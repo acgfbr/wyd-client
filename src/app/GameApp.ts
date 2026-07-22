@@ -29,6 +29,7 @@ import { FIELD_WORLD_SIZE, fieldAt, toScene, toWyd, type WydPosition } from "../
 import { Minimap } from "../ui/Minimap";
 import { GameHud } from "../ui/GameHud";
 import { RuntimeTelemetry } from "../ui/RuntimeTelemetry";
+import { ClassicPlayerOverheadHud } from "../ui/ClassicPlayerOverheadHud";
 import { PlayerState, type PlayerSnapshot } from "../game/state/PlayerState";
 import { ClassicBeastMasterSummon } from "../game/player/ClassicBeastMasterSummon";
 import type { ClassicWeaponEffectSegmentSample } from "../game/player/ClassicPlayerAvatar";
@@ -104,6 +105,7 @@ export class GameApp {
   readonly #input: GameInput;
   readonly #hud = new GameHud();
   readonly #telemetry = new RuntimeTelemetry();
+  readonly #playerOverhead: ClassicPlayerOverheadHud;
   readonly #playerState = new PlayerState("Huntress");
   #skills = new ClassSkillSystem("huntress");
   #activeClassKey: ClassicClassKey = "huntress";
@@ -192,6 +194,7 @@ export class GameApp {
     this.#etherealExplosionEffects = new ClassicEtherealExplosionEffect(this.#scene);
     this.#levelUpEffects = new ClassicLevelUpEffects(this.#scene);
     this.#damageNumbers = new ClassicDamageNumbers(this.container);
+    this.#playerOverhead = new ClassicPlayerOverheadHud(this.container);
     this.#input = new GameInput(this.#renderer.domElement);
     this.#input.onGroundClick = this.groundClick;
     this.#input.onCameraRotate = (yaw, pitch) => this.#cameraRig.rotate(yaw, pitch);
@@ -232,10 +235,12 @@ export class GameApp {
       // A camada de rede continua fora do escopo: o fluxo e a apresentação
       // seguem o cliente, mas a mensagem é ecoada apenas no frontend local.
       this.#hud.addChatMessage(this.#playerState.snapshot.name, message, channel);
+      this.#playerOverhead.showChat(message, channel);
     };
     this.#hud.onCatalogSkillUse = (classicIndex) => this.requestCatalogSkill(classicIndex);
     this.#hud.bindPlayer(this.#playerState);
     this.#playerState.subscribe(this.playerEquipmentChanged);
+    this.#playerState.subscribe((snapshot) => this.#playerOverhead.sync(snapshot));
     this.#hud.configureSkills(
       this.#skills.skills.map((skill) => ({ ...skill, offensive: isOffensiveBarSkill(skill) })),
       (slot) => this.requestSkill(slot),
@@ -262,11 +267,7 @@ export class GameApp {
     // Small optional payload loaded alongside the world; combat keeps its
     // procedural fallback until the classic critical resources are ready.
     void this.#combatEffects.prepareClassic(assets);
-    void this.#skillEffects.prepareClassic(assets);
-    void this.#foemaSkillEffects.prepareClassic(assets);
-    void this.#transKnightSkillEffects.prepareClassic(assets);
-    void this.#beastMasterSkillEffects.prepareClassic(assets);
-    void this.#etherealExplosionEffects.prepareClassic(assets);
+    void this.prepareClassSkillEffects(this.#activeClassKey);
     void this.#levelUpEffects.prepareClassic(assets);
     this.configureMapSelector(assets);
     this.configureClassSelector();
@@ -408,6 +409,7 @@ export class GameApp {
       this.updateCombat(dt, mouseForward);
       this.updateBeastMasterSummons(dt);
       this.#cameraRig.update(this.#player.object.position, dt);
+      this.#playerOverhead.update(this.#camera, this.#player.object, this.#player.mounted);
       this.activateField(this.#player.position);
       const coordinates = document.querySelector<HTMLElement>("#coordinates");
       if (coordinates) coordinates.textContent = `${Math.floor(this.#player.position.x)}, ${Math.floor(this.#player.position.y)}`;
@@ -1294,6 +1296,26 @@ export class GameApp {
       : null;
     const delay = timing?.effectDelaySeconds ?? 0.5;
 
+    // #35/#36/#39 are instantiated directly by TMFieldScene::OnPacketAttack.
+    // Their meteor controllers already contain the retail flight/delay timing,
+    // so delaying this dispatch by TMHuman's shared 500 ms would be incorrect.
+    if (
+      skill.classKey === "foema"
+      && (skill.classicIndex === 35 || skill.classicIndex === 36 || skill.classicIndex === 39)
+    ) {
+      const currentTarget = spawns.snapshot(targetId);
+      if (currentTarget?.alive && currentTarget.hostile) {
+        const targetBase = foemaTargetSnapshot ?? this.combatPoint(currentTarget.position, 0);
+        this.#foemaSkillEffects.playAttack(skill.classicIndex, casterBase, targetBase);
+        this.applySkillImpact(skill, targetId, targetBase, false);
+        if (skill.classicIndex === 36) {
+          spawns.applyClassicFreeze(targetId, skill.affectTimeSeconds);
+        }
+      }
+      this.#hud.addLog(`${skill.name} · ${skill.mana} MP.`, "system");
+      return;
+    }
+
     // #52/#55 are created directly inside TMFieldScene::OnPacketAttack; they
     // do not use TMHuman's shared +500 ms effect event.
     if (skill.classKey === "beastmaster" && (skill.classicIndex === 52 || skill.classicIndex === 55)) {
@@ -1971,6 +1993,23 @@ export class GameApp {
     this.syncClassControls();
   }
 
+  /** Keeps complete class-specific rigs/textures out of mobile boot memory. */
+  private async prepareClassSkillEffects(classKey: ClassicClassKey): Promise<void> {
+    const assets = this.#assets;
+    if (!assets) return;
+    const jobs = classKey === "huntress"
+      ? [
+          this.#skillEffects.prepareClassic(assets),
+          this.#etherealExplosionEffects.prepareClassic(assets),
+        ]
+      : classKey === "foema"
+        ? [this.#foemaSkillEffects.prepareClassic(assets)]
+        : classKey === "transknight"
+          ? [this.#transKnightSkillEffects.prepareClassic(assets)]
+          : [this.#beastMasterSkillEffects.prepareClassic(assets)];
+    await Promise.allSettled(jobs);
+  }
+
   private requestPlayerClass(classKey: string): void {
     const definition = CLASSIC_PLAYER_CLASSES.find((candidate) => candidate.key === classKey);
     const select = document.querySelector<HTMLSelectElement>("#player-class-select");
@@ -1998,11 +2037,14 @@ export class GameApp {
     const outfit = document.querySelector<HTMLSelectElement>("#outfit-select");
     if (outfit) outfit.disabled = true;
     if (status) status.textContent = `Carregando ${definition.name}…`;
-    void this.#player.loadClassicAvatar(
-      this.#assets,
-      definition.key,
-      definition.defaultLookKey,
-    ).then((loaded) => {
+    void Promise.all([
+      this.#player.loadClassicAvatar(
+        this.#assets,
+        definition.key,
+        definition.defaultLookKey,
+      ),
+      this.prepareClassSkillEffects(definition.key),
+    ]).then(([loaded]) => {
       if (requestId !== this.#classLoadId) return;
       if (!loaded) {
         select.value = previousKey;

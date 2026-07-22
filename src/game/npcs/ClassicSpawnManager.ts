@@ -96,6 +96,8 @@ interface SpawnedActor {
   currentAction: string | null;
   actionLockRemaining: number;
   hitFlashRemaining: number;
+  freezeRemainingSeconds: number;
+  readonly affectMaterials: ActorAffectMaterial[];
   aiMode: ActorAiMode;
   nextAttackAtSeconds: number;
   attackCount: number;
@@ -114,6 +116,12 @@ interface SpawnedActor {
   readonly label: THREE.Sprite;
   readonly labelTexture: THREE.CanvasTexture;
   readonly labelMaterial: THREE.SpriteMaterial;
+}
+
+interface ActorAffectMaterial {
+  readonly mesh: THREE.SkinnedMesh;
+  readonly original: THREE.MeshLambertMaterial;
+  readonly material: THREE.MeshLambertMaterial;
 }
 
 interface StreamedSpawnField {
@@ -228,6 +236,20 @@ export class ClassicSpawnManager {
     return { ok: true, target, damage: appliedDamage, killed: !target.alive };
   }
 
+  /**
+   * Client-visible portion of affect 1/value 2. Server movement remains out of
+   * scope; locally we preserve TMHuman's blue material and 1.15x frame period.
+   */
+  applyClassicFreeze(id: string, durationSeconds: number): boolean {
+    const actor = this.#actorsById.get(id);
+    if (!actor || !isActorAlive(actor) || !Number.isFinite(durationSeconds) || durationSeconds <= 0) {
+      return false;
+    }
+    actor.freezeRemainingSeconds = Math.max(actor.freezeRemainingSeconds, durationSeconds);
+    applyActorFreezeMaterial(actor);
+    return true;
+  }
+
   private emit<K extends ClassicMonsterEventName>(type: K, event: ClassicMonsterEventMap[K]): void {
     const listeners = this.#listeners.get(type);
     if (!listeners) return;
@@ -247,6 +269,7 @@ export class ClassicSpawnManager {
     actor.aiMode = "route";
     actor.actionLockRemaining = 0;
     actor.hitFlashRemaining = 0;
+    clearActorFreeze(actor);
     actor.object.visible = true;
     actor.lease.model.object.scale.setScalar(1);
     actor.label.visible = false;
@@ -291,10 +314,13 @@ export class ClassicSpawnManager {
       const distanceSquared = dx * dx + dy * dy;
       const fieldVisible = actor.object.parent?.visible !== false;
       if (fieldVisible && actor.object.visible && distanceSquared <= animateDistanceSquared) {
-        actor.lease.model.update(deltaSeconds);
+        // m_cFreeze multiplies the classic frame period by 1.15, therefore the
+        // equivalent elapsed animation time is divided by the same factor.
+        actor.lease.model.update(actor.freezeRemainingSeconds > 0 ? deltaSeconds / 1.15 : deltaSeconds);
       }
       actor.label.visible = fieldVisible && isActorAlive(actor) && distanceSquared <= 40 * 40;
       updateHitFeedback(actor, deltaSeconds);
+      updateActorFreeze(actor, deltaSeconds);
       const scene = toScene(actor.position, this.environment.origin);
       actor.object.position.x = scene.x;
       actor.object.position.z = scene.z;
@@ -428,6 +454,7 @@ export class ClassicSpawnManager {
     actor.aiMode = "route";
     actor.actionLockRemaining = 0;
     actor.hitFlashRemaining = 0;
+    clearActorFreeze(actor);
     actor.object.visible = true;
     actor.lease.model.object.scale.setScalar(1);
     resetActorRoute(actor);
@@ -640,6 +667,8 @@ export class ClassicSpawnManager {
         currentAction: lease.model.currentClip,
         actionLockRemaining: 0,
         hitFlashRemaining: 0,
+        freezeRemainingSeconds: 0,
+        affectMaterials: [],
         aiMode: "route",
         nextAttackAtSeconds: nowSeconds + ai.initialAttackDelaySeconds,
         attackCount: 0,
@@ -1658,8 +1687,53 @@ function updateHitFeedback(actor: SpawnedActor, deltaSeconds: number): void {
   actor.lease.model.object.scale.setScalar(1 + Math.sin(progress * Math.PI) * 0.09);
 }
 
+function applyActorFreezeMaterial(actor: SpawnedActor): void {
+  if (actor.affectMaterials.length === 0) {
+    for (const mesh of actor.lease.model.meshes) {
+      const source = mesh.material;
+      if (Array.isArray(source)) continue;
+      if (!(source instanceof THREE.MeshLambertMaterial)) continue;
+      const material = source.clone();
+      mesh.material = material;
+      actor.affectMaterials.push({
+        mesh,
+        original: source,
+        material,
+      });
+    }
+  }
+  for (const entry of actor.affectMaterials) {
+    // TMHuman::SetColorEffect uses (0.0, 0.4, 0.9) for Diffuse/Emissive.
+    entry.material.color.setRGB(0, 0.4, 0.9);
+    entry.material.emissive.setRGB(0, 0.4, 0.9);
+  }
+}
+
+function updateActorFreeze(actor: SpawnedActor, deltaSeconds: number): void {
+  if (actor.freezeRemainingSeconds <= 0) return;
+  actor.freezeRemainingSeconds = Math.max(
+    0,
+    actor.freezeRemainingSeconds - Math.max(0, Number.isFinite(deltaSeconds) ? deltaSeconds : 0),
+  );
+  if (actor.freezeRemainingSeconds === 0) restoreActorAffectMaterials(actor);
+}
+
+function clearActorFreeze(actor: SpawnedActor): void {
+  actor.freezeRemainingSeconds = 0;
+  restoreActorAffectMaterials(actor);
+}
+
+function restoreActorAffectMaterials(actor: SpawnedActor): void {
+  for (const entry of actor.affectMaterials) {
+    entry.mesh.material = entry.original;
+    entry.material.dispose();
+  }
+  actor.affectMaterials.length = 0;
+}
+
 function disposeActor(actor: SpawnedActor): void {
   actor.object.removeFromParent();
+  restoreActorAffectMaterials(actor);
   actor.lease.release();
   actor.labelMaterial.dispose();
   actor.labelTexture.dispose();

@@ -3,8 +3,10 @@ import type { ClassicAssetSource } from "../../assets/ClassicAssetSource";
 import type { ClassicWeaponEffectSegmentSample } from "../../game/player/ClassicPlayerAvatar";
 import { ClassicDdsTextureLoader } from "../textures/ClassicDdsTextureLoader";
 import { ClassicFoemaFirePhoenixEffects } from "./ClassicFoemaFirePhoenixEffects";
+import { ClassicFoemaBlizzardEffects } from "./ClassicFoemaBlizzardEffects";
 import { ClassicFoemaIceSpearEffects } from "./ClassicFoemaIceSpearEffects";
 import { ClassicFoemaMagicWeaponEffects } from "./ClassicFoemaMagicWeaponEffects";
+import { ClassicFoemaMeteorEffects } from "./ClassicFoemaMeteorEffects";
 
 export type FoemaPoisonEffectLevel = 0 | 1 | 2 | 3;
 
@@ -143,7 +145,8 @@ interface ThunderCastVisual {
 }
 
 /**
- * Retail presentation facade for Foema #32/#33/#34/#37/#38/#40/#41/#44.
+ * Retail presentation facade for Foema #32/#33/#34/#35/#36/#37/#38/#39/
+ * #40/#41/#44, including the dedicated meteor and skinned controllers.
  *
  * The implementation is a direct, bounded port of TMSkillFire.cpp:8-201,
  * TMSkillThunderBolt.cpp:10-67, TMSkillPoison.cpp:8-66,
@@ -170,6 +173,8 @@ export class ClassicFoemaSkillEffects {
   readonly #iceSpearEffects: ClassicFoemaIceSpearEffects;
   readonly #firePhoenixEffects: ClassicFoemaFirePhoenixEffects;
   readonly #magicWeaponEffects: ClassicFoemaMagicWeaponEffects;
+  readonly #meteorEffects: ClassicFoemaMeteorEffects;
+  readonly #blizzardEffects: ClassicFoemaBlizzardEffects;
   #resources: ClassicFoemaResources | null = null;
   #preload: Promise<void> | null = null;
   #serial = 0;
@@ -186,6 +191,8 @@ export class ClassicFoemaSkillEffects {
     this.#iceSpearEffects = new ClassicFoemaIceSpearEffects(this.object);
     this.#firePhoenixEffects = new ClassicFoemaFirePhoenixEffects(this.object);
     this.#magicWeaponEffects = new ClassicFoemaMagicWeaponEffects(this.object);
+    this.#meteorEffects = new ClassicFoemaMeteorEffects(this.object);
+    this.#blizzardEffects = new ClassicFoemaBlizzardEffects(this.object);
     scene.add(this.object);
   }
 
@@ -219,6 +226,8 @@ export class ClassicFoemaSkillEffects {
       this.#iceSpearEffects.prepareClassic(assets),
       this.#firePhoenixEffects.prepareClassic(assets),
       this.#magicWeaponEffects.prepareClassic(assets),
+      this.#meteorEffects.prepareClassic(assets),
+      this.#blizzardEffects.prepareClassic(assets),
     ])
       .then((results) => {
         for (const result of results.slice(1)) {
@@ -241,6 +250,8 @@ export class ClassicFoemaSkillEffects {
     this.#iceSpearEffects.setEnabled(enabled);
     this.#firePhoenixEffects.setEnabled(enabled);
     this.#magicWeaponEffects.setEnabled(enabled);
+    this.#meteorEffects.setEnabled(enabled);
+    this.#blizzardEffects.setEnabled(enabled);
     if (!enabled) this.clear();
   }
 
@@ -252,6 +263,8 @@ export class ClassicFoemaSkillEffects {
     this.#iceSpearEffects.update(delta);
     this.#firePhoenixEffects.update(delta);
     this.#magicWeaponEffects.update(delta);
+    this.#meteorEffects.update(delta);
+    this.#blizzardEffects.update(delta);
 
     // Existing independent children advance before their parent controllers
     // emit this frame, so a newly emitted classic billboard starts at t=0.
@@ -327,6 +340,15 @@ export class ClassicFoemaSkillEffects {
         return true;
       case 38:
         this.#firePhoenixEffects.play(casterFeet, targetFeet);
+        return true;
+      case 35:
+      case 39:
+        // TMFieldScene creates these at packet time. GameApp owns that timing;
+        // the renderer only expands the retail meteor layout around the target.
+        this.#meteorEffects.play(classicIndex, targetFeet);
+        return true;
+      case 36:
+        this.#blizzardEffects.play(targetFeet);
         return true;
       default:
         return this.playCast(classicIndex, targetFeet, poisonEffectLevel);
@@ -475,6 +497,8 @@ export class ClassicFoemaSkillEffects {
     this.#iceSpearEffects.clear();
     this.#firePhoenixEffects.clear();
     this.#magicWeaponEffects.clear();
+    this.#meteorEffects.clear();
+    this.#blizzardEffects.clear();
   }
 
   /** Terminal cleanup; clear() intentionally leaves every bounded pool reusable. */
@@ -485,6 +509,8 @@ export class ClassicFoemaSkillEffects {
     this.#iceSpearEffects.dispose();
     this.#firePhoenixEffects.dispose();
     this.#magicWeaponEffects.dispose();
+    this.#meteorEffects.dispose();
+    this.#blizzardEffects.dispose();
     this.#owner.remove(this.object);
 
     for (const visual of this.#firePool) visual.shade.material.dispose();

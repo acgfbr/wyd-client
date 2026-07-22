@@ -1,3 +1,11 @@
+@font-face {
+  font-family: "WYD NanumGothic";
+  src: url("/game-data/classic/ui/FontNanum.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+}
+
 :root {
   color: #ded8c8;
   background: #050607;
@@ -24,6 +32,90 @@ button, select { font: inherit; }
   height: 100%;
   pointer-events: none;
 }
+
+.classic-player-overhead-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 18;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.classic-player-overhead-anchor {
+  --classic-player-label-font-size: 18px;
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: none;
+  width: 0;
+  height: 0;
+  color: #fff;
+  font-family: "WYD NanumGothic", sans-serif;
+  font-size: var(--classic-player-label-font-size);
+  font-style: normal;
+  font-weight: 500;
+  line-height: 14px;
+  text-shadow: 1px 1px #000;
+  white-space: nowrap;
+  will-change: transform;
+}
+
+.classic-player-overhead-anchor.is-visible { display: block; }
+
+.classic-player-overhead-name {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  overflow: visible;
+  height: 16px;
+  padding-left: 8px;
+  transform: translateX(-50%);
+  color: #ffffaa;
+  line-height: 16px;
+}
+
+.classic-player-overhead-health {
+  position: absolute;
+  top: -12px;
+  left: -35px;
+  overflow: hidden;
+  width: 72px;
+  height: 7.5px;
+  background: #333;
+}
+
+.classic-player-overhead-health-fill {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  display: block;
+  width: 68px;
+  height: 3.5px;
+  background: #1e821e;
+  transform: scaleX(0);
+  transform-origin: left center;
+}
+
+.classic-player-overhead-chat {
+  position: absolute;
+  top: -75px;
+  left: 50%;
+  display: none;
+  overflow: hidden;
+  padding: 14px 0 0 8px;
+  transform: translateX(-50%);
+  background: rgb(0 0 0 / 46.7%);
+  color: #fff;
+  line-height: 14px;
+  text-align: left;
+  white-space: pre;
+}
+
+.classic-player-overhead-chat.is-visible { display: block; }
+.classic-player-overhead-chat.is-multiline { padding-top: 19px; }
+.classic-player-overhead-anchor.is-mounted .classic-player-overhead-chat { top: -85px; }
+.classic-player-overhead-anchor.is-mounted .classic-player-overhead-health { top: -26px; }
+.classic-player-overhead-anchor.is-mounted .classic-player-overhead-name { top: -20px; }
 
 .boot-screen {
   position: fixed;

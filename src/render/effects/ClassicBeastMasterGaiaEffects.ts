@@ -120,12 +120,13 @@ export class ClassicBeastMasterGaiaEffects {
   play(
     casterFeet: THREE.Vector3,
     targetFeet: THREE.Vector3,
-    groundHeightAt: ClassicGroundHeightSampler | null = null,
+    groundHeightAt: ClassicGroundHeightSampler,
   ): boolean {
     if (
       this.#disposed
       || !this.#enabled
       || !this.#resources
+      || typeof groundHeightAt !== "function"
       || !isFiniteVector(casterFeet)
       || !isFiniteVector(targetFeet)
     ) return false;

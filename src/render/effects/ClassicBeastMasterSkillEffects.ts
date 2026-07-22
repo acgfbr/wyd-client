@@ -93,7 +93,7 @@ export class ClassicBeastMasterSkillEffects {
       return true;
     }
     if (classicIndex === 52) {
-      this.#gaiaEffects.play(casterFeet, targetFeet, groundHeightAt ?? null);
+      if (groundHeightAt) this.#gaiaEffects.play(casterFeet, targetFeet, groundHeightAt);
       return true;
     }
     return false;

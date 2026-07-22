@@ -108,6 +108,10 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
   extensão deliberada pedida para este projeto; não é apresentada como regra
   do servidor. Enquanto o servidor não existe, cada nível concede `+3 ATQ` no
   estado do frontend e o combate usa esse total.
+- `Enfraquecer #51` preserva o `AffectValue=10` bruto do SkillData. Como o
+  cliente não revela se o servidor o trata como pontos ou percentual, o mock
+  offline reduz em `10%` o dano dos monstros marcados por `5 s`; essa política
+  deve ser removida quando a fórmula autoritativa existir.
 
 ## Fila obrigatória
 
@@ -190,7 +194,22 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
    `#44` possui o cast único `56/60` e, durante os `180 s` do mock, amostra a
    matriz final da arma para emitir o rastro `56` ao longo da lâmina, inclusive
    montado, sem o antigo pulso genérico no corpo. Os três preservam pools
-   limitados e separam o dano offline do momento do impacto visual. O primeiro
+   limitados e separam o dano offline do momento do impacto visual. Tempestade
+   de Meteoro `#35` e Inferno `#39` também estão integrados: o primeiro cria o
+   MeteorStorm central de nível `0`; o segundo cria os quatro cantos de nível
+   `4` em `0/200/400/600 ms` e o centro em `270 ms`. Ambos preservam o voo
+   diagonal de `600 ms`, trilhas `0/59`, impacto animado `33–41`, flash `8`,
+   shade `7`, pools limitados e o despacho imediato de `TMFieldScene`, separado
+   do evento atrasado de `TMHuman`. Nevasca `#36` segue o outro branch imediato:
+   cria seis MeteorStorm nível `1` com os offsets autorados, modelo `708`,
+   textura `19`, trilhas azuis `0`, impactos `71–78` e shade `7`. O affect de
+   `2 s` fica no ator: usa o RGB clássico `(0,.4,.9)` e aumenta o período da
+   animação em `1,15×`; movimento continua sem regra inventada, pois no cliente
+   essa posição chega do servidor. As Foema ainda abertas foram auditadas: o
+   próximo lote seguro é Escudo Mágico `#43` + Toque da Athena `#45`, seguido
+   por Controle de Mana `#46` e Cancelamento `#47`. Teleporte `#42` fica por
+   último porque exige party, consentimento, restrições de mapa/inventário e
+   rede; não deve virar teleporte livre no mock. O primeiro
    lote visual ativo do BeastMaster também deixou de usar projéteis e pulsos
    genéricos: Fera Flamejante `#48` e Chamas Etéreas `#49` usam os dois looks
    reais do `dr01`, Judgement, voo com alvo móvel, trilhas e respectivamente
@@ -201,8 +220,17 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
    `#54` combina o cast Haste, SlowSlash e o stream persistente dos modelos
    `704/705`, incluindo a escala montada. Todos usam materiais isolados, pools
    limitados, lifecycle ligado a morte/mapa/classe/FX e mantêm o dano offline
-   separado do término das trajetórias. Skills ainda
-   não citadas continuam abertas e não devem cair
+   separado do término das trajetórias. O segundo lote ativo do BeastMaster
+   cobre Enfraquecer `#51`, Fúria de Gaia `#52` e Espírito Vingador `#55`.
+   Enfraquecer preserva o evento atrasado de `500 ms`, o SlowSlash tipo `1`, a
+   seleção primário-primeiro de até oito alvos no raio `1` e não passa pelo
+   dano mínimo genérico; o mock marca Ataque(-) por `5 s`. Fúria de Gaia
+   despacha imediatamente e encadeia os sete FreezeBlade reais `712–718`, com
+   `stone01`, snap de altura, crescimento/retração e emissão compartilhada.
+   Espírito Vingador também é imediato, combina Judgement `418/419` e
+   EffectStart `703/152` nos mesmos cinco alvos usados pelo dano offline. Os
+   novos modelos e a textura indireta fazem parte do importador e do manifesto
+   reprodutível. Skills ainda não citadas continuam abertas e não devem cair
    silenciosamente em um efeito genérico ao serem promovidas.
    `#76/#81/#86/#101` estão homologadas; `#88` está implementada e aguarda a
    inspeção visual no navegador. O épico só fecha depois da matriz completa das
@@ -245,11 +273,13 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
     orbes laterais, readout integrado, botões redondos clicáveis e telemetria
     legível. O chat local segue `SEditableText::OnCharEvent` e
     `TMFieldScene::OnKeyReturn`; rede continua deliberadamente fora do escopo.
-    Falta reconstruir o HUD sobre o próprio personagem: nick sempre visível,
-    barra de HP e, ao enviar texto no chat, balão temporário acima do nick. A
-    ordem vertical deve ser balão, nome e HP, com offset, escala, duração,
-    oclusão e estilo derivados das rotinas do cliente clássico antes da
-    implementação, sem reutilizar arbitrariamente o painel de alvo dos mobs.
+    O HUD sobre o próprio personagem também foi reconstruído como a camada 2D
+    do cliente, sem reutilizar sprites dos mobs: projeta o topo do ator a cada
+    frame, mantém nome `#ffffaa` e HP `72×7,5`, e mostra o balão preto
+    translúcido acima deles por `3 s` (`10 s` com prefixo `*`). Grupo/guild e
+    rotas `@`/`/` não geram balão; os offsets a pé/montado, a fonte
+    `FontNanum.ttf`, o recorte de viewport e a ausência deliberada de
+    depth-test seguem `TMHuman::LabelPosition` e `SText`.
     Ainda é necessária homologação visual em 1024×768, desktop widescreen e
     iPhone; o detalhamento dos slots equipados já foi reconstruído a partir do
     `FieldScene2.bin`. A causa da
@@ -265,6 +295,9 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
 12. Distribuição web — **concluído para o escopo atual**. O build de produção
     não publica sourcemaps, remove comentários legais/`debugger`/`console.debug`,
     minifica identificadores/sintaxe/espaços e usa nomes de assets por hash. O
+    bootstrap mobile prepara somente os renderers da classe ativa; a troca de
+    classe aguarda o respectivo lote antes de liberar o personagem, evitando
+    manter em memória de entrada os efeitos completos das quatro classes. O
     README documenta o limite dessa proteção, instalação e comandos somente com
     Bun, preparo dos assets, erros comuns, iPhone/Vercel e a galeria de capturas
     reais, incluindo as quatro classes, evocações e os 111 mapas.
