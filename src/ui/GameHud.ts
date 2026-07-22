@@ -1,4 +1,6 @@
 import {
+  CARGO_PAGE_COUNT,
+  CARGO_PAGE_SIZE,
   EQUIPMENT_SLOTS,
   INVENTORY_BAG_COUNT,
   INVENTORY_BAG_SIZE,
@@ -29,7 +31,10 @@ import {
 
 type InventoryItemSource =
   | { readonly kind: "inventory"; readonly slot: number }
+  | { readonly kind: "cargo"; readonly slot: number }
   | { readonly kind: "equipment"; readonly slot: EquipmentSlot };
+
+type InventoryPanelItemSource = Exclude<InventoryItemSource, { readonly kind: "cargo" }>;
 
 interface InventoryPointerDrag {
   readonly pointerId: number;
@@ -156,6 +161,8 @@ export class GameHud {
   readonly #groundPortalPromptPrice = requireElement<HTMLElement>("#ground-portal-prompt-price");
   readonly #groundPortalConfirm = requireElement<HTMLButtonElement>("[data-ground-portal-confirm]");
   readonly #npcShopGrid: ClassicNpcShopGrid;
+  readonly #cargoPageNav: HTMLElement;
+  readonly #cargoOfflineNotice: HTMLElement;
   readonly #inventoryWindowDrag: ClassicWindowDragController;
   readonly #characterWindowDrag: ClassicWindowDragController;
   readonly #skillWindowDrag: ClassicWindowDragController;
@@ -169,7 +176,10 @@ export class GameHud {
   #itemIconCatalog: ClassicItemIconCatalog | null = null;
   #itemIconCatalogJob: Promise<ClassicItemIconCatalog | null> | null = null;
   #inventorySignature = "";
+  #cargoSignature = "";
   #activeInventoryBag = 0;
+  #activeCargoPage = 0;
+  #activeNpcInteractionKind: ClassicNpcInteractionKind = "none";
   #selectedInventorySource: InventoryItemSource | null = null;
   #selectedInventoryItemKey: string | null = null;
   #inventoryPointerDrag: InventoryPointerDrag | null = null;
@@ -192,6 +202,18 @@ export class GameHud {
 
   constructor() {
     this.#npcShopGrid = new ClassicNpcShopGrid(this.#npcInteractionSlots);
+    this.#cargoPageNav = createCargoPageNavigation();
+    this.#cargoOfflineNotice = document.createElement("p");
+    this.#cargoOfflineNotice.className = "classic-cargo-offline-notice";
+    this.#cargoOfflineNotice.textContent = "Armazém offline desta sessão — reinicia ao recarregar";
+    const npcSurface = requirePanelHandle(this.#npcInteraction, ".npc-interaction-surface");
+    npcSurface.append(this.#cargoPageNav, this.#cargoOfflineNotice);
+    for (const button of this.#cargoPageNav.querySelectorAll<HTMLButtonElement>("[data-cargo-page]")) {
+      button.addEventListener("click", () => {
+        const page = Number(button.dataset.cargoPage);
+        if (Number.isInteger(page)) this.setActiveCargoPage(page);
+      });
+    }
     this.#npcWindowDrag = makeClassicWindowDraggable(
       this.#npcInteraction,
       requirePanelHandle(this.#npcInteraction, ".npc-interaction-surface > header"),
@@ -320,6 +342,8 @@ export class GameHud {
   }
 
   openNpcInteraction(snapshot: ClassicMonsterSnapshot): void {
+    if (this.#selectedInventorySource?.kind === "cargo") this.clearInventorySelection();
+    this.#activeNpcInteractionKind = snapshot.interactionKind;
     const useInventoryAnchor = !this.#npcWindowDrag.userPositioned;
     this.#npcInteraction.classList.add("classic-window-layout-snap");
     if (useInventoryAnchor) this.#inventory.classList.add("classic-window-layout-snap");
@@ -354,8 +378,10 @@ export class GameHud {
   }
 
   closeNpcInteraction(): void {
+    if (this.#selectedInventorySource?.kind === "cargo") this.clearInventorySelection();
     this.#npcInteraction.classList.remove("is-visible");
     this.#npcInteraction.setAttribute("aria-hidden", "true");
+    this.#activeNpcInteractionKind = "none";
     this.#activeNpcShopTemplateKey = null;
     this.#npcShopGrid.clear();
   }
@@ -865,6 +891,7 @@ export class GameHud {
     setText("#quickslot-1-count", firstConsumable ? String(firstConsumable.quantity) : "");
     this.renderCharacter(snapshot);
     this.updateInventory(snapshot);
+    this.updateCargo(snapshot);
   }
 
   private renderCharacter(snapshot: PlayerSnapshot): void {
@@ -905,6 +932,7 @@ export class GameHud {
         }
         this.#itemIconCatalog = catalog;
         if (this.#lastSnapshot) this.updateInventory(this.#lastSnapshot, true);
+        if (this.#lastSnapshot) this.updateCargo(this.#lastSnapshot, true);
         return catalog;
       })
       .catch((error: unknown) => {
@@ -941,6 +969,116 @@ export class GameHud {
     this.renderInventory(snapshot);
   }
 
+  private updateCargo(snapshot: PlayerSnapshot, force = false): void {
+    if (this.#activeNpcInteractionKind !== "cargo" || !this.npcInteractionVisible) return;
+    const signature = `${this.#activeCargoPage}:${snapshot.cargo.map(inventoryStackSignature).join("|")}`;
+    if (!force && signature === this.#cargoSignature) return;
+    this.#cargoSignature = signature;
+    this.renderCargo(snapshot);
+  }
+
+  private renderCargo(snapshot: PlayerSnapshot): void {
+    const pageStart = this.#activeCargoPage * CARGO_PAGE_SIZE;
+    const cells = Array.from({ length: CARGO_PAGE_SIZE }, (_, offset) => {
+      const slot = pageStart + offset;
+      return this.createCargoCell(slot, snapshot.cargo[slot] ?? null);
+    });
+    this.#npcInteractionSlots.replaceChildren(...cells);
+    this.#npcInteractionSlots.setAttribute("role", "grid");
+    this.#npcInteractionSlots.setAttribute("aria-rowcount", "8");
+    this.#npcInteractionSlots.setAttribute("aria-colcount", "5");
+    this.#npcInteractionSlots.setAttribute(
+      "aria-label",
+      `Página ${this.#activeCargoPage + 1} do armazém offline, 40 espaços`,
+    );
+    this.#npcInteractionSlots.setAttribute("aria-hidden", "false");
+    this.updateCargoPageButtons(snapshot);
+
+    const selected = this.#selectedInventorySource;
+    if (selected?.kind !== "cargo") return;
+    const selectedStack = snapshot.cargo[selected.slot] ?? null;
+    const selectedAnchor = this.findInventorySourceElement(selected);
+    if (selectedStack?.item.key === this.#selectedInventoryItemKey && selectedAnchor) {
+      selectedAnchor.classList.add("is-selected");
+      selectedAnchor.setAttribute("aria-pressed", "true");
+      this.setInventoryPreview(selectedStack.item);
+    } else {
+      this.clearInventorySelection();
+    }
+  }
+
+  private createCargoCell(
+    slot: number,
+    stack: Readonly<InventoryStack> | null,
+  ): HTMLButtonElement {
+    const source = { kind: "cargo", slot } as const;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "npc-interaction-slot classic-cargo-cell";
+    button.dataset.cargoSlot = String(slot);
+    button.setAttribute("role", "gridcell");
+    button.setAttribute("aria-rowindex", String(Math.floor((slot % CARGO_PAGE_SIZE) / 5) + 1));
+    button.setAttribute("aria-colindex", String((slot % 5) + 1));
+
+    if (!stack) {
+      const label = `Espaço vazio ${slot % CARGO_PAGE_SIZE + 1} da página ${this.#activeCargoPage + 1}`;
+      button.classList.add("is-empty");
+      button.title = "Espaço vazio";
+      button.setAttribute("aria-label", label);
+      button.addEventListener("click", () => {
+        if (this.consumeSuppressedInventoryClick()) return;
+        this.handleInventoryCellClick(source, null, button);
+      });
+      return button;
+    }
+
+    button.classList.add("has-item", `rarity-${stack.item.rarity}`);
+    button.setAttribute("aria-pressed", "false");
+    button.setAttribute(
+      "aria-label",
+      `${stack.item.name}, quantidade ${stack.quantity}. ${stack.item.description}`,
+    );
+    button.title = `${stack.item.name}\nClique: pegar/preview · clique em outro espaço para mover`;
+    const icon = this.createInventoryIcon(stack.item);
+    const quantity = document.createElement("small");
+    quantity.textContent = stack.quantity > 1 ? String(stack.quantity) : "";
+    const refinement = document.createElement("b");
+    refinement.className = "inventory-item-refinement";
+    refinement.textContent = stack.item.refinement ? `+${stack.item.refinement}` : "";
+    refinement.classList.toggle("is-high", (stack.item.refinement ?? 0) > 9);
+    button.append(icon, refinement, quantity);
+    button.addEventListener("click", () => {
+      if (this.consumeSuppressedInventoryClick()) return;
+      this.handleInventoryCellClick(source, stack.item, button);
+    });
+    button.addEventListener("pointerdown", (event) => {
+      this.beginInventoryPointerDrag(event, source, stack.item, button);
+    });
+    return button;
+  }
+
+  private updateCargoPageButtons(snapshot: PlayerSnapshot): void {
+    for (const button of this.#cargoPageNav.querySelectorAll<HTMLButtonElement>("[data-cargo-page]")) {
+      const page = Number(button.dataset.cargoPage);
+      const start = page * CARGO_PAGE_SIZE;
+      const used = snapshot.cargo.slice(start, start + CARGO_PAGE_SIZE).filter(Boolean).length;
+      const active = page === this.#activeCargoPage;
+      button.classList.toggle("is-active", active);
+      button.setAttribute("aria-pressed", String(active));
+      button.setAttribute("aria-label", `Abrir página ${page + 1}, ${used} de ${CARGO_PAGE_SIZE} espaços ocupados`);
+      button.title = `Página ${page + 1} · ${used}/${CARGO_PAGE_SIZE}`;
+    }
+  }
+
+  private setActiveCargoPage(page: number): void {
+    if (page < 0 || page >= CARGO_PAGE_COUNT || page === this.#activeCargoPage) return;
+    this.cancelInventoryPointerDrag();
+    if (this.#selectedInventorySource?.kind === "cargo") this.clearInventorySelection();
+    this.#activeCargoPage = page;
+    this.#cargoSignature = "";
+    if (this.#lastSnapshot) this.updateCargo(this.#lastSnapshot, true);
+  }
+
   private renderInventory(snapshot: PlayerSnapshot): void {
     const bagStart = this.#activeInventoryBag * INVENTORY_BAG_SIZE;
     const bagCells = Array.from({ length: INVENTORY_BAG_SIZE }, (_, offset) => {
@@ -959,11 +1097,7 @@ export class GameHud {
     this.updateInventoryBagButtons(snapshot);
 
     const selected = this.#selectedInventorySource;
-    const selectedStack = selected?.kind === "inventory"
-      ? snapshot.inventory[selected.slot]
-      : selected
-        ? snapshot.equipment[selected.slot]
-        : null;
+    const selectedStack = selected ? inventoryStackAt(snapshot, selected) : null;
     const selectedAnchor = selected ? this.findInventorySourceElement(selected) : null;
     const selectedItem = selectedStack?.item.key === this.#selectedInventoryItemKey
       ? selectedStack.item
@@ -980,7 +1114,7 @@ export class GameHud {
   }
 
   private createInventoryCell(
-    source: InventoryItemSource,
+    source: InventoryPanelItemSource,
     stack: Readonly<InventoryStack> | null,
   ): HTMLButtonElement {
     const button = document.createElement("button");
@@ -1110,7 +1244,8 @@ export class GameHud {
     this.#selectedInventorySource = source;
     this.#selectedInventoryItemKey = item.key;
     this.#inventory.classList.add("is-carrying");
-    for (const cell of this.#inventory.querySelectorAll<HTMLButtonElement>(".inventory-slot, .equipment-slot")) {
+    this.#npcInteraction.classList.add("is-carrying-item");
+    for (const cell of this.inventorySourceElements()) {
       const selected = cell === anchor;
       cell.classList.toggle("is-selected", selected);
       if (cell.hasAttribute("aria-pressed")) cell.setAttribute("aria-pressed", String(selected));
@@ -1123,7 +1258,9 @@ export class GameHud {
     this.#selectedInventorySource = null;
     this.#selectedInventoryItemKey = null;
     this.#inventory.classList.remove("is-carrying");
-    for (const cell of this.#inventory.querySelectorAll<HTMLButtonElement>(".inventory-slot.is-selected, .equipment-slot.is-selected")) {
+    this.#npcInteraction.classList.remove("is-carrying-item");
+    for (const cell of this.inventorySourceElements()) {
+      if (!cell.classList.contains("is-selected")) continue;
       cell.classList.remove("is-selected");
       cell.setAttribute("aria-pressed", "false");
     }
@@ -1134,17 +1271,25 @@ export class GameHud {
     const source = this.#selectedInventorySource;
     const snapshot = this.#lastSnapshot;
     if (!source || !snapshot) return null;
-    const stack = source.kind === "inventory"
-      ? snapshot.inventory[source.slot]
-      : snapshot.equipment[source.slot];
+    const stack = inventoryStackAt(snapshot, source);
     return stack?.item.key === this.#selectedInventoryItemKey ? stack.item : null;
   }
 
   private findInventorySourceElement(source: InventoryItemSource): HTMLButtonElement | null {
     const selector = source.kind === "inventory"
       ? `[data-inventory-slot="${source.slot}"]`
-      : `[data-equipment-slot="${source.slot}"]`;
-    return this.#inventory.querySelector<HTMLButtonElement>(selector);
+      : source.kind === "cargo"
+        ? `[data-cargo-slot="${source.slot}"]`
+        : `[data-equipment-slot="${source.slot}"]`;
+    const owner = source.kind === "cargo" ? this.#npcInteraction : this.#inventory;
+    return owner.querySelector<HTMLButtonElement>(selector);
+  }
+
+  private inventorySourceElements(): readonly HTMLButtonElement[] {
+    return [
+      ...this.#inventory.querySelectorAll<HTMLButtonElement>(".inventory-slot, .equipment-slot"),
+      ...this.#npcInteraction.querySelectorAll<HTMLButtonElement>(".classic-cargo-cell"),
+    ];
   }
 
   private beginInventoryPointerDrag(
@@ -1185,6 +1330,7 @@ export class GameHud {
       drag.moved = true;
       drag.anchor.classList.add("is-drag-source");
       this.#inventory.classList.add("is-dragging");
+      this.#npcInteraction.classList.add("is-item-dragging");
       this.clearInventorySelection();
       drag.ghost = drag.anchor.cloneNode(true) as HTMLElement;
       drag.ghost.classList.remove("is-selected", "is-drag-source");
@@ -1212,7 +1358,7 @@ export class GameHud {
       this.#suppressInventoryClick = false;
     }, 0);
     const dropElement = document.elementFromPoint(event.clientX, event.clientY)
-      ?.closest<HTMLElement>("[data-inventory-slot], [data-equipment-slot]") ?? null;
+      ?.closest<HTMLElement>("[data-inventory-slot], [data-equipment-slot], [data-cargo-slot]") ?? null;
     const destination = dropElement ? inventorySourceFromElement(dropElement) : null;
     this.finishInventoryDrop(drag.source, drag.item, destination);
     this.cancelInventoryPointerDrag();
@@ -1231,6 +1377,26 @@ export class GameHud {
     if (source.kind === "inventory" && destination.kind === "inventory") {
       const moved = this.#state?.moveInventoryItem(source.slot, destination.slot) ?? false;
       if (moved) this.addLog(`${item.name} movido.`, "system");
+      return moved;
+    }
+    if (source.kind === "cargo" && destination.kind === "cargo") {
+      const moved = this.#state?.moveCargoItem(source.slot, destination.slot) ?? false;
+      if (moved) this.addLog(`${item.name} movido no armazém desta sessão.`, "system");
+      return moved;
+    }
+    if (source.kind === "inventory" && destination.kind === "cargo") {
+      const moved = this.#state?.transferInventoryToCargo(source.slot, destination.slot) ?? false;
+      if (moved) this.addLog(`${item.name} guardado no armazém desta sessão.`, "system");
+      return moved;
+    }
+    if (source.kind === "cargo" && destination.kind === "inventory") {
+      const moved = this.#state?.transferCargoToInventory(source.slot, destination.slot) ?? false;
+      if (moved) {
+        this.addLog(
+          `${item.name} retirado para a bolsa ${Math.floor(destination.slot / INVENTORY_BAG_SIZE) + 1}.`,
+          "system",
+        );
+      }
       return moved;
     }
     if (source.kind === "inventory" && destination.kind === "equipment") {
@@ -1254,6 +1420,9 @@ export class GameHud {
       }
       return unequipped;
     }
+    if (source.kind === "equipment" || destination.kind === "equipment") {
+      this.addLog("Retire o equipamento para uma bolsa antes de usar o armazém.", "system");
+    }
     return false;
   }
 
@@ -1264,6 +1433,7 @@ export class GameHud {
     drag.anchor.classList.remove("is-drag-source");
     drag.ghost?.remove();
     this.#inventory.classList.remove("is-dragging");
+    this.#npcInteraction.classList.remove("is-item-dragging");
     this.#inventoryPointerDrag = null;
   }
 
@@ -1329,8 +1499,14 @@ export class GameHud {
   };
 
   private renderNpcInteractionSlots(kind: ClassicNpcInteractionKind): void {
+    this.#cargoSignature = "";
     this.#npcShopGrid.clear();
-    if (kind === "shop") this.setNpcShopLoading();
+    this.#npcInteractionSlots.setAttribute("aria-hidden", String(kind !== "shop" && kind !== "cargo"));
+    if (kind === "shop") {
+      this.setNpcShopLoading();
+      return;
+    }
+    if (kind === "cargo" && this.#lastSnapshot) this.updateCargo(this.#lastSnapshot, true);
   }
 
   private requestNpcInteractionClose(): void {
@@ -1671,9 +1847,9 @@ const NPC_INTERACTION_PRESENTATIONS: Readonly<Record<ClassicNpcInteractionKind, 
   },
   cargo: {
     label: "CARGO",
-    message: "O conteúdo do armazém não está disponível no modo offline.",
-    authorityTitle: "Armazém somente leitura",
-    authorityDetail: "Os slots permanecem vazios até existir inventário autoritativo do servidor.",
+    message: "Armazém offline desta sessão — reinicia ao recarregar",
+    authorityTitle: "Armazém local · 3 páginas × 40 slots",
+    authorityDetail: "Os movimentos são locais e atômicos; sem gold, taxa, persistência ou regra inventada.",
   },
   quest: {
     label: "MISSÃO",
@@ -1778,11 +1954,42 @@ function inventorySourceFromElement(element: HTMLElement): InventoryItemSource |
     const slot = Number(element.dataset.inventorySlot);
     return Number.isInteger(slot) ? { kind: "inventory", slot } : null;
   }
+  if (element.dataset.cargoSlot !== undefined) {
+    const slot = Number(element.dataset.cargoSlot);
+    return Number.isInteger(slot) ? { kind: "cargo", slot } : null;
+  }
   const equipmentSlot = element.dataset.equipmentSlot;
   if (equipmentSlot && (EQUIPMENT_SLOTS as readonly string[]).includes(equipmentSlot)) {
     return { kind: "equipment", slot: equipmentSlot as EquipmentSlot };
   }
   return null;
+}
+
+function inventoryStackAt(
+  snapshot: PlayerSnapshot,
+  source: InventoryItemSource,
+): Readonly<InventoryStack> | null {
+  if (source.kind === "inventory") return snapshot.inventory[source.slot] ?? null;
+  if (source.kind === "cargo") return snapshot.cargo[source.slot] ?? null;
+  return snapshot.equipment[source.slot];
+}
+
+function createCargoPageNavigation(): HTMLElement {
+  const navigation = document.createElement("nav");
+  navigation.className = "classic-cargo-pages";
+  navigation.setAttribute("aria-label", "Páginas do armazém offline");
+  for (let page = 0; page < CARGO_PAGE_COUNT; page++) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.dataset.cargoPage = String(page);
+    button.setAttribute("aria-pressed", String(page === 0));
+    button.setAttribute("aria-label", `Abrir página ${page + 1}`);
+    button.title = `Página ${page + 1}`;
+    button.textContent = String(page + 1);
+    if (page === 0) button.classList.add("is-active");
+    navigation.appendChild(button);
+  }
+  return navigation;
 }
 
 function inventoryStackSignature(stack: Readonly<InventoryStack> | null): string {

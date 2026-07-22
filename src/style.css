@@ -1372,6 +1372,7 @@ button, select { font: inherit; }
   pointer-events: none;
 }
 .npc-interaction.is-shop .npc-interaction-slots { pointer-events: auto; }
+.npc-interaction.is-cargo .npc-interaction-slots { pointer-events: auto; }
 .npc-interaction-slot {
   display: block;
   width: 36px;
@@ -1381,6 +1382,92 @@ button, select { font: inherit; }
   border-radius: 0;
   background: linear-gradient(145deg, rgb(255 255 255 / 1.5%), rgb(0 0 0 / 3%));
   box-shadow: inset 0 0 4px rgb(0 0 0 / 12%);
+}
+.classic-cargo-cell {
+  position: relative;
+  display: grid;
+  place-items: center;
+  color: #ded8c9;
+  cursor: pointer;
+  touch-action: none;
+}
+.classic-cargo-cell:hover,
+.classic-cargo-cell:focus-visible,
+.classic-cargo-cell.is-selected {
+  border-color: rgb(224 194 95 / 78%);
+  outline: 1px solid rgb(255 224 119 / 42%);
+  outline-offset: -2px;
+  box-shadow: inset 0 0 6px rgb(133 91 25 / 72%);
+}
+.classic-cargo-cell.rarity-uncommon { border-color: #56885b; }
+.classic-cargo-cell.rarity-rare { border-color: #557fb8; }
+.classic-cargo-cell.rarity-epic { border-color: #8f5aa8; }
+.classic-cargo-cell > small {
+  position: absolute;
+  right: 2px;
+  bottom: 1px;
+  z-index: 3;
+  color: #fff3aa;
+  font-size: 8px;
+  text-shadow: 1px 1px #000;
+  pointer-events: none;
+}
+.classic-cargo-cell.is-drag-source { opacity: .38; }
+.npc-interaction.is-carrying-item .classic-cargo-cell.is-selected > * { opacity: .22; }
+.npc-interaction.is-item-dragging,
+.npc-interaction.is-item-dragging * { cursor: grabbing !important; }
+.classic-cargo-pages,
+.classic-cargo-offline-notice { display: none; }
+.npc-interaction.is-cargo .classic-cargo-pages {
+  position: absolute;
+  top: 395px;
+  left: 158px;
+  z-index: 7;
+  display: flex;
+  gap: 0;
+  width: 54px;
+  height: 20px;
+}
+.classic-cargo-pages button {
+  width: 18px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: url("/game-data/classic/ui/storage.png") no-repeat;
+  color: transparent;
+  font-size: 0;
+  cursor: pointer;
+}
+.classic-cargo-pages button:nth-child(1) { background-position: -36px -427px; }
+.classic-cargo-pages button:nth-child(2) { background-position: -72px -427px; }
+.classic-cargo-pages button:nth-child(3) { background-position: -108px -427px; }
+.classic-cargo-pages button:nth-child(1):hover,
+.classic-cargo-pages button:nth-child(1).is-active { background-position: -54px -427px; }
+.classic-cargo-pages button:nth-child(2):hover,
+.classic-cargo-pages button:nth-child(2).is-active { background-position: -90px -427px; }
+.classic-cargo-pages button:nth-child(3):hover,
+.classic-cargo-pages button:nth-child(3).is-active { background-position: -126px -427px; }
+.classic-cargo-pages button:focus-visible {
+  outline: 1px solid #f2d878;
+  outline-offset: -2px;
+}
+.npc-interaction.is-cargo .classic-cargo-offline-notice {
+  position: absolute;
+  top: 39px;
+  right: 13px;
+  left: 13px;
+  z-index: 6;
+  display: block;
+  margin: 0;
+  overflow: hidden;
+  color: #a99b7b;
+  font: 7px/14px Tahoma, sans-serif;
+  text-align: center;
+  text-overflow: ellipsis;
+  text-shadow: 1px 1px #000;
+  white-space: nowrap;
+  pointer-events: none;
 }
 .classic-npc-shop-cell.has-item {
   color: #e8dba8;

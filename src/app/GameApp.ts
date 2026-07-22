@@ -24,6 +24,7 @@ import type {
   ClassicMonsterSnapshot,
   ClassicSpawnManager,
 } from "../game/npcs/ClassicSpawnManager";
+import { findTriggeredClassicGroundPortalAt } from "../game/portals/ClassicGroundPortals";
 import { GameInput } from "../input/GameInput";
 import { ClassicWorld } from "../world/ClassicWorld";
 import { FIELD_WORLD_SIZE, fieldAt, toScene, toWyd, type WydPosition } from "../world/coordinates";
@@ -145,6 +146,7 @@ export class GameApp {
   #npcInteractionCooldown = 0;
   #npcHoverRaycastCooldown = 0;
   #npcHoverRefreshRemaining = 0;
+  #groundPortalOccupancyKey: string | null = null;
   #attackCooldown = 0;
   #attackSequence = 0;
   readonly #pendingBowAttacks: PendingBowAttack[] = [];
@@ -258,6 +260,14 @@ export class GameApp {
       this.#playerOverhead.showChat(message, channel);
     };
     this.#hud.onNpcInteractionClose = () => this.closeNpcInteraction();
+    this.#hud.onGroundPortalConfirm = (portal) => {
+      const destination = portal.labelPtBr?.trim() || `destino #${portal.messageStringId}`;
+      this.#hud.addLog(
+        `Portal para ${destination} confirmado localmente; teleporte, autorização e cobrança dependem do servidor e não foram executados.`,
+        "system",
+      );
+    };
+    this.#hud.onGroundPortalClose = () => undefined;
     this.#hud.onCatalogSkillUse = (classicIndex) => this.requestCatalogSkill(classicIndex);
     this.#hud.bindPlayer(this.#playerState);
     this.#playerState.subscribe(this.playerEquipmentChanged);
@@ -428,6 +438,7 @@ export class GameApp {
         }
         this.#player.update(dt, movement);
         this.#world?.update(dt, this.#player.position);
+        this.updateGroundPortalPrompt();
       }
       this.bindSpawnGameplay();
       this.updateNpcHover(dt);
@@ -2043,6 +2054,50 @@ export class GameApp {
     this.#clickMarker.visible = false;
   }
 
+  /**
+   * Mirrors the local half of the retail ground-portal flow. The trigger is
+   * recognized from the untouched AttributeMap byte only while the avatar is
+   * standing; destination resolution, charging and movement remain server
+   * responsibilities.
+   */
+  private updateGroundPortalPrompt(): void {
+    const player = this.#player;
+    const world = this.#world;
+    if (
+      !player
+      || !world
+      || !this.#playerState.snapshot.alive
+      || this.#classSwitchInFlight
+    ) {
+      this.resetGroundPortalPrompt();
+      return;
+    }
+
+    const attribute = world.attributeAt(player.position);
+    const portal = attribute === null
+      ? undefined
+      : findTriggeredClassicGroundPortalAt(player.position.x, player.position.y, attribute);
+    if (!portal) {
+      this.resetGroundPortalPrompt();
+      return;
+    }
+
+    const occupancyKey = `${portal.x}:${portal.y}`;
+    if (this.#groundPortalOccupancyKey === occupancyKey || !player.standing) return;
+
+    // Commit occupancy before opening the modal so closing/confirming it does
+    // not reopen every frame while the actor remains on the same trigger.
+    this.#groundPortalOccupancyKey = occupancyKey;
+    this.closeNpcInteraction();
+    this.selectTarget(null);
+    this.#hud.openGroundPortalPrompt(portal);
+  }
+
+  private resetGroundPortalPrompt(): void {
+    this.#groundPortalOccupancyKey = null;
+    this.#hud.closeGroundPortalPrompt();
+  }
+
   private closeNpcInteraction(): void {
     if (
       this.#activeNpcId === null
@@ -2115,6 +2170,7 @@ export class GameApp {
     this.#player?.setInvisible(false);
     this.#respawnRemaining = 4.5;
     this.clearNpcHover();
+    this.resetGroundPortalPrompt();
     this.closeNpcInteraction();
     this.#selectedTargetId = null;
     this.#macroOwnsTarget = false;
@@ -2184,6 +2240,7 @@ export class GameApp {
 
   private respawnPlayer(): void {
     if (!this.#player || !this.#world) return;
+    this.resetGroundPortalPrompt();
     this.closeNpcInteraction();
     // Resolve/cancel any presentation callback while the actor is still dead,
     // so a blade that was in flight cannot deal damage during respawn.
@@ -2311,6 +2368,7 @@ export class GameApp {
     const previousKey = this.#activeClassKey;
     const requestId = ++this.#classLoadId;
     this.#classSwitchInFlight = true;
+    this.resetGroundPortalPrompt();
     this.closeNpcInteraction();
     if (this.#queuedSkillOrigin === "macro") {
       this.#queuedSkillSlot = null;
@@ -2592,6 +2650,7 @@ export class GameApp {
     this.#queuedSkillSlot = null;
     this.#queuedSkillOrigin = null;
     this.clearNpcHover();
+    this.resetGroundPortalPrompt();
     this.closeNpcInteraction();
     this.selectTarget(null);
     this.#skillEffects.clear();
@@ -2631,6 +2690,7 @@ export class GameApp {
     const coordinates = fieldAt(position);
     const key = fieldKey(coordinates.column, coordinates.row);
     if (!force && key === this.#currentFieldKey) return;
+    this.resetGroundPortalPrompt();
     this.#currentFieldKey = key;
 
     const entry = this.#assets?.manifest.fields.find((field) => field.column === coordinates.column && field.row === coordinates.row);

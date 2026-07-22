@@ -177,7 +177,12 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
    Foram importados os atlas reais `MessageBox2`, `Store2`, `Storage2`,
    `Quest2`, `PotalUI` e `PotalOldUI`; os painéis usam essas geometrias e o
    serviço abre junto do inventário existente, fechando-o depois somente quando
-   ele próprio o abriu. O inventário conserva os 14 atlas de `itemicon.bin`,
+   ele próprio o abriu. Inventário, personagem, skills, loja e cargo podem ser
+   arrastados por mouse/toque; loja/cargo nascem a `8 px` do inventário e
+   escolhem automaticamente o lado que cabe no viewport. NPCs amistosos também
+   recebem no hover um contorno verde extrudado pela normal depois do skinning,
+   em vez de uma cópia escalada pelo pivô que desaparecia dentro de rigs
+   multipartes. O inventário conserva os 14 atlas de `itemicon.bin`,
    quatro bolsas, 15 slots por página, 15 slots de equipamento, preview 3D,
    drag/drop, merge/swap e equipar/desequipar no estado offline.
    O novo catálogo comercial contém os 6.500 registros de `ItemList.bin`, os
@@ -186,13 +191,20 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
    79 templates. O loader runtime é explícito, lazy, cacheado e somente leitura;
    resolve por item/template uma view congelada dos 27 slots, inclusive vazios,
    com item completo, efeitos da instância e preço estático marcado como não
-   autoritativo. Ainda falta ligar essa view ao painel da loja e implementar no
-   servidor lista/compra/venda, saldo, Tax, cargo, combinação, missões, loot e
-   persistência; nenhuma dessas operações deve ser simulada como autoritativa.
+   autoritativo. Essa view já alimenta as 40 células visuais da loja: os 27
+   slots `Carry` preservam seus vazios e os 13 restantes ficam vazios como no
+   atlas; ícone, nome, requisitos, efeitos e preço estático vêm do catálogo. O
+   Aki, por exemplo, expõe os 14 itens recuperados de seu template. Selecionar
+   continua sendo apenas apresentação; ainda faltam no servidor compra/venda,
+   saldo, Tax, cargo, combinação, missões, loot e persistência, e nenhuma dessas
+   operações deve ser simulada como autoritativa.
    Para portais, o runtime reconhece o bit `0x10` do `AttributeMap`, cruza as 37
-   entradas exatas de `g_TeleportTable` e abre o prompt clássico. Confirmar ainda
-   não move o personagem nem cobra preço: destino, autorização e transição
-   continuam pendentes do servidor. Também restam dimensões multicélula dos
+   entradas exatas de `g_TeleportTable` e abre o prompt clássico quando o
+   personagem para sobre a célula. O prompt abre uma vez por entrada, não
+   reaparece enquanto o personagem permanece nela e é limpo ao sair, morrer,
+   trocar de classe/Field ou teleportar. Confirmar ainda não move o personagem
+   nem cobra preço: destino, autorização e transição continuam pendentes do
+   servidor. Também restam dimensões multicélula dos
    itens e a ligação final do catálogo ao loot. NPCs amistosos mantêm o passeio
    curto já implementado, e o Griupan segue homologado como familiar padrão.
 10. HUD, áudio, efeitos e revisão manual dos mapas — **parcial**. A HUD recebeu

@@ -88,6 +88,7 @@ export class ClassicNpcShopGrid {
 
   /** Keeps all 40 cells mounted while resetting them to an empty grid. */
   clear(): void {
+    this.ensureMounted();
     this.#renderGeneration++;
     this.#activeCarry = null;
     this.#selectedDisplayIndex = null;
@@ -97,6 +98,7 @@ export class ClassicNpcShopGrid {
 
   /** Public loading state for an owner that starts catalog resolution first. */
   setLoading(): void {
+    this.ensureMounted();
     this.#renderGeneration++;
     this.#activeCarry = null;
     this.#selectedDisplayIndex = null;
@@ -106,6 +108,7 @@ export class ClassicNpcShopGrid {
 
   /** Public failure state; no additional DOM node is added to the 40 cells. */
   setError(error: unknown): void {
+    this.ensureMounted();
     this.#renderGeneration++;
     this.#activeCarry = null;
     this.#selectedDisplayIndex = null;
@@ -118,6 +121,7 @@ export class ClassicNpcShopGrid {
    * atlas. Stale icon requests cannot overwrite a newer shop or `clear()`.
    */
   async render(carry: ClassicResolvedTemplateCarry): Promise<void> {
+    this.ensureMounted();
     const validationError = validateCarry(carry);
     if (validationError) {
       this.setError(validationError);
@@ -164,6 +168,17 @@ export class ClassicNpcShopGrid {
     cell.setAttribute("aria-colindex", String((displayIndex % 5) + 1));
     cell.addEventListener("click", () => this.selectCell(displayIndex));
     return cell;
+  }
+
+  /**
+   * Cargo and shop share the authored NPC grid host. Cargo replaces its
+   * children while open, so a returning shop must explicitly remount the
+   * original 40 Store2 cells before changing their state.
+   */
+  private ensureMounted(): void {
+    const mounted = this.#container.childElementCount === this.#cells.length
+      && this.#cells.every((cell, index) => this.#container.children.item(index) === cell);
+    if (!mounted) this.#container.replaceChildren(...this.#cells);
   }
 
   private clearCell(cell: HTMLButtonElement): void {

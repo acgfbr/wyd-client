@@ -87,6 +87,11 @@ export interface PlayerSnapshot {
   readonly coins: number;
   readonly alive: boolean;
   readonly inventory: readonly (Readonly<InventoryStack> | null)[];
+  /**
+   * Visible classic cargo slots for this frontend session only. They are not
+   * persisted or populated until an authoritative server is connected.
+   */
+  readonly cargo: readonly (Readonly<InventoryStack> | null)[];
   readonly equipment: EquipmentSnapshot;
 }
 
@@ -102,6 +107,15 @@ export interface RewardSummary {
 export const INVENTORY_BAG_COUNT = 4;
 export const INVENTORY_BAG_SIZE = 15;
 export const INVENTORY_SIZE = INVENTORY_BAG_COUNT * INVENTORY_BAG_SIZE;
+/** Three classic cargo pages, each rendered as a 5 x 8 grid. */
+export const CARGO_PAGE_COUNT = 3;
+export const CARGO_PAGE_SIZE = 40;
+/**
+ * The original structure reserves MAX_CARGO=128, but TMFieldScene exposes
+ * only indices 0..119 through its three pages. Keep this session state equal
+ * to the visible client contract instead of exposing the eight hidden slots.
+ */
+export const CARGO_VISIBLE_SIZE = CARGO_PAGE_COUNT * CARGO_PAGE_SIZE;
 const OFFLINE_ATTACK_PER_LEVEL = 3;
 /** Explicit frontend mock; callers may override it through OfflineProgressionOptions. */
 export const DEFAULT_OFFLINE_ATTRIBUTE_POINTS_PER_LEVEL = 5;
@@ -159,6 +173,8 @@ export const CLASSIC_CUMULATIVE_EXPERIENCE = [
 export class PlayerState {
   readonly #listeners = new Set<(snapshot: PlayerSnapshot) => void>();
   readonly #inventory: (InventoryStack | null)[] = Array.from({ length: INVENTORY_SIZE }, () => null);
+  /** Offline/session-only cargo: intentionally empty, unseeded and unpersisted. */
+  readonly #cargo: (InventoryStack | null)[] = Array.from({ length: CARGO_VISIBLE_SIZE }, () => null);
   readonly #equipment = createEmptyEquipment();
   #level = 1;
   #experience = 0;
@@ -285,6 +301,7 @@ export class PlayerState {
       coins: this.#coins,
       alive: this.#hp > 0,
       inventory: this.#inventory.map((stack) => stack ? { item: stack.item, quantity: stack.quantity } : null),
+      cargo: this.#cargo.map((stack) => stack ? { item: stack.item, quantity: stack.quantity } : null),
       equipment: snapshotEquipment(this.#equipment),
     };
   }
@@ -410,34 +427,29 @@ export class PlayerState {
   /** Moves, merges or swaps two positions in the flattened four-bag inventory. */
   moveInventoryItem(from: number, to: number): boolean {
     if (!isInventorySlot(from) || !isInventorySlot(to)) return false;
-    const source = this.#inventory[from];
-    if (!source) return false;
-    if (from === to) return true;
+    return this.moveStack(this.#inventory, from, this.#inventory, to);
+  }
 
-    const destination = this.#inventory[to];
-    if (!destination) {
-      this.#inventory[to] = source;
-      this.#inventory[from] = null;
-      this.emit();
-      return true;
-    }
+  /**
+   * Moves, merges or swaps two of the 120 visible cargo positions.
+   * Cargo is an offline/session-only frontend mirror; no persistence, gold,
+   * tax or server transaction is implied by this operation.
+   */
+  moveCargoItem(from: number, to: number): boolean {
+    if (!isCargoSlot(from) || !isCargoSlot(to)) return false;
+    return this.moveStack(this.#cargo, from, this.#cargo, to);
+  }
 
-    if (destination.item.key === source.item.key) {
-      const maxStack = Math.max(1, Math.trunc(destination.item.maxStack));
-      const moved = Math.min(source.quantity, Math.max(0, maxStack - destination.quantity));
-      if (moved > 0) {
-        destination.quantity += moved;
-        source.quantity -= moved;
-        if (source.quantity <= 0) this.#inventory[from] = null;
-        this.emit();
-        return true;
-      }
-    }
+  /** Atomically moves, merges or swaps an inventory stack into visible cargo. */
+  transferInventoryToCargo(inventorySlot: number, cargoSlot: number): boolean {
+    if (!isInventorySlot(inventorySlot) || !isCargoSlot(cargoSlot)) return false;
+    return this.moveStack(this.#inventory, inventorySlot, this.#cargo, cargoSlot);
+  }
 
-    this.#inventory[from] = destination;
-    this.#inventory[to] = source;
-    this.emit();
-    return true;
+  /** Atomically moves, merges or swaps a visible cargo stack into inventory. */
+  transferCargoToInventory(cargoSlot: number, inventorySlot: number): boolean {
+    if (!isCargoSlot(cargoSlot) || !isInventorySlot(inventorySlot)) return false;
+    return this.moveStack(this.#cargo, cargoSlot, this.#inventory, inventorySlot);
   }
 
   /** Equips an item and atomically puts the previous occupant back in its bag slot. */
@@ -498,6 +510,47 @@ export class PlayerState {
     return true;
   }
 
+  /**
+   * Synchronous container transaction used by inventory and session cargo.
+   * All validation happens before this helper; it commits a transfer, merge or
+   * swap before emitting exactly one snapshot, so no intermediate state leaks.
+   */
+  private moveStack(
+    sourceSlots: (InventoryStack | null)[],
+    sourceIndex: number,
+    destinationSlots: (InventoryStack | null)[],
+    destinationIndex: number,
+  ): boolean {
+    const source = sourceSlots[sourceIndex];
+    if (!source) return false;
+    if (sourceSlots === destinationSlots && sourceIndex === destinationIndex) return true;
+
+    const destination = destinationSlots[destinationIndex];
+    if (!destination) {
+      destinationSlots[destinationIndex] = source;
+      sourceSlots[sourceIndex] = null;
+      this.emit();
+      return true;
+    }
+
+    if (destination.item.key === source.item.key) {
+      const maxStack = normalizedMaxStack(destination.item.maxStack);
+      const moved = Math.min(source.quantity, Math.max(0, maxStack - destination.quantity));
+      if (moved > 0) {
+        destination.quantity += moved;
+        source.quantity -= moved;
+        if (source.quantity <= 0) sourceSlots[sourceIndex] = null;
+        this.emit();
+        return true;
+      }
+    }
+
+    sourceSlots[sourceIndex] = destination;
+    destinationSlots[destinationIndex] = source;
+    this.emit();
+    return true;
+  }
+
   private emit(): void {
     const snapshot = this.snapshot;
     for (const listener of this.#listeners) listener(snapshot);
@@ -520,6 +573,15 @@ function isPrimaryAttribute(value: string): value is PrimaryAttribute {
 
 function isInventorySlot(slot: number): boolean {
   return Number.isInteger(slot) && slot >= 0 && slot < INVENTORY_SIZE;
+}
+
+function isCargoSlot(slot: number): boolean {
+  return Number.isInteger(slot) && slot >= 0 && slot < CARGO_VISIBLE_SIZE;
+}
+
+function normalizedMaxStack(maxStack: number): number {
+  if (!Number.isFinite(maxStack)) return 1;
+  return Math.max(1, Math.trunc(maxStack));
 }
 
 function isEquipmentSlot(value: unknown): value is EquipmentSlot {
