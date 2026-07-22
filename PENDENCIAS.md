@@ -134,7 +134,15 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
 12. Distribuição web: desenhar um build de produção com minificação agressiva,
     nomes/sourcemaps protegidos e ofuscação seletiva. Documentar que isso apenas
     eleva o custo de engenharia reversa; regras e segredos reais não podem
-    depender de código entregue ao navegador.
+    depender de código entregue ao navegador. Criar também no `README.md` um
+    tutorial completo para quem clonou o repositório do zero: requisitos,
+    instalação e execução exclusivamente com Bun, localização/preparo dos
+    assets necessários, comandos de desenvolvimento e produção e resolução dos
+    erros comuns de ambiente. Organizar capturas reais do jogo em uma pasta
+    dedicada e montar no README uma galeria representativa de tudo que foi
+    entregue — mapas/objetos, personagem e equipamentos, montarias, criaturas,
+    combate/skills/buffs, efeitos, HUD e streaming — sem usar imagens que não
+    correspondam ao estado atual do projeto.
 13. Auditoria técnica final e cobertura do cliente clássico. Revisar o runtime
     contra as melhores práticas atuais do Three.js — ciclo de vida/dispose,
     cache e compartilhamento de GPU, draw calls/instancing, streaming, LOD,
