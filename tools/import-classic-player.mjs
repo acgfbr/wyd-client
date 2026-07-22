@@ -1,6 +1,8 @@
 import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
+import { HUNTRESS_LOOKS } from "../src/game/player/HuntressLooks.ts";
+import { MOUNT_LOOKS } from "../src/game/player/MountLooks.ts";
 
 const projectRoot = path.resolve(import.meta.dirname, "..");
 const clientRoot = path.resolve(process.argv[2] ?? path.join(projectRoot, "../tjs/Origem"));
@@ -8,36 +10,81 @@ const meshRoot = path.join(clientRoot, "mesh");
 const outputRoot = path.join(projectRoot, "public/game-data/classic/player");
 const meshesRoot = path.join(outputRoot, "meshes");
 const texturesRoot = path.join(outputRoot, "textures");
-const mountRoot = path.join(outputRoot, "mounts/unicorn");
+const mountsRoot = path.join(outputRoot, "mounts");
 
 await mkdir(meshesRoot, { recursive: true });
 await mkdir(texturesRoot, { recursive: true });
-await mkdir(mountRoot, { recursive: true });
+await mkdir(mountsRoot, { recursive: true });
 
-// Waha Divino is the complete retail Huntress set (ch02, variant 69).
-for (let part = 1; part <= 6; part++) {
-  const base = `ch02${String(part).padStart(2, "0")}69`;
-  await copyFile(path.join(meshRoot, `${base}.msh`), path.join(meshesRoot, `${base}.msh`));
-  await writeFile(path.join(texturesRoot, `${base}.dds`), decodeWys(await readFile(path.join(meshRoot, `${base}.wys`))));
+// LOOK_INFO equipment and SetHumanCostume cases used by the Huntress wardrobe.
+// Mesh and texture choices live in one shared table consumed by the runtime.
+const importedMeshes = new Set();
+const importedTextures = new Set();
+for (const look of HUNTRESS_LOOKS) {
+  for (const part of look.parts) {
+    if (!importedMeshes.has(part.meshStem)) {
+      await copyFile(
+        path.join(meshRoot, `${part.meshStem}.msh`),
+        path.join(meshesRoot, `${part.meshStem}.msh`),
+      );
+      importedMeshes.add(part.meshStem);
+    }
+    if (!importedTextures.has(part.textureStem)) {
+      await writeFile(
+        path.join(texturesRoot, `${part.textureStem}.dds`),
+        decodeWys(await readFile(path.join(meshRoot, `${part.textureStem}.wys`))),
+      );
+      importedTextures.add(part.textureStem);
+    }
+  }
 }
 
-// Item #826: ItemList mesh 762 -> MeshList bow16.msa.
+// Item #2551 Skytalos(Anct), like base item #826, maps mesh 762 to bow16.msa.
 await copyFile(path.join(meshRoot, "bow16.msa"), path.join(meshesRoot, "bow16.msa"));
 await writeFile(path.join(texturesRoot, "bow16.dds"), decodeWys(await readFile(path.join(meshRoot, "bow16.wys"))));
 
-// Level-120 Unicorn: classic hs01 variant 19, two skinned parts sharing the
-// first texture exactly as the client's God2Exception path does.
-await copyFile(path.join(meshRoot, "hs01.bon"), path.join(mountRoot, "hs01.bon"));
-for (const part of [1, 2]) {
-  await copyFile(path.join(meshRoot, `hs01${String(part).padStart(2, "0")}19.msh`), path.join(mountRoot, `hs01${String(part).padStart(2, "0")}19.msh`));
-}
-await writeFile(path.join(mountRoot, "hs010119.dds"), decodeWys(await readFile(path.join(meshRoot, "hs010119.wys"))));
-for (let clip = 1; clip <= 10; clip++) {
-  const file = `hs01${String(100 + clip).padStart(4, "0")}.ani`;
-  await copyFile(path.join(meshRoot, file), path.join(mountRoot, file));
+// Equip[14] variants use nine distinct rigs. Keep one skeleton/animation bank
+// per family and deduplicate mesh/texture files shared by multiple mounts.
+const importedMountFamilies = new Set();
+const importedMountMeshes = new Set();
+const importedMountTextures = new Set();
+for (const look of MOUNT_LOOKS) {
+  const base = look.family.base;
+  const mountRoot = path.join(mountsRoot, base);
+  await mkdir(mountRoot, { recursive: true });
+
+  if (!importedMountFamilies.has(base)) {
+    await copyFile(path.join(meshRoot, `${base}.bon`), path.join(mountRoot, `${base}.bon`));
+    for (let clip = 1; clip <= look.family.clipCount; clip++) {
+      const file = `${base}${String(100 + clip).padStart(4, "0")}.ani`;
+      await copyFile(path.join(meshRoot, file), path.join(mountRoot, file));
+    }
+    importedMountFamilies.add(base);
+  }
+
+  for (const part of look.parts) {
+    const meshKey = `${base}/${part.meshStem}`;
+    if (!importedMountMeshes.has(meshKey)) {
+      await copyFile(
+        path.join(meshRoot, `${part.meshStem}.msh`),
+        path.join(mountRoot, `${part.meshStem}.msh`),
+      );
+      importedMountMeshes.add(meshKey);
+    }
+    const textureKey = `${base}/${part.textureStem}`;
+    if (!importedMountTextures.has(textureKey)) {
+      await writeFile(
+        path.join(mountRoot, `${part.textureStem}.dds`),
+        decodeWys(await readFile(path.join(meshRoot, `${part.textureStem}.wys`))),
+      );
+      importedMountTextures.add(textureKey);
+    }
+  }
 }
 
-console.log(`Huntress, Skytalos e Unicórnio importados para ${outputRoot}`);
+console.log(
+  `${HUNTRESS_LOOKS.length} looks da Huntress, Skytalos e ${MOUNT_LOOKS.length} montarias importados para ${outputRoot}`,
+);
 
 function decodeWys(encoded) {
   if (encoded.length < 90) throw new Error("WYS truncado");

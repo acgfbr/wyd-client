@@ -19,6 +19,16 @@ import { FIELD_WORLD_SIZE, fieldAt, toScene, toWyd, type WydPosition } from "../
 import { Minimap } from "../ui/Minimap";
 import { GameHud } from "../ui/GameHud";
 import { PlayerState } from "../game/state/PlayerState";
+import {
+  DEFAULT_HUNTRESS_LOOK_KEY,
+  HUNTRESS_LOOKS,
+  huntressLook,
+} from "../game/player/HuntressLooks";
+import {
+  DEFAULT_MOUNT_LOOK_KEY,
+  MOUNT_LOOKS,
+  mountLook,
+} from "../game/player/MountLooks";
 import { HuntressCombatEffects } from "../render/effects/HuntressCombatEffects";
 import {
   connectedFieldRegions,
@@ -68,6 +78,8 @@ export class GameApp {
   #macroSkillCursor = 0;
   #effectsEnabled = true;
   #clickMarkerElapsed = CLICK_MARKER_LIFETIME;
+  #outfitLoadId = 0;
+  #mountLoadId = 0;
 
   constructor(private readonly container: HTMLElement) {
     this.#renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
@@ -110,6 +122,8 @@ export class GameApp {
     const assets = await ClassicAssetSource.load();
     this.#assets = assets;
     this.configureMapSelector(assets);
+    this.configureOutfitSelector();
+    this.configureMountSelector();
     const map = assets.manifest.maps[assets.manifest.defaultMap];
     if (!map) throw new Error("Mapa padrão não definido");
     const spawn = { x: map.spawn[0], y: map.spawn[1] };
@@ -123,14 +137,31 @@ export class GameApp {
     this.#player = new Player(world, spawn);
     this.#player.setEffectsEnabled(this.#effectsEnabled);
     this.#scene.add(this.#player.object);
-    void this.#player.loadClassicAvatar(assets).catch((error: unknown) => {
+    void this.#player.loadClassicAvatar(assets, DEFAULT_HUNTRESS_LOOK_KEY).then((loaded) => {
+      const status = document.querySelector<HTMLElement>("#outfit-status");
+      if (!loaded) {
+        if (status) status.textContent = "Visual indisponível";
+        return;
+      }
+      const select = document.querySelector<HTMLSelectElement>("#outfit-select");
+      if (select) select.value = this.#player?.avatarLookKey ?? DEFAULT_HUNTRESS_LOOK_KEY;
+      if (status) status.textContent = this.#player?.avatarLookName ?? "Traje equipado";
+    }).catch((error: unknown) => {
       console.warn("Avatar clássico indisponível; mantendo fallback", error);
     });
-    void this.#player.loadClassicMount(assets).then((loaded) => {
-      if (!loaded) this.#hud.addLog("Modelo do Unicórnio não pôde ser carregado.", "system");
-      else if (this.#player?.mounted) this.#hud.setMounted(true, "Unicórnio Lv. 120");
+    void this.#player.loadClassicMount(assets, DEFAULT_MOUNT_LOOK_KEY).then((loaded) => {
+      const select = document.querySelector<HTMLSelectElement>("#mount-select");
+      const status = document.querySelector<HTMLElement>("#mount-select-status");
+      if (!loaded) {
+        if (status) status.textContent = "Montarias indisponíveis";
+        this.#hud.addLog("A montaria clássica não pôde ser carregada.", "system");
+        return;
+      }
+      if (select) select.value = this.#player?.mountLookKey ?? DEFAULT_MOUNT_LOOK_KEY;
+      if (status) status.textContent = this.#player?.mountName ?? "Montaria equipada";
+      if (this.#player?.mounted) this.#hud.setMounted(true, this.#player.mountName ?? "Montaria Lv. 120");
     }).catch((error: unknown) => {
-      console.warn("Unicórnio clássico indisponível", error);
+      console.warn("Montaria clássica indisponível", error);
     });
     this.activateField(spawn, true);
     this.#scene.add(this.#clickMarker);
@@ -324,8 +355,9 @@ export class GameApp {
   private toggleMount(): void {
     if (!this.#player) return;
     const active = this.#player.toggleMount();
-    this.#hud.setMounted(active, "Unicórnio Lv. 120");
-    this.#hud.addLog(active ? "Montado no Unicórnio Lv. 120." : "Montaria recolhida.", "system");
+    const name = this.#player.mountName ?? "Montaria Lv. 120";
+    this.#hud.setMounted(active, name);
+    this.#hud.addLog(active ? `Montado em ${name}.` : "Montaria recolhida.", "system");
   }
 
   private toggleEffects(): void {
@@ -546,6 +578,82 @@ export class GameApp {
     const count = document.querySelector<HTMLElement>("#map-count");
     if (count) count.textContent = `${assets.manifest.fields.length} mapas · ${regions.length} regiões conectadas`;
   }
+
+  private configureOutfitSelector(): void {
+    const select = document.querySelector<HTMLSelectElement>("#outfit-select");
+    if (!select) return;
+    select.replaceChildren(...HUNTRESS_LOOKS.map((look) => {
+      const option = document.createElement("option");
+      option.value = look.key;
+      option.textContent = look.name;
+      return option;
+    }));
+    select.value = DEFAULT_HUNTRESS_LOOK_KEY;
+    select.addEventListener("change", this.outfitChanged);
+  }
+
+  private readonly outfitChanged = (): void => {
+    const select = document.querySelector<HTMLSelectElement>("#outfit-select");
+    const status = document.querySelector<HTMLElement>("#outfit-status");
+    if (!select || !this.#assets || !this.#player) return;
+    const requestedKey = select.value;
+    const requestedLook = huntressLook(requestedKey);
+    const requestId = ++this.#outfitLoadId;
+    select.disabled = true;
+    if (status) status.textContent = `Vestindo ${requestedLook.name}…`;
+    void this.#player.loadClassicAvatar(this.#assets, requestedKey).then((loaded) => {
+      if (requestId !== this.#outfitLoadId) return;
+      select.value = this.#player?.avatarLookKey ?? DEFAULT_HUNTRESS_LOOK_KEY;
+      if (loaded) {
+        if (status) status.textContent = requestedLook.name;
+        this.#hud.addLog(`${requestedLook.name} equipado.`, "system");
+      } else {
+        if (status) status.textContent = "Falha ao carregar o traje";
+        this.#hud.addLog(`${requestedLook.name} não pôde ser carregado.`, "system");
+      }
+    }).finally(() => {
+      if (requestId === this.#outfitLoadId) select.disabled = false;
+    });
+  };
+
+  private configureMountSelector(): void {
+    const select = document.querySelector<HTMLSelectElement>("#mount-select");
+    if (!select) return;
+    select.replaceChildren(...MOUNT_LOOKS.map((look) => {
+      const option = document.createElement("option");
+      option.value = look.key;
+      option.textContent = `${look.name} · Lv. ${look.level}`;
+      return option;
+    }));
+    select.value = DEFAULT_MOUNT_LOOK_KEY;
+    select.addEventListener("change", this.mountChanged);
+  }
+
+  private readonly mountChanged = (): void => {
+    const select = document.querySelector<HTMLSelectElement>("#mount-select");
+    const status = document.querySelector<HTMLElement>("#mount-select-status");
+    if (!select || !this.#assets || !this.#player) return;
+    const requestedKey = select.value;
+    const requestedLook = mountLook(requestedKey);
+    const requestId = ++this.#mountLoadId;
+    select.disabled = true;
+    if (status) status.textContent = `Selando ${requestedLook.name}…`;
+    void this.#player.loadClassicMount(this.#assets, requestedKey).then((loaded) => {
+      if (requestId !== this.#mountLoadId) return;
+      select.value = this.#player?.mountLookKey ?? DEFAULT_MOUNT_LOOK_KEY;
+      if (loaded) {
+        const name = this.#player?.mountName ?? `${requestedLook.name} Lv. ${requestedLook.level}`;
+        if (status) status.textContent = name;
+        if (this.#player?.mounted) this.#hud.setMounted(true, name);
+        this.#hud.addLog(`${name} selecionado.`, "system");
+      } else {
+        if (status) status.textContent = this.#player?.mountName ?? "Falha ao carregar a montaria";
+        this.#hud.addLog(`${requestedLook.name} não pôde ser carregado.`, "system");
+      }
+    }).finally(() => {
+      if (requestId === this.#mountLoadId) select.disabled = false;
+    });
+  };
 
   private readonly mapSelectionChanged = (): void => {
     const select = document.querySelector<HTMLSelectElement>("#map-select");

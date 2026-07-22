@@ -3,18 +3,41 @@ import { DDSLoader } from "three/addons/loaders/DDSLoader.js";
 import type { ClassicAssetSource } from "../../assets/ClassicAssetSource";
 import { parseMsa } from "../../formats/classic/Msa";
 import {
+  createClassicD3DLocalMatrix,
+  type ClassicBaseAttachmentTransform,
+} from "../../render/characters/ClassicSkinnedModel";
+import {
   ClassicSkinnedAssetLibrary,
   type ClassicSkinnedInstanceLease,
 } from "../npcs/ClassicSkinnedAssetLibrary";
 import { MonsterCatalog } from "../npcs/MonsterCatalog";
+import {
+  DEFAULT_HUNTRESS_LOOK_KEY,
+  huntressLook,
+  type HuntressLookDefinition,
+} from "./HuntressLooks";
 
-const HUNTRESS_VARIANT = 69;
 const HUNTRESS_ACTIONS = [
   "STAND01", "STAND02", "WALK", "RUN", "ATTACK1", "ATTACK2",
   "SKILL01", "SKILL02", "SKILL03", "STRIKE", "DIE", "DEAD",
   "MSTND01", "MWALK", "MRUN", "MATT1", "MATT2",
   "MSKIL01", "MSKIL02", "MSKIL03", "MSTRIKE", "MDIE", "MDEAD",
 ] as const;
+
+const SKYTALOS_ANCIENT_ITEM_INDEX = 2551;
+const SKYTALOS_REFINEMENT = 15;
+const SKYTALOS_REFINEMENT_TEXTURE = 165;
+
+interface ClassicRefinementState {
+  readonly texture: THREE.Texture;
+  readonly enabled: { value: number };
+  readonly uvProgress: { value: number };
+}
+
+interface ClassicWeaponVisual {
+  readonly object: THREE.Group;
+  readonly refinement: ClassicRefinementState;
+}
 
 export interface ClassicAvatarAction {
   readonly name: string;
@@ -24,18 +47,23 @@ export interface ClassicAvatarAction {
 export class ClassicPlayerAvatar {
   readonly object: THREE.Group;
   readonly templateKey: string;
+  readonly look: HuntressLookDefinition;
   readonly #lease: ClassicSkinnedInstanceLease;
-  readonly #weapon: THREE.Group | null;
-  #effectTime = 0;
-  #effectsEnabled = true;
+  readonly #weapon: ClassicWeaponVisual | null;
+  #mounted = false;
   #released = false;
 
-  private constructor(lease: ClassicSkinnedInstanceLease, weapon: THREE.Group | null) {
+  private constructor(
+    lease: ClassicSkinnedInstanceLease,
+    weapon: ClassicWeaponVisual | null,
+    look: HuntressLookDefinition,
+  ) {
     this.#lease = lease;
     this.#weapon = weapon;
-    this.templateKey = "Huntress_Waha_Skytalos";
+    this.look = look;
+    this.templateKey = `Huntress_${look.key}_Skytalos`;
     this.object = lease.model.object;
-    this.object.name = "classic-player-huntress-skytalos";
+    this.object.name = `classic-player-huntress-${look.key}-skytalos`;
     lease.model.setClassicTransform({
       yaw: -Math.PI / 2,
       scale: 0.9,
@@ -43,38 +71,63 @@ export class ClassicPlayerAvatar {
     });
   }
 
-  static async load(assets: ClassicAssetSource): Promise<ClassicPlayerAvatar | null> {
+  static async load(
+    assets: ClassicAssetSource,
+    lookKey = DEFAULT_HUNTRESS_LOOK_KEY,
+  ): Promise<ClassicPlayerAvatar | null> {
+    const look = huntressLook(lookKey);
     const catalog = await MonsterCatalog.load(assets);
     const library = new ClassicSkinnedAssetLibrary(assets, catalog);
     const lease = await library.createInstance({
       skin: 1,
-      parts: Array.from({ length: 6 }, (_, index) => {
-        const part = index + 1;
-        const base = `ch02${String(part).padStart(2, "0")}${HUNTRESS_VARIANT}`;
-        return {
-          name: `huntress-part-${part}`,
-          mesh: `player/meshes/${base}.msh`,
-          texture: `player/textures/${base}.dds`,
-          alpha: part === 2 ? "A" : "C",
-        };
-      }),
+      parts: look.parts.map((part, index) => ({
+        name: `huntress-part-${index + 1}`,
+        mesh: `player/meshes/${part.meshStem}.msh`,
+        texture: `player/textures/${part.textureStem}.dds`,
+        alpha: part.alpha,
+      })),
       actions: HUNTRESS_ACTIONS,
-      initialAction: "STAND01",
+      // Skytalos has EF_WTYPE=101 and EF_POS=64. CheckWeapon selects bank 6
+      // for the Huntress (skin 1), then returns to the armed STAND02 pose.
+      animationWeaponType: 6,
+      initialAction: "STAND02",
       actionVariant: 1,
     });
     if (!lease) return null;
     const weapon = await attachSkytalos(assets, lease).catch(() => null);
-    return new ClassicPlayerAvatar(lease, weapon);
+    return new ClassicPlayerAvatar(lease, weapon, look);
   }
 
   setYaw(yaw: number): void {
-    if (!this.#released) this.#lease.model.setClassicTransform({ yaw });
+    if (!this.#released && !this.#mounted) this.#lease.model.setClassicTransform({ yaw });
+  }
+
+  /** Attaches the rider to the exact m_OutMatrix bone and Render transform. */
+  attachToMount(
+    anchor: THREE.Object3D,
+    transform: ClassicBaseAttachmentTransform,
+  ): void {
+    if (this.#released) return;
+    anchor.add(this.object);
+    resetObjectTransform(this.object);
+    this.#mounted = true;
+    this.#lease.model.setClassicBaseAttachment(transform);
+  }
+
+  attachOnFoot(parent: THREE.Object3D, yaw: number): void {
+    if (this.#released) return;
+    parent.add(this.object);
+    resetObjectTransform(this.object);
+    this.#mounted = false;
+    this.#lease.model.setClassicTransform({
+      yaw,
+      scale: 0.9,
+      mirrorModelZ: true,
+    });
   }
 
   setEffectsEnabled(enabled: boolean): void {
-    this.#effectsEnabled = enabled;
-    const aura = this.#weapon?.getObjectByName("skytalos-ancient-aura");
-    if (aura) aura.visible = enabled;
+    if (this.#weapon) this.#weapon.refinement.enabled.value = enabled ? 1 : 0;
   }
 
   play(actions: readonly string[], restart = false): ClassicAvatarAction | null {
@@ -92,71 +145,124 @@ export class ClassicPlayerAvatar {
   update(deltaSeconds: number): void {
     if (this.#released) return;
     this.#lease.model.update(deltaSeconds);
-    this.#effectTime += deltaSeconds;
-    if (this.#weapon && this.#effectsEnabled) {
-      const pulse = 0.13 + (Math.sin(this.#effectTime * 5.2) * 0.5 + 0.5) * 0.14;
-      const aura = this.#weapon.getObjectByName("skytalos-ancient-aura") as THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial> | undefined;
-      if (aura) aura.material.opacity = pulse;
+    if (this.#weapon) {
+      // TMMesh::Render(1): (serverTime % 4000) / 4000 is added to U and V.
+      const progress = this.#weapon.refinement.uvProgress;
+      progress.value = (progress.value + deltaSeconds / 4) % 1;
     }
   }
 
   release(): void {
     if (this.#released) return;
     this.#released = true;
-    if (this.#weapon) disposeStaticGroup(this.#weapon);
+    if (this.#weapon) disposeStaticGroup(this.#weapon.object);
     this.#lease.release();
   }
+}
+
+function resetObjectTransform(object: THREE.Object3D): void {
+  object.position.set(0, 0, 0);
+  object.rotation.set(0, 0, 0);
+  object.scale.set(1, 1, 1);
+  object.updateMatrix();
 }
 
 async function attachSkytalos(
   assets: ClassicAssetSource,
   lease: ClassicSkinnedInstanceLease,
-): Promise<THREE.Group> {
+): Promise<ClassicWeaponVisual> {
   const meshResponse = await fetch(assets.dataUrl("player/meshes/bow16.msa"));
   if (!meshResponse.ok) throw new Error("MSA do Skytalos indisponível");
   const model = parseMsa(await meshResponse.arrayBuffer());
-  const texture = await new DDSLoader().loadAsync(assets.dataUrl("player/textures/bow16.dds"));
+  const refinementUrl = assets.effectTextureUrl(SKYTALOS_REFINEMENT_TEXTURE);
+  if (!refinementUrl) throw new Error("Multitextura +15 do Skytalos indisponível");
+  const loader = new DDSLoader();
+  const [texture, refinementTexture] = await Promise.all([
+    loader.loadAsync(assets.dataUrl("player/textures/bow16.dds")),
+    loader.loadAsync(refinementUrl),
+  ]);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.anisotropy = 4;
+  refinementTexture.colorSpace = THREE.SRGBColorSpace;
+  refinementTexture.anisotropy = 4;
+  refinementTexture.wrapS = THREE.RepeatWrapping;
+  refinementTexture.wrapT = THREE.RepeatWrapping;
+  refinementTexture.needsUpdate = true;
+  const refinement: ClassicRefinementState = {
+    texture: refinementTexture,
+    enabled: { value: 1 },
+    uvProgress: { value: 0 },
+  };
   const materials = Array.from({ length: Math.max(1, model.textureNames.length) }, () => (
-    new THREE.MeshLambertMaterial({ map: texture, side: THREE.DoubleSide, alphaTest: 0.25 })
+    createSkytalosMaterial(texture, refinement)
   ));
   const bow = new THREE.Mesh(model.geometry, materials);
-  bow.name = "weapon-skytalos-plus-15-ancient-item-826";
-  bow.userData.itemIndex = 826;
-  bow.userData.refinement = 15;
+  bow.name = `weapon-skytalos-ancient-${SKYTALOS_ANCIENT_ITEM_INDEX}-plus-${SKYTALOS_REFINEMENT}`;
+  bow.userData.itemIndex = SKYTALOS_ANCIENT_ITEM_INDEX;
+  bow.userData.baseItemIndex = 826;
+  bow.userData.refinement = SKYTALOS_REFINEMENT;
+  bow.userData.refinementTexture = SKYTALOS_REFINEMENT_TEXTURE;
   bow.userData.ancient = true;
   bow.castShadow = true;
   bow.frustumCulled = false;
 
-  const aura = new THREE.Mesh(
-    model.geometry.clone(),
-    new THREE.MeshBasicMaterial({
-      color: 0x69f2e4,
-      transparent: true,
-      opacity: 0.2,
-      side: THREE.DoubleSide,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-      toneMapped: false,
-    }),
-  );
-  aura.name = "skytalos-ancient-aura";
-  aura.scale.setScalar(1.025);
-  aura.renderOrder = 3;
-
-
-  // Bows are rendered from the second ch02 hand frame. In the original table
-  // g_dwHandIndex[1][1] is bone 24; bone 18 is the string/right hand and makes
-  // the bow cross the body. The ch02 CFrame branch uses a 180-degree roll.
+  // Equip[6] is copied into HUMAN_LOOKINFO::LeftMesh, whose struct position is
+  // Mesh7. TMSkinMesh attaches part 7 to g_dwHandIndex[1][1] (bone 24).
+  // CFrame then composes T(-.07, -.01, 0) * YPR(-15deg, -10deg, 180deg).
   const holder = new THREE.Group();
-  holder.name = "right-hand-skytalos-anchor";
-  holder.rotation.order = "YXZ";
-  holder.rotation.set(THREE.MathUtils.degToRad(-10), THREE.MathUtils.degToRad(-15), Math.PI);
-  holder.position.set(-0.07, -0.01, 0);
-  holder.add(bow, aura);
+  holder.name = "left-hand-skytalos-anchor";
+  holder.matrixAutoUpdate = false;
+  holder.matrix.copy(createClassicD3DLocalMatrix({
+    x: -0.07,
+    y: -0.01,
+    yaw: THREE.MathUtils.degToRad(-15),
+    pitch: THREE.MathUtils.degToRad(-10),
+    roll: Math.PI,
+  }));
+  holder.matrixWorldNeedsUpdate = true;
+  holder.add(bow);
   (lease.model.bones[24] ?? lease.model.object).add(holder);
-  return holder;
+  return { object: holder, refinement };
+}
+
+function createSkytalosMaterial(
+  baseTexture: THREE.Texture,
+  refinement: ClassicRefinementState,
+): THREE.MeshLambertMaterial {
+  const material = new THREE.MeshLambertMaterial({
+    name: "WYD Skytalos Ancient +15",
+    map: baseTexture,
+    side: THREE.DoubleSide,
+    alphaTest: 0.25,
+  });
+  material.userData.classicRefinement = refinement;
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.wydRefinementMap = { value: refinement.texture };
+    shader.uniforms.wydRefinementEnabled = refinement.enabled;
+    shader.uniforms.wydRefinementUvProgress = refinement.uvProgress;
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        "#include <map_pars_fragment>",
+        `#include <map_pars_fragment>
+        uniform sampler2D wydRefinementMap;
+        uniform float wydRefinementEnabled;
+        uniform float wydRefinementUvProgress;`,
+      )
+      .replace(
+        "#include <opaque_fragment>",
+        `#ifdef USE_MAP
+          vec2 wydRefinementUv = vMapUv + vec2(wydRefinementUvProgress);
+          vec3 wydRefinement = texture2D(wydRefinementMap, wydRefinementUv).rgb;
+          vec3 wydRefinedBase = min(outgoingLight * 2.0, vec3(1.0));
+          vec3 wydRefinedColor = wydRefinedBase + wydRefinement
+            - (wydRefinedBase * wydRefinement);
+          outgoingLight = mix(outgoingLight, wydRefinedColor, wydRefinementEnabled);
+        #endif
+        #include <opaque_fragment>`,
+      );
+  };
+  material.customProgramCacheKey = () => "wyd-skytalos-ancient-plus15-v2";
+  return material;
 }
 
 function disposeStaticGroup(group: THREE.Group): void {
@@ -169,6 +275,8 @@ function disposeStaticGroup(group: THREE.Group): void {
     for (const material of materials) {
       const textured = material as THREE.Material & { map?: THREE.Texture | null };
       if (textured.map) textures.add(textured.map);
+      const refinement = material.userData.classicRefinement as ClassicRefinementState | undefined;
+      if (refinement) textures.add(refinement.texture);
       material.dispose();
     }
   });

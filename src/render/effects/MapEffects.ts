@@ -243,6 +243,7 @@ function createSprite(
   opacity: number,
   phaseOffset = 0,
 ): THREE.Sprite {
+  for (const frame of frames) configureClassicBillboardUvs(frame);
   const material = new THREE.SpriteMaterial({
     map: frames[0],
     color,
@@ -260,6 +261,21 @@ function createSprite(
     if (material.map !== frames[frame]) material.map = frames[frame]!;
   };
   return sprite;
+}
+
+/**
+ * DDSLoader keeps compressed DirectDraw surfaces in their native top-left
+ * orientation (`flipY = false`). Three's shared Sprite geometry, however,
+ * assigns V=0 to its lower vertices. The classic TMEffectBillBoard does the
+ * opposite: lower vertices sample V=.98 and upper vertices sample V=.02.
+ *
+ * Reproduce that mapping through the texture matrix instead of changing the
+ * DDS itself. Besides fixing vertically inverted flames, the .02 inset keeps
+ * compressed edge texels from bleeding exactly as the original quad did.
+ */
+function configureClassicBillboardUvs(texture: THREE.Texture): void {
+  texture.offset.set(0.02, 0.98);
+  texture.repeat.set(0.96, -0.96);
 }
 
 function installPulse(sprite: THREE.Sprite, scaleX: number, scaleY: number): void {

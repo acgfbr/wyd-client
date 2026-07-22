@@ -73,6 +73,14 @@ app.innerHTML = `
   <section id="inventory-panel" class="inventory-panel">
     <header><strong>INVENTÁRIO</strong><button type="button" aria-label="Fechar inventário" data-inventory-close>×</button></header>
     <div class="inventory-caption">Equipamento</div>
+    <div class="inventory-outfit">
+      <label for="outfit-select">Traje da Huntress</label>
+      <select id="outfit-select" aria-label="Selecionar traje da Huntress"><option>Carregando…</option></select>
+      <small id="outfit-status">Carregando visual clássico…</small>
+      <label for="mount-select">Montaria Lv. 120</label>
+      <select id="mount-select" aria-label="Selecionar montaria nível 120"><option>Carregando…</option></select>
+      <small id="mount-select-status">Carregando montarias clássicas…</small>
+    </div>
     <div id="inventory-grid" class="inventory-grid"></div>
     <div class="inventory-gold"><span>Gold</span><b id="player-coins">0</b></div>
     <p>Duplo clique usa o item · <kbd>I</kbd> fecha</p>

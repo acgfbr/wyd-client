@@ -44,6 +44,51 @@ export interface ClassicTransform {
   readonly axisMode?: "standard" | "late";
 }
 
+export interface ClassicD3DLocalTransform {
+  readonly x?: number;
+  readonly y?: number;
+  readonly z?: number;
+  readonly yaw?: number;
+  readonly pitch?: number;
+  readonly roll?: number;
+}
+
+export interface ClassicBaseAttachmentTransform {
+  /** First argument passed to TMSkinMesh::Render (translated on classic Y). */
+  readonly length: number;
+  /** Second argument passed to TMSkinMesh::Render. */
+  readonly scale: number;
+  /** Third argument passed to TMSkinMesh::Render (translated on classic X). */
+  readonly length2: number;
+  /** Rotation stored in m_matMantua before the Render translation. */
+  readonly yaw: number;
+  readonly pitch: number;
+  readonly roll?: number;
+}
+
+/**
+ * Builds a Three.js local matrix from the row-vector transform used by D3DX.
+ * CFrame composes hand offsets as Translation * YawPitchRoll, so expressing
+ * that operation here avoids lossy Euler-order guesses at attachment sites.
+ */
+export function createClassicD3DLocalMatrix(
+  transform: ClassicD3DLocalTransform,
+): THREE.Matrix4 {
+  const translation = rowTranslation(
+    transform.x ?? 0,
+    transform.y ?? 0,
+    transform.z ?? 0,
+  );
+  const rotation = d3dYawPitchRoll(
+    transform.yaw ?? 0,
+    transform.pitch ?? 0,
+    transform.roll ?? 0,
+  );
+  const result = new THREE.Matrix4();
+  setConvertedD3DMatrix(result, rowMultiply(translation, rotation));
+  return result;
+}
+
 /**
  * Live Three.js instance of a classic BON + ANI + one-or-more MSH parts.
  *
@@ -208,6 +253,24 @@ export class ClassicSkinnedModel {
       this.#scale.z * (this.#mirrorModelZ ? -1 : 1),
     );
     setConvertedD3DMatrix(this.#basis.matrix, rowMultiply(rotation, scaleMatrix));
+    this.#basis.matrixWorldNeedsUpdate = true;
+  }
+
+  /**
+   * Recreates TMSkinMesh's `m_bBaseMat` branch used by mounted riders and
+   * mantles: `m_matMantua * Translation(fLen2, fLen, 0) * Scale`.
+   * The parent Object3D must represent the source `m_BaseMatrix` bone.
+   */
+  setClassicBaseAttachment(transform: ClassicBaseAttachmentTransform): void {
+    const rotation = d3dYawPitchRoll(
+      transform.yaw,
+      transform.pitch,
+      transform.roll ?? 0,
+    );
+    const translation = rowTranslation(transform.length2, transform.length, 0);
+    const scale = rowScale(transform.scale, transform.scale, transform.scale);
+    const local = rowMultiply(rowMultiply(rotation, translation), scale);
+    setConvertedD3DMatrix(this.#basis.matrix, local);
     this.#basis.matrixWorldNeedsUpdate = true;
   }
 
@@ -420,4 +483,8 @@ function rowRotationZ(angle: number): number[] {
 
 function rowScale(x: number, y: number, z: number): number[] {
   return [x, 0, 0, 0, 0, y, 0, 0, 0, 0, z, 0, 0, 0, 0, 1];
+}
+
+function rowTranslation(x: number, y: number, z: number): number[] {
+  return [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, x, y, z, 1];
 }

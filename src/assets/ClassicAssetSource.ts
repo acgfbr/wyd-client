@@ -42,7 +42,7 @@ export class ClassicAssetSource {
 
   static async load(): Promise<ClassicAssetSource> {
     const response = await fetch(`${ClassicAssetSource.base}/manifest.json`);
-    if (!response.ok) throw new Error("Assets não importados. Execute: npm run import:classic");
+    if (!response.ok) throw new Error("Assets não importados. Execute: bun run import:classic");
     return new ClassicAssetSource(await response.json() as ClassicManifest);
   }
 

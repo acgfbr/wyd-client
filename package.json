@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "import:classic": "node tools/import-classic-assets.mjs",
-    "import:player": "node tools/import-classic-player.mjs",
+    "import:classic": "bun tools/import-classic-assets.mjs",
+    "import:player": "bun tools/import-classic-player.mjs",
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "test": "vitest run",

@@ -4,6 +4,8 @@ import type { ClassicWorld } from "../world/ClassicWorld";
 import { toScene, type WydPosition } from "../world/coordinates";
 import { ClassicPlayerAvatar } from "./player/ClassicPlayerAvatar";
 import { ClassicMount } from "./player/ClassicMount";
+import { DEFAULT_HUNTRESS_LOOK_KEY } from "./player/HuntressLooks";
+import { DEFAULT_MOUNT_LOOK_KEY } from "./player/MountLooks";
 
 const WAYPOINT_REACHED_DISTANCE = 0.18;
 const NAVIGATION_SUBSTEP = 0.45;
@@ -26,6 +28,8 @@ export class Player {
   #mountLoadGeneration = 0;
   #effectsEnabled = true;
   #avatarAction: string | null = null;
+  #avatarLookKey = DEFAULT_HUNTRESS_LOOK_KEY;
+  #mountLookKey = DEFAULT_MOUNT_LOOK_KEY;
   #actionLockRemaining = 0;
   #deathElapsed = 0;
   #deathAnimationSeconds = 0;
@@ -36,6 +40,10 @@ export class Player {
   get speedBoost(): boolean { return this.#speedBoost; }
   get hasClassicAvatar(): boolean { return this.#avatar !== null; }
   get mounted(): boolean { return this.#mounted; }
+  get avatarLookKey(): string { return this.#avatar?.look.key ?? this.#avatarLookKey; }
+  get avatarLookName(): string | null { return this.#avatar?.look.name ?? null; }
+  get mountLookKey(): string { return this.#mount?.look.key ?? this.#mountLookKey; }
+  get mountName(): string | null { return this.#mount?.name ?? null; }
 
   constructor(private readonly world: ClassicWorld, spawn: WydPosition) {
     this.position = { ...spawn };
@@ -64,10 +72,10 @@ export class Player {
   }
 
   /** Replaces the loading capsule with the classic six-piece Huntress look. */
-  async loadClassicAvatar(assets: ClassicAssetSource): Promise<boolean> {
+  async loadClassicAvatar(assets: ClassicAssetSource, lookKey = this.#avatarLookKey): Promise<boolean> {
     const generation = ++this.#avatarLoadGeneration;
     try {
-      const avatar = await ClassicPlayerAvatar.load(assets);
+      const avatar = await ClassicPlayerAvatar.load(assets, lookKey);
       if (!avatar) return false;
       if (this.#disposed || generation !== this.#avatarLoadGeneration) {
         avatar.release();
@@ -75,25 +83,28 @@ export class Player {
       }
       this.unloadClassicAvatar();
       this.#avatar = avatar;
+      this.#avatarLookKey = avatar.look.key;
       avatar.setEffectsEnabled(this.#effectsEnabled);
-      this.#visualRoot.add(avatar.object);
       this.#fallback.visible = false;
       avatar.setYaw(this.currentClassicYaw());
       this.syncMountedVisuals();
       if (this.#dead) this.playDeath();
       else if (this.#velocity.lengthSq() > 0.02) this.playAvatarAction(["WALK"]);
-      else this.playAvatarAction(["STAND01"]);
+      else this.playAvatarAction(["STAND02", "STAND01"]);
       return true;
     } catch {
       return false;
     }
   }
 
-  /** Loads the mount once; R only toggles visibility afterwards. */
-  async loadClassicMount(assets: ClassicAssetSource): Promise<boolean> {
+  /** Loads or swaps the selected classic mount; R only toggles it afterwards. */
+  async loadClassicMount(
+    assets: ClassicAssetSource,
+    lookKey = this.#mountLookKey,
+  ): Promise<boolean> {
     const generation = ++this.#mountLoadGeneration;
     try {
-      const mount = await ClassicMount.load(assets);
+      const mount = await ClassicMount.load(assets, lookKey);
       if (!mount) return false;
       if (this.#disposed || generation !== this.#mountLoadGeneration) {
         mount.release();
@@ -101,7 +112,9 @@ export class Player {
       }
       this.unloadClassicMount();
       this.#mount = mount;
+      this.#mountLookKey = mount.look.key;
       this.#visualRoot.add(mount.object);
+      mount.setEffectsEnabled(this.#effectsEnabled);
       mount.setYaw(this.currentClassicYaw());
       this.#mounted = this.#mountDesired;
       this.syncMountedVisuals();
@@ -116,12 +129,13 @@ export class Player {
     this.#mountDesired = !this.#mountDesired;
     this.#mounted = this.#mountDesired && this.#mount !== null;
     this.syncMountedVisuals();
-    return this.#mountDesired;
+    return this.#mounted;
   }
 
   setEffectsEnabled(enabled: boolean): void {
     this.#effectsEnabled = enabled;
     this.#avatar?.setEffectsEnabled(enabled);
+    this.#mount?.setEffectsEnabled(enabled);
   }
 
   unloadClassicAvatar(): void {
@@ -138,6 +152,7 @@ export class Player {
 
   unloadClassicMount(): void {
     if (!this.#mount) return;
+    this.#avatar?.attachOnFoot(this.#visualRoot, this.currentClassicYaw());
     this.#visualRoot.remove(this.#mount.object);
     this.#mount.release();
     this.#mount = null;
@@ -151,6 +166,7 @@ export class Player {
       ? ["MATT1", "MATT2", "ATTACK1"]
       : ["ATTACK1", "ATTACK2", "STRIKE"], true);
     if (!action) return false;
+    if (this.#mounted) this.#mount?.playAttack();
     this.#actionLockRemaining = Math.max(0.25, Math.min(0.9, action.durationSeconds));
     return true;
   }
@@ -162,6 +178,7 @@ export class Player {
       ? [`MSKIL0${index}`, "MATT1", `SKILL0${index}`]
       : [`SKILL0${index}`, "ATTACK1"], true);
     if (!action) return false;
+    if (this.#mounted) this.#mount?.playSkill();
     this.#actionLockRemaining = Math.max(0.3, Math.min(1.1, action.durationSeconds));
     return true;
   }
@@ -170,6 +187,7 @@ export class Player {
     if (this.#dead) return false;
     const action = this.playAvatarAction(this.#mounted ? ["MSTRIKE", "STRIKE"] : ["STRIKE"], true);
     if (!action) return false;
+    if (this.#mounted) this.#mount?.playHit();
     this.#actionLockRemaining = Math.max(0.18, Math.min(0.65, action.durationSeconds));
     return true;
   }
@@ -182,6 +200,7 @@ export class Player {
     this.#actionLockRemaining = 0;
     this.#deathElapsed = 0;
     const action = this.playAvatarAction(this.#mounted ? ["MDIE", "MDEAD", "DIE"] : ["DIE", "DEAD"], true);
+    if (this.#mounted) this.#mount?.playDeath();
     this.#deathAnimationSeconds = action?.name === "DIE" || action?.name === "MDIE" ? action.durationSeconds : 0;
     return action !== null;
   }
@@ -191,7 +210,8 @@ export class Player {
     this.#deathElapsed = 0;
     this.#deathAnimationSeconds = 0;
     this.#actionLockRemaining = 0;
-    this.playAvatarAction(this.#mounted ? ["MSTND01", "STAND01"] : ["STAND01"]);
+    this.playAvatarAction(this.#mounted ? ["MSTND01", "STAND01"] : ["STAND02", "STAND01"]);
+    if (this.#mounted) this.#mount?.playIdle();
   }
 
   stop(): void {
@@ -437,11 +457,11 @@ export class Player {
     } else {
       this.playAvatarAction(this.#mounted
         ? [moving ? "MRUN" : "MSTND01", moving ? "MWALK" : "STAND01"]
-        : [moving ? "RUN" : "STAND01", moving ? "WALK" : "STAND02"]);
+        : [moving ? "RUN" : "STAND02", moving ? "WALK" : "STAND01"]);
     }
     avatar.update(deltaSeconds);
     if (this.#mounted) {
-      this.#mount?.setMoving(moving);
+      if (!this.#dead && this.#actionLockRemaining <= 0) this.#mount?.setMoving(moving);
       this.#mount?.update(deltaSeconds);
     }
   }
@@ -464,12 +484,21 @@ export class Player {
 
   private syncMountedVisuals(): void {
     if (this.#mount) this.#mount.object.visible = this.#mounted;
-    const riderHeight = this.#mounted ? 1.05 : 0;
-    if (this.#avatar) this.#avatar.object.position.y = riderHeight;
-    this.#fallback.position.y = 0.95 + riderHeight;
+    if (this.#avatar) {
+      if (this.#mounted && this.#mount) {
+        this.#avatar.attachToMount(
+          this.#mount.riderAnchor,
+          this.#mount.look.riderAttachment,
+        );
+      }
+      else this.#avatar.attachOnFoot(this.#visualRoot, this.currentClassicYaw());
+    }
+    // Loading fallback only; the real rider follows hs01 bone 4 above.
+    this.#fallback.position.y = this.#mounted ? 1.8 : 0.95;
     if (!this.#dead) {
       this.#avatarAction = null;
-      this.playAvatarAction(this.#mounted ? ["MSTND01", "STAND01"] : ["STAND01"]);
+      this.playAvatarAction(this.#mounted ? ["MSTND01", "STAND01"] : ["STAND02", "STAND01"]);
+      if (this.#mounted) this.#mount?.playIdle(true);
     }
   }
 }

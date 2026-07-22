@@ -67,18 +67,18 @@ export class PlayerState {
       heal: 60,
     }, 5, false);
     this.addItem({
-      key: "skytalos-826",
-      name: "Skytalos",
-      description: "Arco clássico da Huntress · Item #826 · equipado.",
+      key: "skytalos-ancient-2551-plus15",
+      name: "Skytalos(Anct) +15",
+      description: "Arco Ancient da Huntress · Item #2551 · refinação +15 · equipado.",
       rarity: "epic",
       maxStack: 1,
       value: 280_000,
       kind: "equipment",
     }, 1, false);
     this.addItem({
-      key: "waha-divino",
-      name: "Set Waha Divino",
-      description: "Conjunto completo da Huntress · equipado.",
+      key: "costume-succubus-4181",
+      name: "Conjunto Succubus",
+      description: "Traje clássico feminino · Item #4181 · equipado.",
       rarity: "epic",
       maxStack: 1,
       value: 350_000,

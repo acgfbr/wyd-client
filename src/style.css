@@ -358,16 +358,49 @@ button, select { font: inherit; }
 .inventory-panel header button { position: absolute; top: -4px; right: -27px; width: 19px; height: 19px; padding: 0; border: 1px outset #716758; border-radius: 0; background: #242321; color: #d1c5ac; font-size: 13px; line-height: 15px; cursor: pointer; }
 .inventory-panel header button:hover { color: #fff1b8; }
 .inventory-caption { position: absolute; top: 33px; left: 16px; color: #887f6b; font-size: 8px; text-transform: uppercase; }
+.inventory-outfit {
+  position: absolute;
+  top: 174px;
+  right: 12px;
+  left: 12px;
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  gap: 3px 5px;
+  align-items: center;
+  padding: 5px 6px;
+  border: 1px solid rgb(91 82 65 / 72%);
+  background: rgb(7 8 8 / 86%);
+  box-shadow: inset 1px 1px 2px #000;
+}
+.inventory-outfit label { color: #b8a46e; font-size: 8px; text-transform: uppercase; }
+.inventory-outfit select {
+  min-width: 0;
+  height: 20px;
+  border: 1px solid #625b4d;
+  border-radius: 0;
+  background: #171918;
+  color: #e3d8bd;
+  font: 9px Tahoma, sans-serif;
+}
+.inventory-outfit select:disabled { color: #77736a; }
+.inventory-outfit small {
+  grid-column: 1 / -1;
+  overflow: hidden;
+  color: #777165;
+  font-size: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .inventory-grid {
   position: absolute;
-  top: 226px;
+  top: 252px;
   left: 11px;
   display: grid;
   grid-template-columns: repeat(5, 38px);
   grid-auto-rows: 34px;
   gap: 4px;
   width: 206px;
-  max-height: 224px;
+  max-height: 162px;
   overflow-y: auto;
   scrollbar-color: #7a6842 #111;
   scrollbar-width: thin;

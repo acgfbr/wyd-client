@@ -23,6 +23,8 @@ export interface ClassicSkinnedLook {
   readonly family?: MonsterVisualFamily;
   readonly actions?: readonly string[];
   readonly initialAction?: string;
+  /** Index selected by TMHuman::CheckWeapon for the classic animation bank. */
+  readonly animationWeaponType?: number;
   readonly actionVariant?: number;
 }
 
@@ -150,6 +152,7 @@ export class ClassicSkinnedAssetLibrary {
       look.skin,
       actions.join(","),
       look.initialAction ?? "",
+      look.animationWeaponType ?? "base",
       actionVariant,
       ...look.parts.map((part) => `${part.mesh}>${part.texture ?? "-"}>${part.alpha ?? "?"}`),
     ].join("|");
@@ -170,6 +173,9 @@ export class ClassicSkinnedAssetLibrary {
     if (!family?.skeleton || look.parts.length === 0) return null;
     const skeleton = await this.skeleton(family.skeleton);
     if (!skeleton) return null;
+    const weaponAnimationTable = look.animationWeaponType === undefined
+      ? null
+      : buildClassicWeaponAnimationTable(family, look.skin);
 
     const parts = (await Promise.all(look.parts.map(async (part): Promise<ParsedPart | null> => {
       const model = await this.mesh(part.mesh);
@@ -184,7 +190,10 @@ export class ClassicSkinnedAssetLibrary {
       const pairOffset = actionValues && actionValues.length >= 9 ? actionVariant * 2 : 0;
       const clipSlot = actionValues?.[pairOffset] ?? actionValues?.[0] ?? 0;
       const quarterStepMs = Math.max(1, actionValues?.[pairOffset + 1] ?? actionValues?.[1] ?? 20);
-      const clipPath = family.clips[clipSlot] ?? (action === "STAND01" ? family.clips.find((entry) => entry !== null) : null) ?? null;
+      const clipPath = weaponAnimationTable?.[look.animationWeaponType!]?.[clipSlot]
+        ?? family.clips[clipSlot]
+        ?? (action === "STAND01" ? family.clips.find((entry) => entry !== null) : null)
+        ?? null;
       const animation = clipPath ? await this.animation(clipPath) : null;
       return animation ? {
         name: action,
@@ -299,6 +308,61 @@ export class ClassicSkinnedAssetLibrary {
       }),
     };
   }
+}
+
+/**
+ * Rebuilds MeshManager::m_sAnimationArray for the two classic player rigs.
+ * ANI filenames encode `(weaponType + 1) * 100 + (motion + 1)`. The client
+ * first fans the base bank out at 137 and then lets each weapon bank override
+ * it; sparse attack banks also inherit the last supplied attack animation.
+ */
+function buildClassicWeaponAnimationTable(
+  family: MonsterVisualFamily,
+  skin: number,
+): (string | null)[][] {
+  const weaponCount = 60;
+  const motionCount = 56;
+  const table = Array.from({ length: weaponCount }, () => (
+    Array<string | null>(motionCount).fill(null)
+  ));
+  const baseName = family.base.replace(/^.*[\\/]/, "").toLowerCase();
+
+  for (const clip of family.clips) {
+    if (!clip) continue;
+    const fileName = clip.replace(/^.*[\\/]/, "").toLowerCase();
+    if (!fileName.startsWith(baseName) || !fileName.endsWith(".ani")) continue;
+    const encodedText = fileName.slice(baseName.length, -4);
+    if (!/^\d{4}$/.test(encodedText)) continue;
+    const encoded = Number(encodedText);
+    const weapon = Math.floor(encoded / 100) - 1;
+    const motion = encoded % 100 - 1;
+    if (weapon < 0 || weapon >= weaponCount || motion < 0 || motion >= motionCount) continue;
+
+    table[weapon]![motion] = clip;
+    if ((skin === 0 || skin === 1) && motion >= 4 && motion < 9) {
+      for (let inherited = motion + 1; inherited < 10; inherited++) {
+        table[weapon]![inherited] = clip;
+      }
+    }
+    if ((skin === 0 || skin === 1) && motion >= 25 && motion < 29) {
+      for (let inherited = motion + 1; inherited < 30; inherited++) {
+        table[weapon]![inherited] = clip;
+      }
+    }
+    if (skin === 1 && weapon === 2 && motion === 4) {
+      for (let inherited = 0; inherited < 4; inherited++) {
+        table[weapon]![inherited] = table[1]![inherited] ?? null;
+      }
+    }
+    if ((skin === 0 && encoded === 138) || (skin === 1 && encoded === 137)) {
+      for (let targetWeapon = 1; targetWeapon < weaponCount; targetWeapon++) {
+        for (let targetMotion = 0; targetMotion < motionCount; targetMotion++) {
+          table[targetWeapon]![targetMotion] = table[0]![targetMotion] ?? null;
+        }
+      }
+    }
+  }
+  return table;
 }
 
 function animationVariant(template: MonsterTemplate): number {
