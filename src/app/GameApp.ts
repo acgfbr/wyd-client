@@ -704,10 +704,10 @@ export class GameApp {
       y: owner.y + Math.sin(angle) * 2.1,
     };
     const generation = this.#summonGeneration;
-    const loadJob = ClassicBeastMasterSummon.load(definition, spawn, this.#assets);
     const delay = timing?.effectDelaySeconds ?? 0.5;
     this.scheduleSkillEvent(delay, () => {
-      void loadJob.then((summon) => {
+      if (!this.#assets) return;
+      void ClassicBeastMasterSummon.load(definition, spawn, this.#assets).then((summon) => {
         if (!summon) {
           this.#hud.addLog(`${definition.name} não pôde ser materializado.`, "system");
           return;
@@ -733,6 +733,90 @@ export class GameApp {
       });
     });
     this.#hud.addLog(`${skill.name} · ${skill.mana} MP.`, "system");
+  }
+
+  private updateBeastMasterSummons(deltaSeconds: number): void {
+    if (!this.#player || !this.#world || this.#activeClassKey !== "beastmaster") return;
+    const target = this.beastMasterSummonTarget();
+    const environment = this.summonEnvironment();
+    for (const summon of this.#beastMasterSummons.values()) {
+      const angle = summon.definition.skill.instanceValue * 2.399963229728653;
+      const ownerAnchor = {
+        x: this.#player.position.x + Math.cos(angle) * 1.15,
+        y: this.#player.position.y + Math.sin(angle) * 1.15,
+      };
+      const attackSpread = summon.definition.pickSize[0] * 0.5 + 0.35;
+      const summonTarget = target ? {
+        ...target,
+        position: {
+          x: target.position.x + Math.cos(angle) * attackSpread,
+          y: target.position.y + Math.sin(angle) * attackSpread,
+        },
+      } : null;
+      summon.update(
+        deltaSeconds,
+        ownerAnchor,
+        summonTarget,
+        environment,
+        (snapshot, definition) => this.applyBeastMasterSummonStrike(snapshot.id, definition),
+      );
+    }
+  }
+
+  private beastMasterSummonTarget(): ClassicMonsterSnapshot | null {
+    if (!this.#player || !this.#boundSpawns) return null;
+    const selected = this.#selectedTargetId ? this.#boundSpawns.snapshot(this.#selectedTargetId) : null;
+    if (selected?.alive && selected.hostile) return selected;
+    let nearest: ClassicMonsterSnapshot | null = null;
+    let nearestDistance = 16;
+    for (const candidate of this.#boundSpawns.snapshots()) {
+      if (!candidate.alive || !candidate.hostile) continue;
+      const distance = Math.hypot(
+        candidate.position.x - this.#player.position.x,
+        candidate.position.y - this.#player.position.y,
+      );
+      if (distance >= nearestDistance) continue;
+      nearest = candidate;
+      nearestDistance = distance;
+    }
+    return nearest;
+  }
+
+  private applyBeastMasterSummonStrike(
+    targetId: string,
+    definition: BeastMasterSummonDefinition,
+  ): void {
+    if (!this.#boundSpawns || !this.#playerState.snapshot.alive) return;
+    const target = this.#boundSpawns.snapshot(targetId);
+    if (!target?.alive || !target.hostile) return;
+    const sequence = ++this.#attackSequence;
+    const variance = 0.9 + ((Math.imul(sequence, 1_664_525) >>> 25) / 127) * 0.2;
+    const coefficient = 0.22 + definition.skill.instanceValue * 0.035;
+    const damage = Math.max(1, Math.round(this.#playerState.snapshot.attack * coefficient * variance));
+    const result = this.#boundSpawns.strikeTarget(targetId, damage);
+    if (!result.ok) return;
+    const point = this.combatPoint(result.target.position, 0.9);
+    this.#damageNumbers.show(this.#camera, point, result.damage, false);
+    this.#combatEffects.burst(point, definition.skill.classicIndex === 62 ? 0x7653ff : 0x89e4a2, 0.55);
+  }
+
+  private summonEnvironment(): {
+    readonly origin: WydPosition;
+    heightAt(position: WydPosition): number;
+    isWalkable(position: WydPosition): boolean;
+  } {
+    const world = this.#world!;
+    return {
+      origin: world.origin,
+      heightAt: (position) => world.heightAt(position),
+      isWalkable: (position) => world.navigation.sample(position).walkability === "walkable",
+    };
+  }
+
+  private clearBeastMasterSummons(): void {
+    this.#summonGeneration++;
+    for (const summon of this.#beastMasterSummons.values()) summon.release();
+    this.#beastMasterSummons.clear();
   }
 
   private castSkill(skill: ClassSkill, target: ClassicMonsterSnapshot): void {
@@ -1031,6 +1115,7 @@ export class GameApp {
     this.#pendingBowAttacks.length = 0;
     this.#pendingSkillEvents.length = 0;
     this.#skills.clearBuffs();
+    this.clearBeastMasterSummons();
     this.#buffVisualPulseRemaining.clear();
     this.#skillEffects.clear();
     this.#etherealExplosionEffects.clear();
@@ -1202,6 +1287,7 @@ export class GameApp {
       }
 
       this.#activeClassKey = definition.key;
+      this.clearBeastMasterSummons();
       this.#skills.clear();
       this.#skills = new ClassSkillSystem(definition.key);
       this.#pendingBowAttacks.length = 0;
