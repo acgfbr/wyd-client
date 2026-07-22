@@ -46,8 +46,8 @@ export class ClassicAssetSource {
     return new ClassicAssetSource(await response.json() as ClassicManifest);
   }
 
-  async loadField(file: string): Promise<TrnBlock> {
-    const response = await fetch(`${ClassicAssetSource.base}/fields/${file}`);
+  async loadField(file: string, signal?: AbortSignal): Promise<TrnBlock> {
+    const response = await fetch(`${ClassicAssetSource.base}/fields/${file}`, { signal });
     if (!response.ok) throw new Error(`Falha ao carregar ${file}`);
     return parseTrn(await response.arrayBuffer());
   }
@@ -67,8 +67,8 @@ export class ClassicAssetSource {
     return entry ? `${ClassicAssetSource.base}/${entry.file}` : null;
   }
 
-  async loadObjects(file: string): Promise<readonly MapObjectRecord[]> {
-    const response = await fetch(`${ClassicAssetSource.base}/objects/${file}`);
+  async loadObjects(file: string, signal?: AbortSignal): Promise<readonly MapObjectRecord[]> {
+    const response = await fetch(`${ClassicAssetSource.base}/objects/${file}`, { signal });
     if (!response.ok) throw new Error(`Falha ao carregar ${file}`);
     return parseDat(await response.arrayBuffer());
   }

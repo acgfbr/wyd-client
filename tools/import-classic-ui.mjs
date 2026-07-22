@@ -15,6 +15,11 @@ const textures = [
   ["UI/InventoryBox2.wyt", "inventory-slots.png"],
   ["UI/MainBox2.wyt", "mainbox.png"],
   ["UI/hppro.wyt", "status-bars.png"],
+  ["UI/number.wyt", "damage-numbers.png"],
+  ["UI/number2.wyt", "magic-damage-numbers.png"],
+  ["UI/Skill2.wyt", "skills.png"],
+  ["UI/SkillMaster2.wyt", "master-skills.png"],
+  ["UI/NewAmul.wyt", "skill-icons.png"],
 ];
 
 await mkdir(outputRoot, { recursive: true });
@@ -37,7 +42,9 @@ function decodeWyt(wyt) {
   const height = wyt.readUInt16LE(base + 14);
   const bits = wyt[base + 16];
   const descriptor = wyt[base + 17];
-  if (imageType !== 2 || (bits !== 24 && bits !== 32)) {
+  const trueColor = imageType === 2 && (bits === 24 || bits === 32);
+  const grayscale = imageType === 3 && bits === 8;
+  if (!trueColor && !grayscale) {
     throw new Error(`WYT não suportado: tipo ${imageType}, ${bits} bits`);
   }
 
@@ -57,10 +64,20 @@ function decodeWyt(wyt) {
       const targetX = rightOrigin ? width - 1 - sourceX : sourceX;
       const input = pixelStart + (sourceY * width + sourceX) * bytesPerPixel;
       const output = rowStart + 1 + targetX * 4;
-      scanlines[output] = wyt[input + 2];
-      scanlines[output + 1] = wyt[input + 1];
-      scanlines[output + 2] = wyt[input];
-      scanlines[output + 3] = bytesPerPixel === 4 ? wyt[input + 3] : 255;
+      if (grayscale) {
+        const luminance = wyt[input];
+        scanlines[output] = luminance;
+        scanlines[output + 1] = luminance;
+        scanlines[output + 2] = luminance;
+        // NewAmul is loaded as X8R8G8B8 with an opaque-black color key in
+        // TextureManager. Preserve that mask instead of inventing an alpha.
+        scanlines[output + 3] = luminance === 0 ? 0 : 255;
+      } else {
+        scanlines[output] = wyt[input + 2];
+        scanlines[output + 1] = wyt[input + 1];
+        scanlines[output + 2] = wyt[input];
+        scanlines[output + 3] = bytesPerPixel === 4 ? wyt[input + 3] : 255;
+      }
     }
   }
 

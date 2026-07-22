@@ -7,7 +7,13 @@ import { createTerrainBlockMesh } from "../render/terrain/TerrainBlockMesh";
 import { TerrainMaterialLibrary } from "../render/terrain/TerrainMaterialLibrary";
 import { MapObjects } from "../render/objects/MapObjects";
 import { ClassicSpawnManager } from "../game/npcs/ClassicSpawnManager";
-import { FIELD_WORLD_SIZE, HEIGHT_SCALE, TILE_WORLD_SIZE, fieldAt, type WydPosition } from "./coordinates";
+import {
+  FIELD_WORLD_SIZE,
+  HEIGHT_SCALE,
+  TILE_WORLD_SIZE,
+  fieldAt,
+  type WydPosition,
+} from "./coordinates";
 import { composeClassicCollisionMask } from "./navigation/ClassicCollisionMask";
 import {
   CLASSIC_BLOCKED_MASK,
@@ -17,11 +23,14 @@ import {
 } from "./navigation/ClassicNavigation";
 import { fieldKey } from "./regions";
 
-// O Field mede 128 unidades. Comecamos o prefetch cedo o bastante para a
-// caminhada com G, mas mantemos uma margem maior para nao ficar carregando e
-// descarregando quando o jogador oscila na borda.
+// O Field mede 128 unidades. A base de 28 ganha ate 32 unidades somente na
+// direcao do movimento; com G isso antecipa 0,5 s sem trazer o vizinho oposto.
+// A margem de 42 preserva a histerese de descarregamento em baixa velocidade.
 const PREFETCH_MARGIN = 28;
 const RELEASE_MARGIN = 42;
+const PREFETCH_LOOKAHEAD_SECONDS = 0.5;
+const MAX_PREDICTIVE_LEAD = 32;
+const ZERO_STREAMING_LEAD = { x: 0, y: 0 } as const;
 
 export class ClassicWorld {
   readonly object = new THREE.Group();
@@ -31,10 +40,14 @@ export class ClassicWorld {
   readonly #terrainMeshes = new Map<string, THREE.Group>();
   readonly #loadedFields = new Set<string>();
   readonly #loadJobs = new Map<string, Promise<void>>();
+  readonly #loadControllers = new Map<string, AbortController>();
   readonly #objectJobs = new Map<string, Promise<void>>();
   readonly #objectReady = new Set<string>();
   readonly #fieldGenerations = new Map<string, number>();
-  readonly #availableFields = new Map<string, ClassicAssetSource["manifest"]["fields"][number]>();
+  readonly #availableFields = new Map<
+    string,
+    ClassicAssetSource["manifest"]["fields"][number]
+  >();
   readonly #materials: TerrainMaterialLibrary;
   readonly #mapObjects: MapObjects;
   #spawns: ClassicSpawnManager | null = null;
@@ -44,16 +57,24 @@ export class ClassicWorld {
   #activeFieldKey = "";
 
   /** Camada viva de NPCs/monstros; fica nula apenas durante o boot assíncrono. */
-  get spawns(): ClassicSpawnManager | null { return this.#spawns; }
+  get spawns(): ClassicSpawnManager | null {
+    return this.#spawns;
+  }
 
-  constructor(private readonly assets: ClassicAssetSource, readonly origin: WydPosition) {
+  constructor(
+    private readonly assets: ClassicAssetSource,
+    readonly origin: WydPosition,
+  ) {
     this.#lastStreamingPosition = { ...origin };
     this.navigation = new ClassicNavigation({
       terrainAt: (column, row) => this.#blocks.get(fieldKey(column, row)),
-      collisionMaskAt: (column, row) => this.#collisionMasks.get(fieldKey(column, row)),
+      collisionMaskAt: (column, row) =>
+        this.#collisionMasks.get(fieldKey(column, row)),
     });
     this.#materials = new TerrainMaterialLibrary(assets);
-    this.#mapObjects = new MapObjects(assets, origin, (position) => this.heightAt(position));
+    this.#mapObjects = new MapObjects(assets, origin, (position) =>
+      this.heightAt(position),
+    );
     for (const field of assets.manifest.fields) {
       this.#availableFields.set(fieldKey(field.column, field.row), field);
     }
@@ -100,16 +121,25 @@ export class ClassicWorld {
 
   /** Advances terrain streaming and the independently loaded creature layer. */
   update(deltaSeconds: number, position: WydPosition): void {
+    const previous = this.#lastStreamingPosition;
     this.#lastStreamingPosition = { ...position };
-    this.updateStreaming(position);
+    this.updateStreaming(
+      position,
+      predictiveLead(previous, position, deltaSeconds),
+    );
     this.#spawns?.update(deltaSeconds, position);
   }
 
   /**
-   * Chamado a cada frame. Mantem no maximo o centro e quatro vizinhos N/S/L/O.
-   * Vizinhos so entram perto da borda e nunca bloqueiam o frame do jogo.
+   * Chamado a cada frame. Mantem o centro e apenas os vizinhos cardinais nas
+   * faixas de borda. Ate a margem preditiva maxima (60) e menor que meio Field,
+   * portanto no maximo dois vizinhos (um por eixo) ficam desejados ao mesmo
+   * tempo.
    */
-  updateStreaming(position: WydPosition): void {
+  updateStreaming(
+    position: WydPosition,
+    lead: WydPosition = ZERO_STREAMING_LEAD,
+  ): void {
     const center = fieldAt(position);
     const centerKey = fieldKey(center.column, center.row);
     this.#activeFieldKey = centerKey;
@@ -120,16 +150,43 @@ export class ClassicWorld {
     const localX = position.x - center.column * FIELD_WORLD_SIZE;
     const localY = position.y - center.row * FIELD_WORLD_SIZE;
     const candidates = [
-      { column: center.column - 1, row: center.row, distance: localX },
-      { column: center.column + 1, row: center.row, distance: FIELD_WORLD_SIZE - localX },
-      { column: center.column, row: center.row - 1, distance: localY },
-      { column: center.column, row: center.row + 1, distance: FIELD_WORLD_SIZE - localY },
+      {
+        column: center.column - 1,
+        row: center.row,
+        distance: localX,
+        predictiveLead: Math.max(0, -lead.x),
+      },
+      {
+        column: center.column + 1,
+        row: center.row,
+        distance: FIELD_WORLD_SIZE - localX,
+        predictiveLead: Math.max(0, lead.x),
+      },
+      {
+        column: center.column,
+        row: center.row - 1,
+        distance: localY,
+        predictiveLead: Math.max(0, -lead.y),
+      },
+      {
+        column: center.column,
+        row: center.row + 1,
+        distance: FIELD_WORLD_SIZE - localY,
+        predictiveLead: Math.max(0, lead.y),
+      },
     ];
     for (const candidate of candidates) {
       const key = fieldKey(candidate.column, candidate.row);
       if (!this.#availableFields.has(key)) continue;
       const resident = this.#loadedFields.has(key) || this.#loadJobs.has(key);
-      if (candidate.distance <= (resident ? RELEASE_MARGIN : PREFETCH_MARGIN)) desired.add(key);
+      const predictiveMargin = PREFETCH_MARGIN + candidate.predictiveLead;
+      // A margem ampliada vale apenas na direcao atual. Depois de cruzar a
+      // borda, o Field anterior volta imediatamente a usar RELEASE_MARGIN.
+      const margin = resident
+        ? Math.max(RELEASE_MARGIN, predictiveMargin)
+        : predictiveMargin;
+      if (candidate.distance <= margin)
+        desired.add(key);
     }
     this.setDesiredFields(desired);
 
@@ -144,7 +201,12 @@ export class ClassicWorld {
       return;
     }
     for (const key of desired) {
-      if (key === centerKey || this.#loadedFields.has(key) || this.#loadJobs.has(key)) continue;
+      if (
+        key === centerKey ||
+        this.#loadedFields.has(key) ||
+        this.#loadJobs.has(key)
+      )
+        continue;
       const entry = this.#availableFields.get(key);
       if (!entry) continue;
       void this.loadField(entry).catch((error: unknown) => {
@@ -164,35 +226,59 @@ export class ClassicWorld {
     const job = ClassicSpawnManager.create(this.assets, {
       origin: this.origin,
       heightAt: (position) => this.heightAt(position),
-      isFieldLoaded: (column, row) => this.#loadedFields.has(fieldKey(column, row)),
-      isWalkable: (position) => this.navigation.sample(position).walkability === "walkable",
-    }).then((spawns) => {
-      this.#spawns = spawns;
-      this.object.add(spawns.object);
-      spawns.update(0, this.#lastStreamingPosition);
-    }).catch((error: unknown) => {
-      // O mundo continua utilizavel mesmo se o pacote opcional estiver ausente.
-      console.warn("Camada de monstros indisponivel", error);
-    }).finally(() => {
-      if (this.#spawnStartJob === job) this.#spawnStartJob = null;
-    });
+      isFieldLoaded: (column, row) =>
+        this.#loadedFields.has(fieldKey(column, row)),
+      isWalkable: (position) =>
+        this.navigation.sample(position).walkability === "walkable",
+    })
+      .then((spawns) => {
+        this.#spawns = spawns;
+        this.object.add(spawns.object);
+        spawns.update(0, this.#lastStreamingPosition);
+      })
+      .catch((error: unknown) => {
+        // O mundo continua utilizavel mesmo se o pacote opcional estiver ausente.
+        console.warn("Camada de monstros indisponivel", error);
+      })
+      .finally(() => {
+        if (this.#spawnStartJob === job) this.#spawnStartJob = null;
+      });
     this.#spawnStartJob = job;
   }
 
-  private loadField(entry: ClassicAssetSource["manifest"]["fields"][number]): Promise<void> {
+  private loadField(
+    entry: ClassicAssetSource["manifest"]["fields"][number],
+  ): Promise<void> {
     const key = fieldKey(entry.column, entry.row);
     if (this.#loadedFields.has(key)) return Promise.resolve();
     const activeJob = this.#loadJobs.get(key);
     if (activeJob) return activeJob;
 
+    const controller = new AbortController();
     const job = (async () => {
-      const [block, records, navigationData] = await Promise.all([
-        this.assets.loadField(entry.file),
-        entry.objectFile ? this.assets.loadObjects(entry.objectFile) : Promise.resolve([]),
-        this.assets.loadNavigation(),
-      ]);
+      let block: TrnBlock;
+      let records: readonly MapObjectRecord[];
+      let navigationData: Awaited<ReturnType<ClassicAssetSource["loadNavigation"]>>;
+      try {
+        [block, records, navigationData] = await Promise.all([
+          this.assets.loadField(entry.file, controller.signal),
+          entry.objectFile
+            ? this.assets.loadObjects(entry.objectFile, controller.signal)
+            : Promise.resolve([]),
+          this.assets.loadNavigation(),
+        ]);
+      } catch (error) {
+        // Trocas rapidas de Field e teleportes cancelam downloads que ja nao
+        // podem ser montados. Nao trate essa liberacao intencional como falha.
+        if (controller.signal.aborted) return;
+        throw error;
+      }
       if (!this.#desiredFields.has(key)) return;
-      const collisionMask = composeClassicCollisionMask(block, records, navigationData);
+      const collisionMask = composeClassicCollisionMask(
+        block,
+        records,
+        navigationData,
+      );
       this.#blocks.set(key, block);
       this.#collisionMasks.set(key, collisionMask);
       this.#loadedFields.add(key);
@@ -203,9 +289,13 @@ export class ClassicWorld {
         this.startObjectLoad(entry, generation, records);
       }
     })().finally(() => {
-      this.#loadJobs.delete(key);
+      if (this.#loadJobs.get(key) === job) this.#loadJobs.delete(key);
+      if (this.#loadControllers.get(key) === controller) {
+        this.#loadControllers.delete(key);
+      }
     });
     this.#loadJobs.set(key, job);
+    this.#loadControllers.set(key, controller);
     return job;
   }
 
@@ -226,41 +316,44 @@ export class ClassicWorld {
         return;
       }
       this.#objectReady.add(key);
-    })().catch((error: unknown) => {
-      console.error(`Falha ao carregar objetos do Field ${key}`, error);
-    }).finally(() => {
-      if (this.#objectJobs.get(key) !== job) return;
-      this.#objectJobs.delete(key);
-      const currentGeneration = this.#fieldGenerations.get(key);
-      // Se o Field saiu e voltou enquanto o DAT/modelos ainda carregavam, o
-      // job antigo foi cancelado logicamente e reiniciamos para a geracao nova.
-      if (
-        currentGeneration !== undefined
-        && currentGeneration !== generation
-        && this.#loadedFields.has(key)
-        && this.#desiredFields.has(key)
-        && !this.#objectReady.has(key)
-      ) {
-        void this.assets.loadObjects(entry.objectFile!).then((currentRecords) => {
-          if (this.isCurrentGeneration(key, currentGeneration)) {
-            this.startObjectLoad(entry, currentGeneration, currentRecords);
-          }
-        }).catch((error: unknown) => {
-          console.error(`Falha ao recarregar objetos do Field ${key}`, error);
-        });
-      }
-    });
+    })()
+      .catch((error: unknown) => {
+        console.error(`Falha ao carregar objetos do Field ${key}`, error);
+      })
+      .finally(() => {
+        if (this.#objectJobs.get(key) !== job) return;
+        this.#objectJobs.delete(key);
+        const currentGeneration = this.#fieldGenerations.get(key);
+        // Se o Field saiu e voltou enquanto o DAT/modelos ainda carregavam, o
+        // job antigo foi cancelado logicamente e reiniciamos para a geracao nova.
+        if (
+          currentGeneration !== undefined &&
+          currentGeneration !== generation &&
+          this.#loadedFields.has(key) &&
+          this.#desiredFields.has(key) &&
+          !this.#objectReady.has(key)
+        ) {
+          // O DAT e imutavel. Reaproveitar os registros ja decodificados evita
+          // um terceiro fetch quando o Field sai e volta durante addBlock.
+          this.startObjectLoad(entry, currentGeneration, records);
+        }
+      });
     this.#objectJobs.set(key, job);
   }
 
   private isCurrentGeneration(key: string, generation: number): boolean {
-    return this.#fieldGenerations.get(key) === generation
-      && this.#loadedFields.has(key)
-      && this.#desiredFields.has(key);
+    return (
+      this.#fieldGenerations.get(key) === generation &&
+      this.#loadedFields.has(key) &&
+      this.#desiredFields.has(key)
+    );
   }
 
   private setDesiredFields(desired: Set<string>): void {
     this.#desiredFields = desired;
+    for (const [key, controller] of this.#loadControllers) {
+      if (!desired.has(key)) controller.abort();
+    }
     let removedAny = false;
     for (const key of [...this.#loadedFields]) {
       if (desired.has(key)) continue;
@@ -333,8 +426,10 @@ export class ClassicWorld {
     const key = fieldKey(field.column, field.row);
     const block = this.#blocks.get(key);
     if (!block) return 0;
-    const localX = (position.x - field.column * FIELD_WORLD_SIZE) / TILE_WORLD_SIZE;
-    const localY = (position.y - field.row * FIELD_WORLD_SIZE) / TILE_WORLD_SIZE;
+    const localX =
+      (position.x - field.column * FIELD_WORLD_SIZE) / TILE_WORLD_SIZE;
+    const localY =
+      (position.y - field.row * FIELD_WORLD_SIZE) / TILE_WORLD_SIZE;
     const x0 = Math.max(0, Math.min(TRN_SIDE - 1, Math.floor(localX)));
     const y0 = Math.max(0, Math.min(TRN_SIDE - 1, Math.floor(localY)));
     const x1 = Math.min(TRN_SIDE - 1, x0 + 1);
@@ -345,9 +440,10 @@ export class ClassicWorld {
     const h10 = block.tiles[y0 * TRN_SIDE + x1]?.height ?? h00;
     const h01 = block.tiles[y1 * TRN_SIDE + x0]?.height ?? h00;
     const h11 = block.tiles[y1 * TRN_SIDE + x1]?.height ?? h00;
-    const raw = tx + ty <= 1
-      ? h00 + tx * (h10 - h00) + ty * (h01 - h00)
-      : (1 - tx) * h01 + (1 - ty) * h10 + (tx + ty - 1) * h11;
+    const raw =
+      tx + ty <= 1
+        ? h00 + tx * (h10 - h00) + ty * (h01 - h00)
+        : (1 - tx) * h01 + (1 - ty) * h10 + (tx + ty - 1) * h11;
     const terrainHeight = raw * HEIGHT_SCALE;
     const collision = this.#collisionMasks.get(key);
     const collisionHeight = collision?.complete
@@ -356,8 +452,33 @@ export class ClassicWorld {
     // Actor movement in the classic client follows GroundGetMask, which is
     // where bridge decks are stamped. Keep the rendered TRN when that mask is
     // merely its coarser terrain approximation.
-    return collisionHeight === null ? terrainHeight : Math.max(terrainHeight, collisionHeight);
+    return collisionHeight === null
+      ? terrainHeight
+      : Math.max(terrainHeight, collisionHeight);
   }
+}
+
+function predictiveLead(
+  previous: WydPosition,
+  current: WydPosition,
+  deltaSeconds: number,
+): WydPosition {
+  if (!Number.isFinite(deltaSeconds) || deltaSeconds <= 0) {
+    return ZERO_STREAMING_LEAD;
+  }
+  const scale = PREFETCH_LOOKAHEAD_SECONDS / deltaSeconds;
+  return {
+    x: THREE.MathUtils.clamp(
+      (current.x - previous.x) * scale,
+      -MAX_PREDICTIVE_LEAD,
+      MAX_PREDICTIVE_LEAD,
+    ),
+    y: THREE.MathUtils.clamp(
+      (current.y - previous.y) * scale,
+      -MAX_PREDICTIVE_LEAD,
+      MAX_PREDICTIVE_LEAD,
+    ),
+  };
 }
 
 function collisionHeightAt(
@@ -366,8 +487,14 @@ function collisionHeightAt(
   fieldColumn: number,
   fieldRow: number,
 ): number | null {
-  const localX = Math.max(0, Math.min(FIELD_WORLD_SIZE - 1, position.x - fieldColumn * FIELD_WORLD_SIZE));
-  const localY = Math.max(0, Math.min(FIELD_WORLD_SIZE - 1, position.y - fieldRow * FIELD_WORLD_SIZE));
+  const localX = Math.max(
+    0,
+    Math.min(FIELD_WORLD_SIZE - 1, position.x - fieldColumn * FIELD_WORLD_SIZE),
+  );
+  const localY = Math.max(
+    0,
+    Math.min(FIELD_WORLD_SIZE - 1, position.y - fieldRow * FIELD_WORLD_SIZE),
+  );
   const x0 = Math.floor(localX);
   const y0 = Math.floor(localY);
   const x1 = Math.min(FIELD_WORLD_SIZE - 1, x0 + 1);
@@ -380,7 +507,8 @@ function collisionHeightAt(
   // cell also cannot belong to the same classic route segment (strict MH=8).
   const surface = (x: number, y: number): number => {
     const value = signedMask(values[y * FIELD_WORLD_SIZE + x] ?? base);
-    return value >= CLASSIC_BLOCKED_MASK || Math.abs(value - base) >= CLASSIC_MAX_STEP_HEIGHT
+    return value >= CLASSIC_BLOCKED_MASK ||
+      Math.abs(value - base) >= CLASSIC_MAX_STEP_HEIGHT
       ? base
       : value;
   };
@@ -389,11 +517,12 @@ function collisionHeightAt(
   const h01 = surface(x0, y1);
   const h11 = surface(x1, y1);
   return (
-    h00 * (1 - tx) * (1 - ty)
-    + h10 * tx * (1 - ty)
-    + h01 * (1 - tx) * ty
-    + h11 * tx * ty
-  ) * HEIGHT_SCALE;
+    (h00 * (1 - tx) * (1 - ty) +
+      h10 * tx * (1 - ty) +
+      h01 * (1 - tx) * ty +
+      h11 * tx * ty) *
+    HEIGHT_SCALE
+  );
 }
 
 function signedMask(value: number): number {
@@ -401,19 +530,44 @@ function signedMask(value: number): number {
   return byte > 127 ? byte - 256 : byte;
 }
 
-function copyColumn(source: TrnBlock, sourceColumn: number, target: TrnBlock, targetColumn: number): void {
+function copyColumn(
+  source: TrnBlock,
+  sourceColumn: number,
+  target: TrnBlock,
+  targetColumn: number,
+): void {
   for (let row = 0; row < TRN_SIDE; row++) {
-    copyHeightAndColor(source, row * TRN_SIDE + sourceColumn, target, row * TRN_SIDE + targetColumn);
+    copyHeightAndColor(
+      source,
+      row * TRN_SIDE + sourceColumn,
+      target,
+      row * TRN_SIDE + targetColumn,
+    );
   }
 }
 
-function copyRow(source: TrnBlock, sourceRow: number, target: TrnBlock, targetRow: number): void {
+function copyRow(
+  source: TrnBlock,
+  sourceRow: number,
+  target: TrnBlock,
+  targetRow: number,
+): void {
   for (let column = 0; column < TRN_SIDE; column++) {
-    copyHeightAndColor(source, sourceRow * TRN_SIDE + column, target, targetRow * TRN_SIDE + column);
+    copyHeightAndColor(
+      source,
+      sourceRow * TRN_SIDE + column,
+      target,
+      targetRow * TRN_SIDE + column,
+    );
   }
 }
 
-function copyHeightAndColor(source: TrnBlock, sourceIndex: number, target: TrnBlock, targetIndex: number): void {
+function copyHeightAndColor(
+  source: TrnBlock,
+  sourceIndex: number,
+  target: TrnBlock,
+  targetIndex: number,
+): void {
   const sourceTile = source.tiles[sourceIndex];
   const targetTile = target.tiles[targetIndex];
   if (!sourceTile || !targetTile) return;

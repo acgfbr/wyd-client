@@ -6,6 +6,7 @@
   "scripts": {
     "import:classic": "bun tools/import-classic-assets.mjs",
     "import:player": "bun tools/import-classic-player.mjs",
+    "import:skills": "bun tools/import-classic-skills.mjs",
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "test": "vitest run",

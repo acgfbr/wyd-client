@@ -216,6 +216,18 @@ for (const index of [1, 2, 3, 8, 9]) {
 // O TMHouse 474 desenha a hélice como GetCommonMesh(dwObjType + 1), portanto
 // o MSA 475 é uma dependência indireta e não aparece nos records DAT.
 usedObjectTypes.add(475);
+// TMArrow type 152 level 2 (Explosão Etérea) referencia estes modelos
+// diretamente; eles também não aparecem nos records dos mapas.
+usedObjectTypes.add(28); // Effect/plane.msa, aura animada 101..104
+usedObjectTypes.add(863); // mesh/sword01.msa, lâmina do projétil
+// Buffs persistentes da Huntress não aparecem em DAT: Imunidade e Ligação Espectral.
+usedObjectTypes.add(12); // Effect/sphere2.msa
+usedObjectTypes.add(2839); // Effect/unsole.msa
+// Força Espectral (#101) renders the weapon-owned SForce layers from
+// TMEffectSWSwing::Render. They are indirect dependencies, not DAT objects.
+usedObjectTypes.add(10);
+usedObjectTypes.add(19);
+usedObjectTypes.add(20);
 for (const [ownerType, waterType] of houseWaterCompanions) {
   if (usedObjectTypes.has(ownerType)) usedObjectTypes.add(waterType);
 }
@@ -235,7 +247,13 @@ for (const type of [...usedObjectTypes].sort((a, b) => a - b)) {
   const textureNames = readMsaTextureNames(msa);
   const modelTextures = [];
   for (const textureName of textureNames) {
-    const baseName = path.basename(textureName, path.extname(textureName));
+    // Effect MSAs commonly embed root-relative Windows names (for example
+    // "\\spec01"). Normalise separators before basename resolution.
+    const normalizedTextureName = textureName.replaceAll("\\", path.sep);
+    const baseName = path.basename(
+      normalizedTextureName,
+      path.extname(normalizedTextureName),
+    );
     const wysName = directoryFiles.get(`${baseName}.wys`.toLowerCase());
     if (!wysName) {
       modelTextures.push(null);

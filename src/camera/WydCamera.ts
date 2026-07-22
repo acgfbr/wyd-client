@@ -5,6 +5,10 @@ export class WydCamera {
   pitch = Math.PI * 0.25;
   distance = 15;
   readonly #lookAt = new THREE.Vector3();
+  #quakeRemaining = 0;
+  #quakeDuration = 0;
+  #quakeStrength = 0;
+  #quakePhase = 0;
 
   constructor(readonly camera: THREE.PerspectiveCamera) {}
 
@@ -18,6 +22,12 @@ export class WydCamera {
     this.distance = THREE.MathUtils.clamp(this.distance + scaledDelta, 3.5, 180);
   }
 
+  quake(strength = 1, durationSeconds = 0.18): void {
+    this.#quakeStrength = Math.max(this.#quakeStrength, Math.max(0, strength));
+    this.#quakeDuration = Math.max(0.01, durationSeconds);
+    this.#quakeRemaining = Math.max(this.#quakeRemaining, this.#quakeDuration);
+  }
+
   update(target: THREE.Vector3, dt: number): void {
     const desiredTarget = new THREE.Vector3(target.x, target.y + 1, target.z);
     this.#lookAt.lerp(desiredTarget, 1 - Math.exp(-dt * 14));
@@ -27,6 +37,16 @@ export class WydCamera {
       this.#lookAt.y + Math.sin(this.pitch) * this.distance,
       this.#lookAt.z + Math.sin(this.yaw) * horizontal,
     );
+    if (this.#quakeRemaining > 0) {
+      this.#quakeRemaining = Math.max(0, this.#quakeRemaining - dt);
+      this.#quakePhase += dt * 71;
+      const envelope = this.#quakeRemaining / this.#quakeDuration;
+      const amplitude = this.#quakeStrength * 0.045 * envelope;
+      desiredPosition.x += Math.sin(this.#quakePhase) * amplitude;
+      desiredPosition.y += Math.sin(this.#quakePhase * 1.73) * amplitude * 0.55;
+      desiredPosition.z += Math.cos(this.#quakePhase * 1.31) * amplitude;
+      if (this.#quakeRemaining === 0) this.#quakeStrength = 0;
+    }
     this.camera.position.lerp(desiredPosition, 1 - Math.exp(-dt * 10));
     this.camera.lookAt(this.#lookAt);
   }

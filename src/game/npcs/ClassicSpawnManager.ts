@@ -29,8 +29,11 @@ export type {
 const MAX_ACTORS_PER_FIELD = 40;
 const MATERIALIZE_BATCH = 4;
 const DENSE_FIELD_RESELECT_DISTANCE = 24;
-const ADJACENT_FIELD_PREFETCH_DISTANCE = 32;
-const ADJACENT_FIELD_RELEASE_DISTANCE = 45;
+// Creature assets start before ClassicWorld requests the neighbouring TRN
+// (28 units). At G speed (64 u/s), 56 units still leaves ~0.88 s to prepare
+// the ten worst-case materialization batches before crossing the Field edge.
+const ADJACENT_FIELD_PRELOAD_DISTANCE = 56;
+const ADJACENT_FIELD_RELEASE_DISTANCE = 64;
 const TARGET_ID_USER_DATA_KEY = "classicMonsterTargetId";
 
 export interface ClassicSpawnEnvironment {
@@ -123,6 +126,7 @@ interface StreamedSpawnField {
 export class ClassicSpawnManager {
   readonly object = new THREE.Group();
   readonly #assets: ClassicSkinnedAssetLibrary;
+  readonly #availableFields = new Set<string>();
   #activeFieldKey = "";
   #activeColumn = -1;
   #activeRow = -1;
@@ -143,6 +147,9 @@ export class ClassicSpawnManager {
     private readonly environment: ClassicSpawnEnvironment,
   ) {
     this.#assets = new ClassicSkinnedAssetLibrary(assets, catalog);
+    for (const field of assets.manifest.fields) {
+      this.#availableFields.add(fieldKey(field.column, field.row));
+    }
     this.object.name = "classic-npcs-and-monsters";
   }
 
@@ -250,7 +257,15 @@ export class ClassicSpawnManager {
     const animateDistanceSquared = FIELD_WORLD_SIZE * FIELD_WORLD_SIZE * 2.25;
     const nowSeconds = this.routeClockSeconds();
     const previousPositions = this.#actors.map((actor) => ({ ...actor.position }));
-    for (const actor of this.#actors) this.updateActorGameplay(actor, deltaSeconds, playerPosition, nowSeconds);
+    for (const actor of this.#actors) {
+      this.updateActorGameplay(
+        actor,
+        deltaSeconds,
+        playerPosition,
+        nowSeconds,
+        actor.object.parent?.visible !== false,
+      );
+    }
     const isWalkable = this.environment.isWalkable
       ? (position: WydPosition) => this.environment.isWalkable?.(position) ?? true
       : undefined;
@@ -268,11 +283,19 @@ export class ClassicSpawnManager {
       const dx = actor.position.x - playerPosition.x;
       const dy = actor.position.y - playerPosition.y;
       const distanceSquared = dx * dx + dy * dy;
-      if (actor.object.visible && distanceSquared <= animateDistanceSquared) actor.lease.model.update(deltaSeconds);
-      actor.label.visible = isActorAlive(actor) && distanceSquared <= 40 * 40;
+      const fieldVisible = actor.object.parent?.visible !== false;
+      if (fieldVisible && actor.object.visible && distanceSquared <= animateDistanceSquared) {
+        actor.lease.model.update(deltaSeconds);
+      }
+      actor.label.visible = fieldVisible && isActorAlive(actor) && distanceSquared <= 40 * 40;
       updateHitFeedback(actor, deltaSeconds);
       const scene = toScene(actor.position, this.environment.origin);
-      actor.object.position.set(scene.x, this.environment.heightAt(actor.position), scene.z);
+      actor.object.position.x = scene.x;
+      actor.object.position.z = scene.z;
+      // A preloaded neighbour has no TRN/collision height yet. Keep its last
+      // vertical value while hidden and resolve the authoritative height on
+      // the very frame its terrain becomes resident.
+      if (fieldVisible) actor.object.position.y = this.environment.heightAt(actor.position);
     }
   }
 
@@ -281,6 +304,7 @@ export class ClassicSpawnManager {
     deltaSeconds: number,
     playerPosition: WydPosition,
     nowSeconds: number,
+    canEngagePlayer: boolean,
   ): void {
     const delta = Number.isFinite(deltaSeconds) ? Math.max(0, Math.min(deltaSeconds, 0.1)) : 0;
     if (!isActorAlive(actor)) {
@@ -295,6 +319,17 @@ export class ClassicSpawnManager {
 
     actor.actionLockRemaining = Math.max(0, actor.actionLockRemaining - delta);
     if (!actor.hostile) {
+      if (actor.actionLockRemaining <= 0) advanceActor(actor, delta);
+      return;
+    }
+    if (!canEngagePlayer) {
+      // Preloaded/retained Fields keep their autonomous route clock alive, but
+      // an invisible creature must never acquire or damage the player before
+      // its terrain and navigation are authoritative.
+      if (actor.aiMode !== "route") {
+        resetActorRoute(actor);
+        actor.aiMode = "route";
+      }
       if (actor.actionLockRemaining <= 0) advanceActor(actor, delta);
       return;
     }
@@ -405,11 +440,13 @@ export class ClassicSpawnManager {
     }
 
     const desiredFields = cardinalSpawnFields(field.column, field.row, playerPosition);
+    for (const desiredKey of [...desiredFields.keys()]) {
+      if (!this.#availableFields.has(desiredKey)) desiredFields.delete(desiredKey);
+    }
 
     // A margem maior para liberar e menor para solicitar evita que uma pequena
-    // oscilacao na emenda fique recriando dezenas de meshes. Um Field que ja
-    // foi materializado pode sobreviver por alguns metros depois de o terreno
-    // sair do cache; no limite de 45 unidades os dois ja estao fora da tela.
+    // oscilacao na emenda fique recriando dezenas de meshes. O grupo pode ficar
+    // materializado, mas oculto, enquanto seu TRN ainda nao esta residente.
     for (const streamed of this.#fields.values()) {
       if (desiredFields.has(streamed.key)) continue;
       const cardinalDistance = Math.abs(streamed.column - field.column) + Math.abs(streamed.row - field.row);
@@ -425,15 +462,14 @@ export class ClassicSpawnManager {
     for (const [desiredKey, desired] of desiredFields) {
       const streamed = this.#fields.get(desiredKey);
       if (streamed) {
+        streamed.group.visible = this.environment.isFieldLoaded(desired.column, desired.row);
         this.syncDenseFieldSelection(streamed, playerPosition, desiredKey === key);
         continue;
       }
-      // Os atores entram apenas depois que o TRN vizinho estiver residente.
-      // Como o mundo inicia o prefetch em paralelo, isto normalmente acontece
-      // ainda antes de o jogador chegar a emenda.
-      if (this.environment.isFieldLoaded(desired.column, desired.row)) {
-        this.startField(desired.column, desired.row, playerPosition);
-      }
+      // CPU/GPU assets are prepared before ClassicWorld requests the TRN. The
+      // field group stays hidden until isFieldLoaded becomes true, so no actor
+      // can float at height zero while terrain/navigation are unavailable.
+      this.startField(desired.column, desired.row, playerPosition);
     }
 
     for (const streamedKey of [...this.#fields.keys()]) {
@@ -449,6 +485,7 @@ export class ClassicSpawnManager {
 
     const group = new THREE.Group();
     group.name = `spawns-${key}`;
+    group.visible = this.environment.isFieldLoaded(column, row);
     const streamed: StreamedSpawnField = {
       key,
       column,
@@ -505,7 +542,7 @@ export class ClassicSpawnManager {
         const batch = specs.slice(offset, offset + MATERIALIZE_BATCH);
         const actors = await Promise.all(batch.map((spec) => this.createActor(spec)));
         if (!this.isCurrent(streamed, generation)) {
-          for (const actor of actors) if (actor) disposeActor(actor);
+          for (const actor of actors) if (actor) this.releaseActor(actor);
           return;
         }
         for (const actor of actors) {
@@ -513,7 +550,7 @@ export class ClassicSpawnManager {
           // Alguns bancos antigos repetem um generator na tabela de dois
           // Fields. O id classico e global; jamais materializamos sua copia.
           if (this.#actorsById.has(actor.id)) {
-            disposeActor(actor);
+            this.releaseActor(actor);
             continue;
           }
           streamed.actors.push(actor);
@@ -624,6 +661,24 @@ export class ClassicSpawnManager {
       && streamed.group.parent === this.object;
   }
 
+  private releaseActor(actor: SpawnedActor): void {
+    disposeActor(actor);
+    // Most life entries are pristine and need not accumulate while the player
+    // explores many maps. Preserve only gameplay-relevant state (damage/death
+    // history); it is reconciled against the global clock when loaded again.
+    if (this.#actorsById.has(actor.id)) return;
+    const life = this.#lifeStates.get(actor.id);
+    if (
+      life === actor.life
+      && life.hp === life.maxHp
+      && life.deadAtSeconds === null
+      && life.respawnAtSeconds === null
+      && life.deathCount === 0
+    ) {
+      this.#lifeStates.delete(actor.id);
+    }
+  }
+
   private lifeStateFor(id: string, maxHp: number, nowSeconds: number): PersistentLifeState {
     let life = this.#lifeStates.get(id);
     if (!life) {
@@ -657,7 +712,7 @@ export class ClassicSpawnManager {
     const removed = new Set(streamed.actors);
     for (const actor of streamed.actors) {
       if (this.#actorsById.get(actor.id) === actor) this.#actorsById.delete(actor.id);
-      disposeActor(actor);
+      this.releaseActor(actor);
     }
     streamed.actors.length = 0;
     this.#actors = this.#actors.filter((actor) => !removed.has(actor));
@@ -677,10 +732,10 @@ function cardinalSpawnFields(
 
   const localX = position.x - column * FIELD_WORLD_SIZE;
   const localY = position.y - row * FIELD_WORLD_SIZE;
-  if (localX <= ADJACENT_FIELD_PREFETCH_DISTANCE) add(column - 1, row);
-  if (FIELD_WORLD_SIZE - localX <= ADJACENT_FIELD_PREFETCH_DISTANCE) add(column + 1, row);
-  if (localY <= ADJACENT_FIELD_PREFETCH_DISTANCE) add(column, row - 1);
-  if (FIELD_WORLD_SIZE - localY <= ADJACENT_FIELD_PREFETCH_DISTANCE) add(column, row + 1);
+  if (localX <= ADJACENT_FIELD_PRELOAD_DISTANCE) add(column - 1, row);
+  if (FIELD_WORLD_SIZE - localX <= ADJACENT_FIELD_PRELOAD_DISTANCE) add(column + 1, row);
+  if (localY <= ADJACENT_FIELD_PRELOAD_DISTANCE) add(column, row - 1);
+  if (FIELD_WORLD_SIZE - localY <= ADJACENT_FIELD_PRELOAD_DISTANCE) add(column, row + 1);
   return desired;
 }
 

@@ -37,9 +37,11 @@ export interface RewardSummary {
   readonly levelsGained: number;
   readonly experienceAdded: number;
   readonly coinsAdded: number;
+  readonly attackGained: number;
 }
 
 const INVENTORY_SIZE = 30;
+const OFFLINE_ATTACK_PER_LEVEL = 3;
 
 /** Client-side progression used while the server layer intentionally stays out of scope. */
 export class PlayerState {
@@ -154,6 +156,7 @@ export class PlayerState {
     const experienceAdded = clampReward(experience, 0, 2_000_000);
     const coinsAdded = clampReward(coins, 0, 50_000_000);
     const initialLevel = this.#level;
+    const initialAttack = this.#attack;
     this.#experience += experienceAdded;
     this.#coins += coinsAdded;
     while (this.#level < 400) {
@@ -163,13 +166,19 @@ export class PlayerState {
       this.#level++;
       this.#maxHp += 22 + Math.floor(this.#level * 1.4);
       this.#maxMp += 12 + Math.floor(this.#level * 0.8);
-      this.#attack += 3;
+      // Mock autoritativo do frontend enquanto o servidor está fora do escopo.
+      this.#attack += OFFLINE_ATTACK_PER_LEVEL;
       this.#defense += 2;
       this.#hp = this.#maxHp;
       this.#mp = this.#maxMp;
     }
     this.emit();
-    return { levelsGained: this.#level - initialLevel, experienceAdded, coinsAdded };
+    return {
+      levelsGained: this.#level - initialLevel,
+      experienceAdded,
+      coinsAdded,
+      attackGained: this.#attack - initialAttack,
+    };
   }
 
   addItem(item: InventoryItem, quantity = 1, notify = true): number {

@@ -7,6 +7,17 @@ import { parseMsh, type MshModel } from "../../formats/classic/Msh";
 import { ClassicSkinnedModel, type ClassicSkinnedPart } from "../../render/characters/ClassicSkinnedModel";
 import type { MonsterCatalog, MonsterTemplate, MonsterVisualFamily } from "./MonsterCatalog";
 
+// Parsed assets are cheap to reuse but were previously retained for every map
+// visited during the whole session. These LRU ceilings cover the current spawn
+// window comfortably while bounding long exploration sessions. Live models
+// keep direct references to their clips; evicting a cache entry never invalidates
+// an actor that is already materialized.
+const MAX_BUFFER_CACHE_ENTRIES = 256;
+const MAX_SKELETON_CACHE_ENTRIES = 48;
+const MAX_MESH_CACHE_ENTRIES = 192;
+const MAX_ANIMATION_CACHE_ENTRIES = 256;
+const MAX_DEFINITION_CACHE_ENTRIES = 64;
+
 export interface ClassicSkinnedLookPart {
   readonly name?: string;
   readonly mesh: string;
@@ -25,6 +36,8 @@ export interface ClassicSkinnedLook {
   readonly initialAction?: string;
   /** Index selected by TMHuman::CheckWeapon for the classic animation bank. */
   readonly animationWeaponType?: number;
+  /** Per-action overrides used when classic state changes select another bank. */
+  readonly animationWeaponTypeByAction?: Readonly<Record<string, number>>;
   readonly actionVariant?: number;
 }
 
@@ -148,20 +161,25 @@ export class ClassicSkinnedAssetLibrary {
   private definition(look: ClassicSkinnedLook): Promise<ParsedDefinition | null> {
     const actions = [...new Set(look.actions?.length ? look.actions : ["STAND01"])];
     const actionVariant = Math.max(0, Math.min(3, Math.trunc(look.actionVariant ?? 0)));
+    const animationWeaponTypeOverrides = Object.entries(look.animationWeaponTypeByAction ?? {})
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([action, weaponType]) => `${action}:${weaponType}`)
+      .join(",");
     const key = [
       look.skin,
       actions.join(","),
       look.initialAction ?? "",
       look.animationWeaponType ?? "base",
+      animationWeaponTypeOverrides,
       actionVariant,
       ...look.parts.map((part) => `${part.mesh}>${part.texture ?? "-"}>${part.alpha ?? "?"}`),
     ].join("|");
-    let promise = this.#definitions.get(key);
-    if (!promise) {
-      promise = this.loadDefinition(look, actions, actionVariant).catch(() => null);
-      this.#definitions.set(key, promise);
-    }
-    return promise;
+    return cachedPromise(
+      this.#definitions,
+      key,
+      MAX_DEFINITION_CACHE_ENTRIES,
+      () => this.loadDefinition(look, actions, actionVariant).catch(() => null),
+    );
   }
 
   private async loadDefinition(
@@ -174,6 +192,7 @@ export class ClassicSkinnedAssetLibrary {
     const skeleton = await this.skeleton(family.skeleton);
     if (!skeleton) return null;
     const weaponAnimationTable = look.animationWeaponType === undefined
+      && !look.animationWeaponTypeByAction
       ? null
       : buildClassicWeaponAnimationTable(family, look.skin);
 
@@ -190,8 +209,12 @@ export class ClassicSkinnedAssetLibrary {
       const pairOffset = actionValues && actionValues.length >= 9 ? actionVariant * 2 : 0;
       const clipSlot = actionValues?.[pairOffset] ?? actionValues?.[0] ?? 0;
       const quarterStepMs = Math.max(1, actionValues?.[pairOffset + 1] ?? actionValues?.[1] ?? 20);
-      const clipPath = weaponAnimationTable?.[look.animationWeaponType!]?.[clipSlot]
-        ?? family.clips[clipSlot]
+      const animationWeaponType = look.animationWeaponTypeByAction?.[action]
+        ?? look.animationWeaponType;
+      const clipPath = (animationWeaponType === undefined
+        ? family.clips[clipSlot]
+        : (weaponAnimationTable?.[animationWeaponType]?.[clipSlot]
+          ?? family.clips[clipSlot]))
         ?? (action === "STAND01" ? family.clips.find((entry) => entry !== null) : null)
         ?? null;
       const animation = clipPath ? await this.animation(clipPath) : null;
@@ -221,41 +244,41 @@ export class ClassicSkinnedAssetLibrary {
   }
 
   private buffer(file: string): Promise<ArrayBuffer | null> {
-    let promise = this.#buffers.get(file);
-    if (!promise) {
-      promise = fetch(this.assets.dataUrl(file))
+    return cachedPromise(
+      this.#buffers,
+      file,
+      MAX_BUFFER_CACHE_ENTRIES,
+      () => fetch(this.assets.dataUrl(file))
         .then((response) => response.ok ? response.arrayBuffer() : null)
-        .catch(() => null);
-      this.#buffers.set(file, promise);
-    }
-    return promise;
+        .catch(() => null),
+    );
   }
 
   private skeleton(file: string): Promise<BonSkeleton | null> {
-    let promise = this.#skeletons.get(file);
-    if (!promise) {
-      promise = this.buffer(file).then((buffer) => buffer ? parseBon(buffer) : null).catch(() => null);
-      this.#skeletons.set(file, promise);
-    }
-    return promise;
+    return cachedPromise(
+      this.#skeletons,
+      file,
+      MAX_SKELETON_CACHE_ENTRIES,
+      () => this.buffer(file).then((buffer) => buffer ? parseBon(buffer) : null).catch(() => null),
+    );
   }
 
   private mesh(file: string): Promise<MshModel | null> {
-    let promise = this.#meshes.get(file);
-    if (!promise) {
-      promise = this.buffer(file).then((buffer) => buffer ? parseMsh(buffer) : null).catch(() => null);
-      this.#meshes.set(file, promise);
-    }
-    return promise;
+    return cachedPromise(
+      this.#meshes,
+      file,
+      MAX_MESH_CACHE_ENTRIES,
+      () => this.buffer(file).then((buffer) => buffer ? parseMsh(buffer) : null).catch(() => null),
+    );
   }
 
   private animation(file: string): Promise<AniAnimation | null> {
-    let promise = this.#animations.get(file);
-    if (!promise) {
-      promise = this.buffer(file).then((buffer) => buffer ? parseAni(buffer) : null).catch(() => null);
-      this.#animations.set(file, promise);
-    }
-    return promise;
+    return cachedPromise(
+      this.#animations,
+      file,
+      MAX_ANIMATION_CACHE_ENTRIES,
+      () => this.buffer(file).then((buffer) => buffer ? parseAni(buffer) : null).catch(() => null),
+    );
   }
 
   private async retainMaterial(
@@ -308,6 +331,30 @@ export class ClassicSkinnedAssetLibrary {
       }),
     };
   }
+}
+
+function cachedPromise<T>(
+  cache: Map<string, Promise<T>>,
+  key: string,
+  maximumEntries: number,
+  create: () => Promise<T>,
+): Promise<T> {
+  const existing = cache.get(key);
+  if (existing) {
+    // Map insertion order gives us a compact LRU without a second index.
+    cache.delete(key);
+    cache.set(key, existing);
+    return existing;
+  }
+
+  const promise = create();
+  cache.set(key, promise);
+  while (cache.size > maximumEntries) {
+    const oldest = cache.keys().next().value as string | undefined;
+    if (oldest === undefined) break;
+    cache.delete(oldest);
+  }
+  return promise;
 }
 
 /**

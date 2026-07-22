@@ -1,33 +1,65 @@
 import type { PlayerState } from "../state/PlayerState";
 
-export type HuntressSkillKind = "projectile" | "area" | "poison" | "defense";
+export type HuntressSkillKind = "direct" | "volley" | "cone" | "shadow" | "buff";
 
 export interface HuntressSkill {
   readonly slot: number;
-  /** Index in the Huntress block (72..95) of the original SkillData.bin. */
+  /** Logical record in the retail SkillData.bin (Huntress block 72..95). */
   readonly classicIndex: number;
   readonly name: string;
   readonly shortName: string;
   readonly mana: number;
   readonly cooldownSeconds: number;
   readonly range: number;
-  readonly power: number;
   readonly kind: HuntressSkillKind;
+  readonly target: "enemy" | "self";
+  readonly maxTargets: number;
+  readonly affectType: number;
+  readonly affectValue: number;
+  /** Duration from SkillData.bin, retained for source fidelity. */
+  readonly affectTimeSeconds: number;
+  /** Offline gameplay override requested while the server is out of scope. */
+  readonly runtimeDurationSeconds: number;
+  /** Offline-only damage overlay; the authoritative server formula is not in scope yet. */
+  readonly damageCoefficient: number;
+  /** Geometry used by the original target selection, in WYD tiles. */
   readonly radius: number;
+  /** Presentation fallback while the skill-specific classic effect is being ported. */
   readonly color: number;
 }
 
-/** Values are based on the decoded Huntress block from the retail client. */
+/**
+ * Bow-compatible Huntress loadout. Binary fields below are copied from the
+ * decoded retail SkillData.bin; only damageCoefficient is an offline overlay.
+ * Toxina de Serpente (#92) is intentionally absent because the client accepts
+ * it only with WTYPE 41 claws, while this character equips a WTYPE 101 bow.
+ */
 export const HUNTRESS_SKILLS: readonly HuntressSkill[] = [
-  { slot: 1, classicIndex: 72, name: "Ataque Fatal", shortName: "Fatal", mana: 15, cooldownSeconds: 1.5, range: 14, power: 1.45, kind: "projectile", radius: 0, color: 0xffdb78 },
-  { slot: 2, classicIndex: 79, name: "Tempestade de Raios", shortName: "Raios", mana: 75, cooldownSeconds: 11, range: 13, power: 2.2, kind: "area", radius: 4.2, color: 0xaedbff },
-  { slot: 3, classicIndex: 80, name: "Golpe Felino", shortName: "Felino", mana: 10, cooldownSeconds: 1.5, range: 11, power: 1.3, kind: "projectile", radius: 0, color: 0xff9a52 },
-  { slot: 4, classicIndex: 86, name: "Explosão Etérea", shortName: "Etérea", mana: 25, cooldownSeconds: 3, range: 12, power: 1.65, kind: "area", radius: 3.1, color: 0xd292ff },
-  { slot: 5, classicIndex: 88, name: "Lâmina das Sombras", shortName: "Sombras", mana: 15, cooldownSeconds: 4, range: 14, power: 1.8, kind: "projectile", radius: 0, color: 0x7b8cff },
-  { slot: 6, classicIndex: 92, name: "Toxina de Serpente", shortName: "Toxina", mana: 50, cooldownSeconds: 6, range: 12, power: 1.55, kind: "poison", radius: 2.2, color: 0x82e84f },
-  { slot: 7, classicIndex: 93, name: "Lâmina Aérea", shortName: "Aérea", mana: 0, cooldownSeconds: 2, range: 15, power: 1.35, kind: "area", radius: 2.5, color: 0xe8f7ff },
-  { slot: 8, classicIndex: 95, name: "Invisibilidade", shortName: "Invisível", mana: 200, cooldownSeconds: 13, range: 0, power: 0, kind: "defense", radius: 0, color: 0xb9c8ff },
+  { slot: 1, classicIndex: 72, name: "Ataque Fatal", shortName: "Fatal", mana: 15, cooldownSeconds: 15, range: 2, kind: "direct", target: "enemy", maxTargets: 1, affectType: 0, affectValue: 0, affectTimeSeconds: 0, runtimeDurationSeconds: 0, damageCoefficient: 1.3, radius: 0, color: 0xffaa55 },
+  { slot: 2, classicIndex: 79, name: "Tempestade de Raios", shortName: "Raios", mana: 75, cooldownSeconds: 11, range: 6, kind: "volley", target: "enemy", maxTargets: 6, affectType: 0, affectValue: 0, affectTimeSeconds: 0, runtimeDurationSeconds: 0, damageCoefficient: 1.75, radius: 3, color: 0xaedbff },
+  { slot: 3, classicIndex: 80, name: "Golpe Felino", shortName: "Felino", mana: 10, cooldownSeconds: 15, range: 2, kind: "direct", target: "enemy", maxTargets: 1, affectType: 0, affectValue: 0, affectTimeSeconds: 0, runtimeDurationSeconds: 0, damageCoefficient: 1.3, radius: 0, color: 0xff5555 },
+  { slot: 4, classicIndex: 86, name: "Explosão Etérea", shortName: "Etérea", mana: 25, cooldownSeconds: 3, range: 6, kind: "cone", target: "enemy", maxTargets: 13, affectType: 0, affectValue: 0, affectTimeSeconds: 0, runtimeDurationSeconds: 0, damageCoefficient: 1.5, radius: 6, color: 0xd292ff },
+  { slot: 5, classicIndex: 88, name: "Lâmina das Sombras", shortName: "Sombras", mana: 15, cooldownSeconds: 15, range: 3, kind: "shadow", target: "enemy", maxTargets: 1, affectType: 0, affectValue: 0, affectTimeSeconds: 0, runtimeDurationSeconds: 0, damageCoefficient: 1.3, radius: 0, color: 0x996655 },
+  { slot: 6, classicIndex: 75, name: "Encantar Gelo", shortName: "Gelo", mana: 30, cooldownSeconds: 6, range: 0, kind: "buff", target: "self", maxTargets: 1, affectType: 27, affectValue: 1, affectTimeSeconds: 12, runtimeDurationSeconds: 180, damageCoefficient: 0, radius: 0, color: 0x55aaff },
+  { slot: 7, classicIndex: 76, name: "Imunidade", shortName: "Imune", mana: 42, cooldownSeconds: 6, range: 0, kind: "buff", target: "self", maxTargets: 1, affectType: 19, affectValue: 15, affectTimeSeconds: 12, runtimeDurationSeconds: 180, damageCoefficient: 0, radius: 0, color: 0x99bbff },
+  { slot: 8, classicIndex: 95, name: "Invisibilidade", shortName: "Invis.", mana: 200, cooldownSeconds: 13, range: 0, kind: "buff", target: "self", maxTargets: 1, affectType: 28, affectValue: 1, affectTimeSeconds: 3, runtimeDurationSeconds: 180, damageCoefficient: 0, radius: 0, color: 0x661122 },
+  { slot: 9, classicIndex: 81, name: "Ligação Espectral", shortName: "Ligação", mana: 108, cooldownSeconds: 6, range: 0, kind: "buff", target: "self", maxTargets: 1, affectType: 37, affectValue: 0, affectTimeSeconds: 14, runtimeDurationSeconds: 180, damageCoefficient: 0, radius: 0, color: 0x999999 },
 ] as const;
+
+export interface ActiveHuntressBuff {
+  readonly classicIndex: number;
+  readonly name: string;
+  readonly iconIndex: number;
+  readonly affectType: number;
+  readonly affectValue: number;
+  readonly durationSeconds: number;
+  readonly remainingSeconds: number;
+}
+
+interface MutableBuffState {
+  readonly skill: HuntressSkill;
+  remainingSeconds: number;
+}
 
 export type SkillStartResult =
   | { readonly ok: true; readonly skill: HuntressSkill }
@@ -35,6 +67,7 @@ export type SkillStartResult =
 
 export class HuntressSkillSystem {
   readonly #remaining = new Map<number, number>();
+  readonly #buffs = new Map<number, MutableBuffState>();
 
   update(deltaSeconds: number): void {
     if (!Number.isFinite(deltaSeconds) || deltaSeconds <= 0) return;
@@ -42,6 +75,10 @@ export class HuntressSkillSystem {
       const next = Math.max(0, remaining - deltaSeconds);
       if (next === 0) this.#remaining.delete(slot);
       else this.#remaining.set(slot, next);
+    }
+    for (const [classicIndex, state] of this.#buffs) {
+      state.remainingSeconds = Math.max(0, state.remainingSeconds - deltaSeconds);
+      if (state.remainingSeconds === 0) this.#buffs.delete(classicIndex);
     }
   }
 
@@ -54,6 +91,38 @@ export class HuntressSkillSystem {
     return { ok: true, skill };
   }
 
+  activateBuff(skill: HuntressSkill): ActiveHuntressBuff | null {
+    if (skill.kind !== "buff" || skill.runtimeDurationSeconds <= 0) return null;
+    this.#buffs.set(skill.classicIndex, {
+      skill,
+      remainingSeconds: skill.runtimeDurationSeconds,
+    });
+    return this.buff(skill.classicIndex);
+  }
+
+  removeBuff(classicIndex: number): boolean {
+    return this.#buffs.delete(classicIndex);
+  }
+
+  clearBuffs(): void {
+    this.#buffs.clear();
+  }
+
+  hasBuff(classicIndex: number): boolean {
+    return this.#buffs.has(classicIndex);
+  }
+
+  buff(classicIndex: number): ActiveHuntressBuff | null {
+    const state = this.#buffs.get(classicIndex);
+    return state ? snapshotBuff(state) : null;
+  }
+
+  activeBuffs(): readonly ActiveHuntressBuff[] {
+    return [...this.#buffs.values()]
+      .map(snapshotBuff)
+      .sort((left, right) => left.classicIndex - right.classicIndex);
+  }
+
   remaining(slot: number): number {
     return this.#remaining.get(slot) ?? 0;
   }
@@ -62,4 +131,16 @@ export class HuntressSkillSystem {
     const skill = HUNTRESS_SKILLS.find((candidate) => candidate.slot === slot);
     return skill ? Math.max(0, Math.min(1, this.remaining(slot) / skill.cooldownSeconds)) : 0;
   }
+}
+
+function snapshotBuff(state: MutableBuffState): ActiveHuntressBuff {
+  return {
+    classicIndex: state.skill.classicIndex,
+    name: state.skill.name,
+    iconIndex: state.skill.classicIndex,
+    affectType: state.skill.affectType,
+    affectValue: state.skill.affectValue,
+    durationSeconds: state.skill.runtimeDurationSeconds,
+    remainingSeconds: state.remainingSeconds,
+  };
 }

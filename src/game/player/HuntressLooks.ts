@@ -25,6 +25,7 @@ const BASE_FACE_AND_HEAD = [
  * bExpand=1 and ordinary LOOK_INFO variants receive +20 before the final +1.
  */
 export const HUNTRESS_LOOKS = [
+  kalintzCostume(),
   equipmentLook("rake", "Rake", 1656, 62),
   equipmentLook("loki", "Loki", 1673, 67),
   equipmentLook("waha-divino", "Waha Divino", 1681, 69),
@@ -39,7 +40,7 @@ export const HUNTRESS_LOOKS = [
 ] as const satisfies readonly HuntressLookDefinition[];
 
 export type HuntressLookKey = (typeof HUNTRESS_LOOKS)[number]["key"];
-export const DEFAULT_HUNTRESS_LOOK_KEY: HuntressLookKey = "succubus";
+export const DEFAULT_HUNTRESS_LOOK_KEY: HuntressLookKey = "mulher-kalintz";
 
 export function huntressLook(key: string): HuntressLookDefinition {
   return HUNTRESS_LOOKS.find((look) => look.key === key)
@@ -59,6 +60,23 @@ function equipmentLook(key: string, name: string, firstItemIndex: number, armorV
         const stem = `ch02${String(part).padStart(2, "0")}${armorVariant}`;
         return { meshStem: stem, textureStem: stem, alpha: "C" as const };
       }),
+    ],
+  };
+}
+
+function kalintzCostume(): HuntressLookDefinition {
+  return {
+    key: "mulher-kalintz",
+    name: "Mulher Kalintz",
+    itemIndex: 4156,
+    source: "SetHumanCostume item 4156 -> Costype 5 -> SetOldCostume case 6",
+    parts: [
+      { meshStem: "ch020117", textureStem: "ch020117", alpha: "A" },
+      { meshStem: "ch020217", textureStem: "ch020117", alpha: "A" },
+      { meshStem: "ch020317", textureStem: "ch020317", alpha: "C" },
+      { meshStem: "ch020417", textureStem: "ch020417", alpha: "C" },
+      { meshStem: "ch020517", textureStem: "ch020517", alpha: "N" },
+      { meshStem: "ch020617", textureStem: "ch020617", alpha: "N" },
     ],
   };
 }

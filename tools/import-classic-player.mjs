@@ -11,10 +11,12 @@ const outputRoot = path.join(projectRoot, "public/game-data/classic/player");
 const meshesRoot = path.join(outputRoot, "meshes");
 const texturesRoot = path.join(outputRoot, "textures");
 const mountsRoot = path.join(outputRoot, "mounts");
+const griupanRoot = path.join(outputRoot, "familiars/ag01");
 
 await mkdir(meshesRoot, { recursive: true });
 await mkdir(texturesRoot, { recursive: true });
 await mkdir(mountsRoot, { recursive: true });
+await mkdir(griupanRoot, { recursive: true });
 
 // LOOK_INFO equipment and SetHumanCostume cases used by the Huntress wardrobe.
 // Mesh and texture choices live in one shared table consumed by the runtime.
@@ -82,8 +84,19 @@ for (const look of MOUNT_LOOKS) {
   }
 }
 
+// Equip[13] item #1726 (Griupan): TMHuman creates skin 32 with LOOK_INFO
+// Mesh0/Skin0 = 2/0. TMSkinMesh therefore resolves the single ag01 part to
+// ag010103, while the [angel] animation table uses ag010101.ani.
+await copyFile(path.join(meshRoot, "ag01.bon"), path.join(griupanRoot, "ag01.bon"));
+await copyFile(path.join(meshRoot, "ag010101.ani"), path.join(griupanRoot, "ag010101.ani"));
+await copyFile(path.join(meshRoot, "ag010103.msh"), path.join(griupanRoot, "ag010103.msh"));
+await writeFile(
+  path.join(griupanRoot, "ag010103.dds"),
+  decodeWys(await readFile(path.join(meshRoot, "ag010103.wys"))),
+);
+
 console.log(
-  `${HUNTRESS_LOOKS.length} looks da Huntress, Skytalos e ${MOUNT_LOOKS.length} montarias importados para ${outputRoot}`,
+  `${HUNTRESS_LOOKS.length} looks da Huntress, Skytalos, ${MOUNT_LOOKS.length} montarias e Griupan importados para ${outputRoot}`,
 );
 
 function decodeWys(encoded) {

@@ -21,8 +21,15 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
 - A fogueira `501` usa os frames `011–018`, cores, escala e UVs do
   `TMEffectBillBoard`; a inversão vertical dos DDS foi corrigida e homologada
   em `2135,2140`.
+- O Griupan item `1726` está homologado como familiar padrão independente da
+  montaria, usando `32/ag01`, malha `ag010103`, animação, seguimento flutuante
+  tipo `5` e partículas clássicas.
+- O recorte da Huntress formado por Imunidade `#76`, Ligação Espectral `#81`,
+  Explosão Etérea `#86` e Força Espectral `#101` está homologado. Os buffs
+  persistem por `180 s`, com efeitos suavizados; a passiva `#101` acrescenta
+  alcance e acopla o `SForce` clássico aos ataques.
 - HUD clássico, minimapa, seletor de mapas, câmera, zoom e modo G estão ligados.
-- Build TypeScript/Vite verde em 21/07/2026.
+- Build TypeScript/Vite verde em 22/07/2026.
 
 ## Implementado, mas ainda não homologado visualmente
 
@@ -31,47 +38,80 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
 - Unicórnio item `2381`/visual `336`, `hs01` variante `07` completa em três
   partes e ações do bloco `[horse] 31`. A sela agora segue o bone `4` e a
   transformação `SetVecMantua(2, 31)`; aguarda homologação visual.
-- Macro `F`, montaria `R`, arco à distância e hotkeys de skill `1–8`.
+- Macro `F`, montaria `R`, arco à distância e hotkeys de skill `1–9`.
+- Controle contínuo implementado: manter o esquerdo atualiza o destino a cada
+  `200 ms`; manter esquerdo+direito avança na direção da câmera e permite
+  esterçar com o direito. A célula isolada em `2164,2102` agora recebe um
+  microdesvio manual restrito, sem remover a colisão clássica nem liberar
+  paredes/corrimãos. O conjunto aguarda homologação manual no navegador.
 
 ## Provisório — não considerar fiel ainda
 
 - Poder/dano e geometria visual das skills ainda são aproximações; nomes,
   mana, delay e range já vêm do bloco Huntress do `SkillData.bin`.
 - Fórmula de dano offline e rotação do macro ainda precisam ser confrontadas
-  com o cliente/servidor disponível.
+  com o cliente/servidor disponível. Enquanto o servidor não existe, cada
+  nível concede `+3 ATQ` no estado do frontend e o combate usa esse total.
 
 ## Fila obrigatória
 
-1. Locomoção, saídas e pontes.
-   Reproduzir também o controle clássico em que manter os botões esquerdo e
-   direito do mouse pressionados faz o personagem avançar na direção atual.
-   Ao manter somente o botão esquerdo pressionado sobre o terreno, atualizar
-   continuamente o destino sob o cursor e manter o personagem em movimento;
-   soltar o botão encerra essa atualização, sem exigir cliques repetidos.
-   Corrigir especificamente o gargalo em `2163,2102`: ao cruzar a ponte em
-   linha reta o personagem fica preso e só passa após um desvio lateral;
-   auditar a célula, vizinhas, máscara do objeto e transição de altura local,
-   sem reabrir a revisão global das pontes já homologadas.
+1. Locomoção, saídas e pontes. O controle contínuo já está implementado:
+   esquerdo mantido retargeta o chão, esquerdo+direito avança e esterça pela
+   câmera, e ambos funcionam independentemente da ordem em que são
+   pressionados. O gargalo relatado em `2163,2102` foi isolado no bloqueio
+   `type 444` da célula vizinha `2164,2102`; o movimento manual agora contorna
+   somente obstáculos unitários com rota curta e máscara autoritativa, nos dois
+   sentidos. O clique continua usando A*. Falta homologar esses controles no
+   navegador e permanece proibido reabrir a revisão global das pontes já
+   homologadas.
 2. Streaming antecipado de mundo e criaturas.
 3. `LOOK_INFO` da Huntress e guarda-roupa real. Implementado a partir de
    `SetPacketMOBItem`, `SetHumanCostume` e `SetCostume`: rosto/cabeça base,
-   Rake, Loki, Waha e oito fantasias, totalizando 11 visuais selecionáveis.
+   Rake, Loki, Waha e fantasias clássicas, incluindo a Mulher Kalintz do item
+   `4156`, agora definida como traje padrão do personagem.
 4. Skytalos, refinação e Ancient. Implementado e homologado: item `2551`,
    refinação +15, composição `MODULATE2X + ADDSMOOTH`, UV animado em 4 s e
    empunhadura pelo banco de arco da Huntress.
-5. Unicórnio nível 120 e pose montada. Implementado a partir do item `2381`,
-   visual `336`, meshes `hs010[1-3]07`, bone de sela `4`, escala combinada
-   `0.9` e multitextura de montaria `452` correspondente ao nível `120`;
-   falta somente homologação visual dentro do jogo. Expandir para um seletor
-   de várias montarias reais do cliente, nos moldes do seletor de trajes:
-   todas no nível `120`, com item/skin/meshes/texturas, escala, bone de sela e
-   conjunto de animações específicos, permitindo troca sem recarregar a página.
-6. Ataque à distância e macro: corrigir a animação de arco pela ação original
-   e sincronizar o disparo ao frame de soltura da flecha. A empunhadura em
-   repouso já está correta, mas o ciclo de ataque com arco continua reprovado
-   visualmente e não deve ser considerado homologado.
-7. Skills Huntress: além da regra de combate, carregar os efeitos originais de
-   conjuração, trajetória e impacto; o feedback visual atual é insuficiente.
+5. Montarias nível 120 e pose montada. Implementado e inspecionado com 14
+   montarias reais selecionáveis, cada uma com item/skin/meshes/texturas,
+   escala, bone de sela e banco de animação próprios. O Grifo conserva o rig
+   `bd02` para asas/pernas e reutiliza somente a curva vertical autorada do
+   `RUN` do Dragão Vermelho `dr02`, subindo ao avançar sem deformar o esqueleto.
+   A multitextura `452` percorre U/V no ciclo clássico de 10 s, respeita os
+   modos alpha `A/N/C` e limita a iluminação antes de `MODULATE2X`, como o
+   vertex shader Direct3D original, evitando saturação causada pelas luzes do
+   Three.js. O runtime permanece em `WebGLRenderer`; uma migração WebGPU não é
+   pendência atual porque exigiria portar os shaders `onBeforeCompile` para TSL.
+6. Ataque à distância e macro. Implementado e homologado: banco de arco `6`
+   desmontado/`5` montado, ciclo `ATTACK02/03/01`, soltura após `200 ms` e voo
+   de `50 ms` por unidade do ataque `151`. O dano usa o atlas original
+   `Yellow_Number`; críticos usam `Orange_Number`, curva `TMFont3` de `2,1 s`
+   e impacto clássico `531/118/229/230/231`. Para o gameplay offline atual, a
+   chance de crítico foi definida em `35%` por ataque. A montaria permanece em
+   locomoção/idle durante o ataque da Huntress. Regressão pendente relatada no
+   macro: durante algumas aproximações automáticas com a Huntress montada, o
+   personagem se desloca mas a montaria permanece visualmente em idle. Auditar
+   a transição entre `MSTND/MRUN/MWALK`, o action lock do disparo e o novo
+   `moveTo` do alvo, sincronizando a animação com deslocamento real sem fazer a
+   montaria saltar durante o ataque.
+7. Skills e buffs completos por classe. Implementar a matriz de habilidades de
+   TransKnight, Foema, BeastMaster e Huntress a partir de `SkillData.bin` e das
+   rotinas do cliente clássico. Cada skill deve usar sua textura, animação de
+   personagem, efeito de conjuração, trajetória e impacto originais; cada buff
+   deve manter duração/estado e o efeito persistente correto no personagem ou
+   alvo. Reproduzir também shader, blend/alpha, UV animado, billboard/mesh,
+   escala, cor, bone de ancoragem e sincronização dos frames, evitando efeitos
+   genéricos compartilhados entre classes. Para a Huntress, o catálogo binário,
+   ícones clássicos, barra clicável e menu `K` já estão integrados; os buffs
+   offline duram `180 s`. A Imunidade `#76` deve manter as duas esferas
+   `sphere2` persistentes, e a Ligação Espectral `#81` deve ocupar o slot `9`
+   com os dois arcos `unsole` orbitando enquanto o estado estiver ativo. A
+   Explosão Etérea `#86` já usa as lâminas e a trajetória clássicas. A passiva
+   Força Espectral `#101` também já está sempre aprendida, acrescenta uma
+   unidade ao alcance e acopla o `SForce` clássico de três camadas à arma em
+   ataques normais e skills ofensivas, sem ocupar slot ou criar buff temporário.
+   Esse recorte da Huntress está homologado; o épico só fecha depois da matriz
+   completa das quatro classes.
 8. Isolamento completo do modo G.
 9. Progressão e painel de personagem: reproduzir a janela de status clássica,
     guardar `STR/INT/DEX/CON` e pontos livres, permitir distribuição e calcular
@@ -83,6 +123,8 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
     clássico ampliado. NPCs devem fazer pequenas caminhadas aleatórias dentro
     de um raio curto do ponto original, alternando pausa/passeio e sempre
     retornando à sua área de origem, sem a autonomia ampla dos monstros.
+    O Griupan solicitado neste pacote já está equipado e homologado como
+    familiar padrão.
 11. HUD, áudio, efeitos e revisão manual dos mapas. Auditar especificamente os
     lotes de grama deslocados em `2104,2088` e `2129,2102`, comparando os
     registros DAT, pivô/rotação e a montagem original de `TMGrass/TMLeaf`.
@@ -102,6 +144,13 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
     equipamentos, montarias, animações, sons e efeitos; apontar os parsers e
     dados-fonte existentes, lacunas, dependências e a ordem segura para trazer
     o restante sem regressões visuais.
+14. Memória canônica do projeto. Depois da auditoria final, criar e consolidar
+    `MEMORIA_PROJETO.md` com a arquitetura resultante, decisões e justificativas,
+    fontes do cliente clássico por subsistema, formatos/parsers, descobertas,
+    bugs corrigidos, bugs ainda conhecidos, limitações técnicas e de navegador,
+    soluções rejeitadas, riscos, débitos, procedimentos de importação/build e
+    um histórico cronológico das mudanças relevantes. Manter o documento vivo
+    a partir daí, sem transformar `PENDENCIAS.md` em diário de implementação.
 
 ## Convenções do projeto
 

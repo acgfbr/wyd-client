@@ -6,6 +6,7 @@ import {
   createClassicD3DLocalMatrix,
   type ClassicBaseAttachmentTransform,
 } from "../../render/characters/ClassicSkinnedModel";
+import { ClassicSpectralForceWeaponEffect } from "../../render/effects/ClassicSpectralForceWeaponEffect";
 import {
   ClassicSkinnedAssetLibrary,
   type ClassicSkinnedInstanceLease,
@@ -18,11 +19,13 @@ import {
 } from "./HuntressLooks";
 
 const HUNTRESS_ACTIONS = [
-  "STAND01", "STAND02", "WALK", "RUN", "ATTACK1", "ATTACK2",
-  "SKILL01", "SKILL02", "SKILL03", "STRIKE", "DIE", "DEAD",
-  "MSTND01", "MWALK", "MRUN", "MATT1", "MATT2",
+  "STAND01", "STAND02", "WALK", "RUN", "ATTACK1", "ATTACK2", "ATTACK3",
+  "SKILL01", "SKILL02", "SKILL03", "STRIKE", "DIE", "DEAD", "MERCHL", "HOLY",
+  "MSTND01", "MWALK", "MRUN", "MATT1", "MATT2", "MATT3",
   "MSKIL01", "MSKIL02", "MSKIL03", "MSTRIKE", "MDIE", "MDEAD",
 ] as const;
+
+const MOUNTED_HUNTRESS_ACTIONS = HUNTRESS_ACTIONS.filter((action) => action.startsWith("M"));
 
 const SKYTALOS_ANCIENT_ITEM_INDEX = 2551;
 const SKYTALOS_REFINEMENT = 15;
@@ -37,6 +40,7 @@ interface ClassicRefinementState {
 interface ClassicWeaponVisual {
   readonly object: THREE.Group;
   readonly refinement: ClassicRefinementState;
+  readonly spectralForce: ClassicSpectralForceWeaponEffect | null;
 }
 
 export interface ClassicAvatarAction {
@@ -88,8 +92,13 @@ export class ClassicPlayerAvatar {
       })),
       actions: HUNTRESS_ACTIONS,
       // Skytalos has EF_WTYPE=101 and EF_POS=64. CheckWeapon selects bank 6
-      // for the Huntress (skin 1), then returns to the armed STAND02 pose.
+      // for the Huntress (skin 1) on foot and bank 5 while mounted. The latter
+      // contains ch020626, the rider's authored bow attack instead of the
+      // standing ch020705 pose.
       animationWeaponType: 6,
+      animationWeaponTypeByAction: Object.fromEntries(
+        MOUNTED_HUNTRESS_ACTIONS.map((action) => [action, 5]),
+      ),
       initialAction: "STAND02",
       actionVariant: 1,
     });
@@ -127,7 +136,14 @@ export class ClassicPlayerAvatar {
   }
 
   setEffectsEnabled(enabled: boolean): void {
-    if (this.#weapon) this.#weapon.refinement.enabled.value = enabled ? 1 : 0;
+    if (!this.#weapon) return;
+    this.#weapon.refinement.enabled.value = enabled ? 1 : 0;
+    this.#weapon.spectralForce?.setEnabled(enabled);
+  }
+
+  /** DoubleCritical bit 3 starts SForce type 2 for the equipped WTYPE 101. */
+  triggerSpectralForce(): void {
+    if (!this.#released) this.#weapon?.spectralForce?.trigger();
   }
 
   play(actions: readonly string[], restart = false): ClassicAvatarAction | null {
@@ -149,13 +165,17 @@ export class ClassicPlayerAvatar {
       // TMMesh::Render(1): (serverTime % 4000) / 4000 is added to U and V.
       const progress = this.#weapon.refinement.uvProgress;
       progress.value = (progress.value + deltaSeconds / 4) % 1;
+      this.#weapon.spectralForce?.update(deltaSeconds);
     }
   }
 
   release(): void {
     if (this.#released) return;
     this.#released = true;
-    if (this.#weapon) disposeStaticGroup(this.#weapon.object);
+    if (this.#weapon) {
+      this.#weapon.spectralForce?.dispose();
+      disposeStaticGroup(this.#weapon.object);
+    }
     this.#lease.release();
   }
 }
@@ -221,8 +241,18 @@ async function attachSkytalos(
   }));
   holder.matrixWorldNeedsUpdate = true;
   holder.add(bow);
+  // TMHuman copies TMMesh::m_fMaxZ into m_fSowrdLength. parseMsa mirrors the
+  // classic Z axis, so the original positive max is the negated Three min.
+  const classicMaxZ = Math.max(0, -(model.geometry.boundingBox?.min.z ?? 0));
+  const spectralForce = await ClassicSpectralForceWeaponEffect
+    .load(assets, classicMaxZ)
+    .catch((error: unknown) => {
+      console.warn("Força Espectral clássica indisponível", error);
+      return null;
+    });
+  if (spectralForce) holder.add(spectralForce.object);
   (lease.model.bones[24] ?? lease.model.object).add(holder);
-  return { object: holder, refinement };
+  return { object: holder, refinement, spectralForce };
 }
 
 function createSkytalosMaterial(

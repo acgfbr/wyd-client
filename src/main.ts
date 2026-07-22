@@ -38,6 +38,8 @@ app.innerHTML = `
     <div id="effects-status" class="effects-status is-active" title="Liga/desliga os efeitos visuais"><kbd>V</kbd><span>FX ON</span></div>
   </div>
 
+  <section id="buff-status" class="buff-status" aria-label="Buffs ativos"></section>
+
   <section class="player-status">
     <div class="vital-orb is-hp" aria-hidden="true"><i></i><span>HP</span></div>
     <div class="vital-orb is-mp" aria-hidden="true"><i></i><span>MP</span></div>
@@ -57,7 +59,7 @@ app.innerHTML = `
       <button id="skill-slot-6" type="button" data-key="6" title="6 · Caçada"><span class="quickslot-icon">✣</span><span class="skill-name">Caçada</span><kbd>6</kbd><span class="skill-cooldown"></span></button>
       <button id="skill-slot-7" type="button" data-key="7" title="7 · Skytalos"><span class="quickslot-icon">♜</span><span class="skill-name">Skytalos</span><kbd>7</kbd><span class="skill-cooldown"></span></button>
       <button id="skill-slot-8" type="button" data-key="8" title="8 · Montar"><span class="quickslot-icon">♘</span><span class="skill-name">Montar</span><kbd>8</kbd><span class="skill-cooldown"></span></button>
-      <button type="button" data-key="9" title="9 · Retorno"><span class="quickslot-icon">◈</span><kbd>9</kbd></button>
+      <button id="skill-slot-9" type="button" data-key="9" title="9 · Ligação Espectral"><span class="quickslot-icon">◈</span><span class="skill-name">Ligação</span><kbd>9</kbd><span class="skill-cooldown"></span></button>
       <button type="button" data-key="0" title="0 · Poção de HP"><span class="quickslot-icon potion">HP</span><kbd>0</kbd><small id="quickslot-1-count">5</small></button>
     </div>
     <div class="classic-menu-labels" aria-hidden="true"><span>C.C</span><span>MENU</span></div>
@@ -86,7 +88,20 @@ app.innerHTML = `
     <p>Duplo clique usa o item · <kbd>I</kbd> fecha</p>
   </section>
 
-  <div class="controls-hint"><span>WASD</span> mover · <span>Q/E</span> câmera · <span>RODA</span> zoom · <span>I</span> inventário · <span>G</span> GM · <span>R</span> montaria · <span>F</span> auto-combate · <span>V</span> efeitos</div>
+  <section id="skill-panel" class="skill-panel" aria-label="Skills clássicas">
+    <header><strong>SKILLS</strong><button type="button" aria-label="Fechar skills" data-skills-close>×</button></header>
+    <div class="skill-panel-toolbar">
+      <label for="skill-class-select">Classe</label>
+      <select id="skill-class-select" aria-label="Classe exibida">
+        <option value="huntress">Huntress</option>
+      </select>
+      <small><kbd>K</kbd> abre/fecha</small>
+    </div>
+    <div id="skill-catalog-status" class="skill-catalog-status">Carregando SkillData.bin…</div>
+    <div id="skill-catalog-grid" class="skill-catalog-grid"></div>
+  </section>
+
+  <div class="controls-hint"><span>WASD</span> mover · <span>Q/E</span> câmera · <span>RODA</span> zoom · <span>I</span> inventário · <span>K</span> skills · <span>G</span> GM · <span>R</span> montaria · <span>F</span> auto-combate · <span>V</span> efeitos</div>
 `;
 
 new GameApp(app).start().catch((error: unknown) => {

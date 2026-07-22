@@ -264,14 +264,29 @@ function applyMountLevelMaterial(
         `#ifdef USE_MAP
           vec2 wydMountUv = vMapUv + vec2(wydMountLevelUvProgress);
           vec3 wydMountLevel = texture2D(wydMountLevelMap, wydMountUv).rgb;
-          vec3 wydMountBase = min(outgoingLight * 2.0, vec3(1.0));
+          // skinmesh*.bin clamps the classic per-vertex light to 1.0 before
+          // texture stage 0 executes MODULATE2X. Three's current Armia lights
+          // intentionally exceed 1.0, so applying the 2x operation directly
+          // to outgoingLight washes the animated refinement into solid yellow.
+          // Recover the light term from the lit/base colors, keep the client's
+          // 0.3 emissive floor, then perform the fixed-function operation.
+          vec3 wydMountSafeDiffuse = max(diffuseColor.rgb, vec3(0.0001));
+          vec3 wydMountClassicLight = clamp(
+            outgoingLight / wydMountSafeDiffuse,
+            vec3(0.3),
+            vec3(1.0)
+          );
+          vec3 wydMountBase = min(
+            diffuseColor.rgb * wydMountClassicLight * 2.0,
+            vec3(1.0)
+          );
           vec3 wydMountRefined = ${combine};
           outgoingLight = mix(outgoingLight, wydMountRefined, wydMountLevelEnabled);
         #endif
         #include <opaque_fragment>`,
       );
   };
-  material.customProgramCacheKey = () => `wyd-mount-level120-multitexture-v3-${alpha}`;
+  material.customProgramCacheKey = () => `wyd-mount-level120-multitexture-v4-${alpha}`;
   material.needsUpdate = true;
 }
 
