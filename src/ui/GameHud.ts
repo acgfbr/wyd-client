@@ -9,6 +9,12 @@ import {
   type PlayerState,
   type PrimaryAttribute,
 } from "../game/state/PlayerState";
+import {
+  nextAutoCombatMode,
+  nextAutoCombatPositionMode,
+  type AutoCombatMode,
+  type AutoCombatPositionMode,
+} from "../game/combat/AutoCombat";
 
 type InventoryItemSource =
   | { readonly kind: "inventory"; readonly slot: number }
@@ -39,6 +45,8 @@ export interface SkillHudEntry {
   readonly shortName: string;
   readonly mana: number;
   readonly classicIndex?: number;
+  /** True only for an aggressive enemy skill that actually occupies the bar. */
+  readonly offensive?: boolean;
 }
 
 export interface BuffHudEntry {
@@ -93,7 +101,11 @@ export class GameHud {
   onSkillClassSelected: ((classKey: string) => void) | null = null;
   onCatalogSkillUse: ((classicIndex: number) => void) | null = null;
   onInventoryPreview: ((item: InventoryItem | null) => void) | null = null;
-  onAutoCombatToggle: (() => void) | null = null;
+  onAutoCombatModeSelected: ((mode: AutoCombatMode) => void) | null = null;
+  onAutoCombatSkillSlotsChanged: ((slots: readonly number[]) => void) | null = null;
+  onAutoCombatRecoveryThresholdChanged: ((percentage: number) => void) | null = null;
+  onAutoCombatMountThresholdChanged: ((percentage: number) => void) | null = null;
+  onAutoCombatPositionModeSelected: ((mode: AutoCombatPositionMode) => void) | null = null;
   onChatSubmit: ((message: string, channel: ChatChannel) => void) | null = null;
   readonly #target = requireElement<HTMLElement>("#target-status");
   readonly #targetName = requireElement<HTMLElement>("#target-name");
@@ -110,6 +122,8 @@ export class GameHud {
   readonly #chatInput = requireElement<HTMLInputElement>("#chat-message");
   readonly #chatChannelLabel = requireElement<HTMLButtonElement>("#chat-channel-label");
   readonly #gameMenu = requireElement<HTMLElement>("#game-menu-panel");
+  readonly #ccPanel = requireElement<HTMLElement>("#cc-panel");
+  readonly #ccSkillList = requireElement<HTMLElement>("#cc-skill-list");
   readonly #buffStatus = requireElement<HTMLElement>("#buff-status");
   readonly #skillPanel = requireElement<HTMLElement>("#skill-panel");
   readonly #skillCatalogGrid = requireElement<HTMLElement>("#skill-catalog-grid");
@@ -131,6 +145,12 @@ export class GameHud {
   #suppressInventoryClick = false;
   #activeClassKey = "huntress";
   #runtimeSkillIndices = new Set<number>();
+  #runtimeSkills: readonly SkillHudEntry[] = [];
+  #autoCombatMode: AutoCombatMode = "off";
+  #autoCombatSkillSlots: number[] = [];
+  #autoCombatRecoveryThreshold = 30;
+  #autoCombatMountThreshold = 30;
+  #autoCombatPositionMode: AutoCombatPositionMode = "continuous";
   #chatChannel: ChatChannel = "general";
   #chatHistory: string[] = [];
   #chatHistoryCursor = 0;
@@ -164,7 +184,24 @@ export class GameHud {
       this.onSkillClassSelected?.(this.#skillClassSelect.value);
     });
     document.querySelector<HTMLButtonElement>("#hud-cc-button")?.addEventListener("click", () => {
-      this.onAutoCombatToggle?.();
+      this.toggleAutoCombatPanel();
+    });
+    document.querySelector<HTMLButtonElement>("[data-cc-close]")?.addEventListener("click", () => {
+      this.toggleAutoCombatPanel(false);
+    });
+    document.querySelector<HTMLButtonElement>("[data-cc-mode-cycle]")?.addEventListener("click", () => {
+      this.onAutoCombatModeSelected?.(nextAutoCombatMode(this.#autoCombatMode));
+    });
+    document.querySelector<HTMLButtonElement>("#cc-recovery-cycle")?.addEventListener("click", () => {
+      const next = this.#autoCombatRecoveryThreshold >= 90 ? 0 : this.#autoCombatRecoveryThreshold + 10;
+      this.onAutoCombatRecoveryThresholdChanged?.(next);
+    });
+    document.querySelector<HTMLButtonElement>("#cc-mount-cycle")?.addEventListener("click", () => {
+      const next = this.#autoCombatMountThreshold >= 90 ? 0 : this.#autoCombatMountThreshold + 10;
+      this.onAutoCombatMountThresholdChanged?.(next);
+    });
+    document.querySelector<HTMLButtonElement>("#cc-position-cycle")?.addEventListener("click", () => {
+      this.onAutoCombatPositionModeSelected?.(nextAutoCombatPositionMode(this.#autoCombatPositionMode));
     });
     document.querySelector<HTMLButtonElement>("#hud-menu-button")?.addEventListener("click", () => {
       this.toggleGameMenu();
@@ -231,8 +268,25 @@ export class GameHud {
 
   toggleGameMenu(force?: boolean): boolean {
     const visible = force ?? !this.#gameMenu.classList.contains("is-visible");
+    if (visible) this.toggleAutoCombatPanel(false);
     this.#gameMenu.classList.toggle("is-visible", visible);
     this.#gameMenu.setAttribute("aria-hidden", String(!visible));
+    return visible;
+  }
+
+  toggleAutoCombatPanel(force?: boolean): boolean {
+    const visible = force ?? !this.#ccPanel.classList.contains("is-visible");
+    if (visible) this.toggleGameMenu(false);
+    this.#ccPanel.classList.toggle("is-visible", visible);
+    this.#ccPanel.setAttribute("aria-hidden", String(!visible));
+    const button = document.querySelector<HTMLButtonElement>("#hud-cc-button");
+    button?.setAttribute("aria-expanded", String(visible));
+    if (visible) {
+      this.addLog(
+        `C.C · HP/MP ${this.#autoCombatRecoveryThreshold}% · montaria ${this.#autoCombatMountThreshold}%.`,
+        "system",
+      );
+    }
     return visible;
   }
 
@@ -261,6 +315,7 @@ export class GameHud {
   }
 
   configureSkills(skills: readonly SkillHudEntry[], onUse: (slot: number) => void): void {
+    this.#runtimeSkills = [...skills];
     this.#runtimeSkillIndices = new Set(skills.flatMap((skill) => (
       skill.classicIndex === undefined ? [] : [skill.classicIndex]
     )));
@@ -298,6 +353,7 @@ export class GameHud {
       }
       button.onclick = () => onUse(skill.slot);
     }
+    this.renderAutoCombatSkills();
     if (this.#skillCatalog) this.renderSkillCatalog();
   }
 
@@ -347,14 +403,143 @@ export class GameHud {
     this.#buffStatus.classList.toggle("is-visible", entries.length > 0);
   }
 
-  setAutoCombat(active: boolean): void {
+  setAutoCombat(mode: AutoCombatMode, configuredSlots: readonly number[] = this.#autoCombatSkillSlots): void {
+    this.#autoCombatMode = mode;
+    const allowed = new Set(this.#runtimeSkills.filter(isMacroHudSkill).map((skill) => skill.slot));
+    this.#autoCombatSkillSlots = configuredSlots
+      .filter((slot, index, slots) => allowed.has(slot) && slots.indexOf(slot) === index)
+      .slice(0, 10);
+    const active = mode !== "off";
     const element = document.querySelector<HTMLElement>("#auto-combat");
     element?.classList.toggle("is-active", active);
+    element?.setAttribute("data-cc-mode", mode);
     const label = element?.querySelector<HTMLElement>("span");
-    if (label) label.textContent = active ? "Auto ON" : "Auto OFF";
+    if (label) label.textContent = AUTO_COMBAT_LABELS[mode].compact;
     const button = document.querySelector<HTMLButtonElement>("#hud-cc-button");
     button?.classList.toggle("is-active", active);
     button?.setAttribute("aria-pressed", String(active));
+    button?.setAttribute("data-cc-mode", mode);
+    if (button) button.title = `C.C · ${AUTO_COMBAT_LABELS[mode].title} · clique para configurar`;
+    this.#ccPanel.setAttribute("data-cc-mode", mode);
+    const modeButton = document.querySelector<HTMLButtonElement>("#cc-mode-cycle");
+    if (modeButton) {
+      modeButton.dataset.ccMode = mode;
+      modeButton.setAttribute("aria-label", `Modo do C.C: ${AUTO_COMBAT_LABELS[mode].title}`);
+      modeButton.title = `${AUTO_COMBAT_LABELS[mode].status} · clique para alternar`;
+    }
+    setText("#cc-mode-name", AUTO_COMBAT_LABELS[mode].title);
+    setText("#cc-profile-status", AUTO_COMBAT_LABELS[mode].status);
+    this.renderAutoCombatSkills();
+  }
+
+  setAutoCombatAuxiliary(
+    recoveryThreshold: number,
+    mountThreshold: number,
+    positionMode: AutoCombatPositionMode,
+  ): void {
+    this.#autoCombatRecoveryThreshold = clampAutoCombatThreshold(recoveryThreshold);
+    this.#autoCombatMountThreshold = clampAutoCombatThreshold(mountThreshold);
+    this.#autoCombatPositionMode = positionMode;
+    setText("#cc-recovery-value", String(this.#autoCombatRecoveryThreshold));
+    setText("#cc-mount-value", String(this.#autoCombatMountThreshold));
+    setText("#cc-position-name", AUTO_COMBAT_POSITION_LABELS[positionMode].title);
+    const recovery = document.querySelector<HTMLButtonElement>("#cc-recovery-cycle");
+    recovery?.setAttribute(
+      "aria-label",
+      `Recuperação automática em ${this.#autoCombatRecoveryThreshold} por cento`,
+    );
+    if (recovery) recovery.title = `HP/MP automático · ${this.#autoCombatRecoveryThreshold}%`;
+    const mount = document.querySelector<HTMLButtonElement>("#cc-mount-cycle");
+    mount?.setAttribute(
+      "aria-label",
+      `Montaria em ${this.#autoCombatMountThreshold} por cento`,
+    );
+    if (mount) mount.title = `HP/ração da montaria · ${this.#autoCombatMountThreshold}% · aguarda estado do servidor`;
+    const position = document.querySelector<HTMLButtonElement>("#cc-position-cycle");
+    if (position) {
+      position.dataset.ccPosition = positionMode;
+      position.setAttribute("aria-label", AUTO_COMBAT_POSITION_LABELS[positionMode].aria);
+      position.title = AUTO_COMBAT_POSITION_LABELS[positionMode].aria;
+    }
+  }
+
+  private renderAutoCombatSkills(): void {
+    const candidates = this.#runtimeSkills
+      .filter(isMacroHudSkill)
+      .filter((skill, index, skills) => skills.findIndex((entry) => entry.slot === skill.slot) === index)
+      .slice(0, 10);
+    const bySlot = new Map(candidates.map((skill) => [skill.slot, skill]));
+    const selectedSlots = this.#autoCombatSkillSlots.filter((slot) => bySlot.has(slot));
+    const selected = new Set(selectedSlots);
+    const ordered = [
+      ...selectedSlots.flatMap((slot) => {
+        const skill = bySlot.get(slot);
+        return skill ? [skill] : [];
+      }),
+      ...candidates.filter((skill) => !selected.has(skill.slot)).sort((left, right) => left.slot - right.slot),
+    ];
+    setText("#cc-skill-count", `${selectedSlots.length} / 10`);
+    if (ordered.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "cc-skill-empty";
+      empty.textContent = "Esta barra não possui skills ofensivas disponíveis.";
+      this.#ccSkillList.replaceChildren(empty);
+      return;
+    }
+
+    const rows = ordered.map((skill) => {
+      const enabled = selected.has(skill.slot);
+      const selectedIndex = selectedSlots.indexOf(skill.slot);
+      const row = document.createElement("article");
+      row.className = `cc-skill-row${enabled ? " is-enabled" : ""}`;
+      row.dataset.skillSlot = String(skill.slot);
+
+      const toggle = document.createElement("button");
+      toggle.type = "button";
+      toggle.className = "cc-skill-toggle";
+      toggle.setAttribute("aria-pressed", String(enabled));
+      toggle.setAttribute("aria-label", `${enabled ? "Remover" : "Adicionar"} ${skill.name} da rotação`);
+      toggle.title = toggle.getAttribute("aria-label") ?? "";
+      toggle.textContent = enabled ? String(selectedIndex + 1) : "";
+      toggle.addEventListener("click", () => {
+        const next = enabled
+          ? selectedSlots.filter((slot) => slot !== skill.slot)
+          : [...selectedSlots, skill.slot].slice(0, 10);
+        this.onAutoCombatSkillSlotsChanged?.(next);
+      });
+
+      const icon = document.createElement("i");
+      icon.className = "cc-skill-icon";
+      if (skill.classicIndex !== undefined) {
+        const iconIndex = Math.max(0, Math.min(152, Math.trunc(skill.classicIndex)));
+        icon.style.setProperty("--cc-skill-icon-x", `${-(iconIndex % 16) * 24}px`);
+        icon.style.setProperty("--cc-skill-icon-y", `${-Math.floor(iconIndex / 16) * 24}px`);
+      }
+
+      const copy = document.createElement("div");
+      const name = document.createElement("strong");
+      name.textContent = skill.name;
+      const details = document.createElement("small");
+      details.textContent = `ATALHO ${skill.slot} · ${skill.mana} MP`;
+      copy.append(name, details);
+
+      const order = document.createElement("div");
+      order.className = "cc-skill-order";
+      const up = createMacroOrderButton("↑", `Subir ${skill.name}`, enabled && selectedIndex > 0, () => {
+        const next = [...selectedSlots];
+        [next[selectedIndex - 1], next[selectedIndex]] = [next[selectedIndex]!, next[selectedIndex - 1]!];
+        this.onAutoCombatSkillSlotsChanged?.(next);
+      });
+      const down = createMacroOrderButton("↓", `Descer ${skill.name}`, enabled && selectedIndex < selectedSlots.length - 1, () => {
+        const next = [...selectedSlots];
+        [next[selectedIndex], next[selectedIndex + 1]] = [next[selectedIndex + 1]!, next[selectedIndex]!];
+        this.onAutoCombatSkillSlotsChanged?.(next);
+      });
+      order.append(up, down);
+      row.append(toggle, icon, copy, order);
+      return row;
+    });
+    this.#ccSkillList.replaceChildren(...rows);
   }
 
   setMounted(active: boolean, name = "Javali"): void {
@@ -898,6 +1083,12 @@ export class GameHud {
   }
 
   private readonly chatGlobalKeyDown = (event: KeyboardEvent): void => {
+    if (event.code === "Escape" && this.#ccPanel.classList.contains("is-visible")) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      this.toggleAutoCombatPanel(false);
+      return;
+    }
     if (event.code === "Escape" && this.#gameMenu.classList.contains("is-visible")) {
       event.preventDefault();
       event.stopImmediatePropagation();
@@ -935,6 +1126,7 @@ export class GameHud {
 
   private openChat(): void {
     this.toggleGameMenu(false);
+    this.toggleAutoCombatPanel(false);
     this.#chatShell.classList.add("is-chatting");
     this.#chatHistoryCursor = this.#chatHistory.length;
     this.#chatInput.placeholder = "Digite a mensagem…";
@@ -996,6 +1188,16 @@ export class GameHud {
     if (action === "character") this.toggleCharacter(true);
     if (action === "inventory") this.toggleInventory(true);
     if (action === "skills") this.toggleSkills(true);
+    if (action === "macro") this.toggleAutoCombatPanel(true);
+    if (action === "server") {
+      this.addLog("Selecionar servidor aguarda a camada de rede.", "system");
+    }
+    if (action === "character-select") {
+      this.addLog("Selecionar personagem aguarda sessão autoritativa do servidor.", "system");
+    }
+    if (action === "quit") {
+      this.addLog("Encerrar a sessão ficará disponível com a camada de rede.", "system");
+    }
   }
 
   private trimChatLog(): void {
@@ -1081,6 +1283,26 @@ function createSkillCatalogEntry(
   return entry;
 }
 
+function createMacroOrderButton(
+  label: string,
+  ariaLabel: string,
+  enabled: boolean,
+  onClick: () => void,
+): HTMLButtonElement {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.textContent = label;
+  button.disabled = !enabled;
+  button.setAttribute("aria-label", ariaLabel);
+  button.title = ariaLabel;
+  if (enabled) button.addEventListener("click", onClick);
+  return button;
+}
+
+function isMacroHudSkill(skill: SkillHudEntry): boolean {
+  return skill.slot >= 1 && skill.slot <= 9 && skill.offensive === true;
+}
+
 function requireElement<T extends Element>(selector: string): T {
   const element = document.querySelector<T>(selector);
   if (!element) throw new Error(`HUD: elemento ${selector} ausente`);
@@ -1108,6 +1330,29 @@ const CHAT_CHANNEL_LABELS: Readonly<Record<ChatChannel, string>> = {
   party: "Grupo",
   guild: "Guild",
 };
+const AUTO_COMBAT_LABELS: Readonly<Record<AutoCombatMode, {
+  readonly compact: string;
+  readonly title: string;
+  readonly status: string;
+}>> = {
+  off: { compact: "C.C OFF", title: "desligado", status: "C.C desligado" },
+  physical: { compact: "C.C FÍSICO", title: "dano físico", status: "Modo 1 · ataque físico automático" },
+  magic: { compact: "C.C MÁGICO", title: "mágico", status: "Modo 2 · rotação de skills da barra" },
+  support: { compact: "C.C SUPORTE", title: "suporte", status: "Modo 3 · buffs e recuperação, sem ataque" },
+};
+const AUTO_COMBAT_POSITION_LABELS: Readonly<Record<AutoCombatPositionMode, {
+  readonly title: string;
+  readonly aria: string;
+}>> = {
+  continuous: { title: "Contínua", aria: "Movimentação contínua" },
+  fixed: { title: "Fixa", aria: "Movimentação fixa na posição atual" },
+  stationary: { title: "Parada", aria: "Movimentação parada" },
+};
+
+function clampAutoCombatThreshold(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(90, Math.round(value / 10) * 10));
+}
 const EQUIPMENT_SLOT_LABELS: Readonly<Record<EquipmentSlot, string>> = {
   helmet: "Elmo",
   armor: "Armadura",

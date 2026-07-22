@@ -69,9 +69,28 @@ app.innerHTML = `
       <button type="button" data-key="0" title="0 · Poção de HP"><span class="quickslot-icon potion">HP</span><kbd>0</kbd><small id="quickslot-1-count">5</small></button>
     </div>
     <div class="classic-menu-actions" aria-label="Ações da interface clássica">
-      <button id="hud-cc-button" class="classic-round-action is-cc" type="button" aria-label="Ativar ou desativar o C.C de combate" title="C.C · macro de combate (F)">C.C</button>
+      <button id="hud-cc-button" class="classic-round-action is-cc" type="button" aria-label="Configurar o C.C de combate" aria-expanded="false" aria-controls="cc-panel" title="C.C · configurar macro de combate">C.C</button>
       <button id="hud-menu-button" class="classic-round-action is-menu" type="button" aria-label="Abrir o menu do jogo" title="Menu do jogo">MENU</button>
     </div>
+    <section id="cc-panel" class="cc-panel" aria-label="Configuração do combate contínuo" aria-hidden="true">
+      <div class="cc-classic-strip">
+        <button id="cc-mode-cycle" type="button" data-cc-mode-cycle aria-label="Modo do C.C: desligado" title="Controle de Combate"><span id="cc-mode-name">Desligado</span></button>
+        <button id="cc-recovery-cycle" type="button" aria-label="Recuperação automática em 30 por cento" title="HP/MP automático"><span id="cc-recovery-value">30</span></button>
+        <button id="cc-mount-cycle" type="button" aria-label="Montaria em 30 por cento" title="HP/ração da montaria"><span id="cc-mount-value">30</span></button>
+        <button id="cc-position-cycle" type="button" data-cc-position="continuous" aria-label="Movimentação contínua" title="Movimentação contínua"><span id="cc-position-name">Contínua</span></button>
+      </div>
+      <section class="cc-rotation" aria-labelledby="cc-rotation-title">
+        <div class="cc-rotation-heading">
+          <div><strong id="cc-rotation-title">Rotação mágica</strong><small>Web: somente skills ofensivas presentes na barra</small></div>
+          <b id="cc-skill-count">0 / 10</b>
+        </div>
+        <div id="cc-skill-list" class="cc-skill-list"></div>
+        <footer>
+          <span id="cc-profile-status">C.C desligado</span>
+          <small><kbd>F</kbd> alterna o modo · a lista abre no mágico</small>
+        </footer>
+      </section>
+    </section>
   </section>
 
   <section class="classic-chat-shell" aria-label="Chat e registro de combate">
@@ -94,7 +113,12 @@ app.innerHTML = `
     <button type="button" data-game-menu-action="character">Personagem <kbd>C</kbd></button>
     <button type="button" data-game-menu-action="inventory">Inventário <kbd>I</kbd></button>
     <button type="button" data-game-menu-action="skills">Skills <kbd>K</kbd></button>
-    <small>Mais opções serão trazidas do cliente clássico.</small>
+    <button type="button" data-game-menu-action="macro">Configurar C.C <kbd>F</kbd></button>
+    <div class="game-menu-divider"><span>Sistema clássico</span></div>
+    <button type="button" data-game-menu-action="server">Selecionar servidor <em>REDE</em></button>
+    <button type="button" data-game-menu-action="character-select">Selecionar personagem <em>REDE</em></button>
+    <button type="button" data-game-menu-action="quit">Sair do jogo <em>REDE</em></button>
+    <small>As ações de sessão aguardam a futura camada de rede.</small>
   </section>
 
   <section id="character-panel" class="character-panel" aria-label="Dados do personagem" aria-hidden="true">

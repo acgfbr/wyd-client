@@ -8,6 +8,11 @@ import {
   type ClassicClassKey,
 } from "../game/combat/ClassSkills";
 import {
+  nextAutoCombatMode,
+  type AutoCombatMode,
+  type AutoCombatPositionMode,
+} from "../game/combat/AutoCombat";
+import {
   beastMasterSummonForSkill,
   type BeastMasterSummonDefinition,
 } from "../game/combat/BeastMasterSummons";
@@ -118,10 +123,25 @@ export class GameApp {
   readonly #buffVisualPulseRemaining = new Map<number, number>();
   #targetApproachCooldown = 0;
   #respawnRemaining = 0;
-  #autoCombat = false;
+  #autoCombatMode: AutoCombatMode = "off";
   #queuedSkillSlot: number | null = null;
+  #queuedSkillOrigin: "manual" | "macro" | null = null;
+  #macroOwnsTarget = false;
   #macroDecisionCooldown = 0;
   #macroSkillCursor = 0;
+  #macroSkillSlots = offensiveBarSkillSlots(this.#skills.skills);
+  readonly #macroSkillSlotsByClass = new Map<ClassicClassKey, number[]>([
+    ["huntress", [...this.#macroSkillSlots]],
+  ]);
+  #classSwitchInFlight = false;
+  #autoCombatRecoveryThreshold = 30;
+  #autoCombatMountThreshold = 30;
+  #autoCombatPositionMode: AutoCombatPositionMode = "continuous";
+  #autoCombatPositionAnchor: WydPosition | null = null;
+  #autoCombatRecoveryCooldown = 0;
+  #autoCombatSupportCooldown = 0;
+  #autoCombatSupportCursor = 0;
+  readonly #autoCombatSummonRefreshAt = new Map<number, number>();
   #effectsEnabled = true;
   #clickMarkerElapsed = CLICK_MARKER_LIFETIME;
   #heldGroundUpdateRemaining = 0;
@@ -177,10 +197,20 @@ export class GameApp {
     this.#input.onCharacterToggle = () => this.#hud.toggleCharacter();
     this.#input.onSkillMenuToggle = () => this.#hud.toggleSkills();
     this.#input.onMountToggle = () => this.toggleMount();
-    this.#input.onAutoCombatToggle = () => this.toggleAutoCombat();
+    this.#input.onAutoCombatToggle = () => this.cycleAutoCombatMode();
     this.#input.onEffectsToggle = () => this.toggleEffects();
     this.#input.onSkill = (slot) => this.requestSkill(slot);
-    this.#hud.onAutoCombatToggle = () => this.toggleAutoCombat();
+    this.#hud.onAutoCombatModeSelected = (mode) => this.setAutoCombatMode(mode);
+    this.#hud.onAutoCombatSkillSlotsChanged = (slots) => this.setMacroSkillSlots(slots);
+    this.#hud.onAutoCombatRecoveryThresholdChanged = (percentage) => {
+      this.#autoCombatRecoveryThreshold = clampAutoCombatThreshold(percentage);
+      this.syncAutoCombatAuxiliary();
+    };
+    this.#hud.onAutoCombatMountThresholdChanged = (percentage) => {
+      this.#autoCombatMountThreshold = clampAutoCombatThreshold(percentage);
+      this.syncAutoCombatAuxiliary();
+    };
+    this.#hud.onAutoCombatPositionModeSelected = (mode) => this.setAutoCombatPositionMode(mode);
     this.#hud.onChatSubmit = (message, channel) => {
       // A camada de rede continua fora do escopo: o fluxo e a apresentação
       // seguem o cliente, mas a mensagem é ecoada apenas no frontend local.
@@ -189,7 +219,12 @@ export class GameApp {
     this.#hud.onCatalogSkillUse = (classicIndex) => this.requestCatalogSkill(classicIndex);
     this.#hud.bindPlayer(this.#playerState);
     this.#playerState.subscribe(this.playerEquipmentChanged);
-    this.#hud.configureSkills(this.#skills.skills, (slot) => this.requestSkill(slot));
+    this.#hud.configureSkills(
+      this.#skills.skills.map((skill) => ({ ...skill, offensive: isOffensiveBarSkill(skill) })),
+      (slot) => this.requestSkill(slot),
+    );
+    this.#hud.setAutoCombat(this.#autoCombatMode, this.#macroSkillSlots);
+    this.syncAutoCombatAuxiliary();
     this.#hud.addLog("Armia carregada. Explore o mundo clássico.", "system");
     if (reducedGpuProfile) {
       document.documentElement.dataset.wydRenderProfile = "mobile";
@@ -511,6 +546,7 @@ export class GameApp {
 
   private updateCombat(deltaSeconds: number, manualMouseForward = false): void {
     if (!this.#player || !this.#world) return;
+    if (this.#streamingPaused || this.#classSwitchInFlight) return;
     if (!this.#playerState.snapshot.alive) {
       this.#pendingBowAttacks.length = 0;
       this.#pendingSkillEvents.length = 0;
@@ -522,31 +558,62 @@ export class GameApp {
     this.#attackCooldown = Math.max(0, this.#attackCooldown - deltaSeconds);
     this.#targetApproachCooldown = Math.max(0, this.#targetApproachCooldown - deltaSeconds);
     this.#macroDecisionCooldown = Math.max(0, this.#macroDecisionCooldown - deltaSeconds);
+    this.updateAutoCombatRecovery(deltaSeconds);
     if (!this.#boundSpawns) return;
     this.updatePendingBowAttacks(deltaSeconds);
     // Preserve target selection/HUD but do not let combat face-lock the avatar
     // sideways while the two-button steering gesture owns locomotion.
     if (manualMouseForward) return;
+    const supportActionStarted = this.updateAutoCombatSupport(deltaSeconds);
+    if (this.#autoCombatMode === "support" || supportActionStarted) return;
 
     let target = this.#selectedTargetId ? this.#boundSpawns.snapshot(this.#selectedTargetId) : null;
-    if (this.#autoCombat && (!target?.alive || !target.hostile)) {
-      target = this.acquireNearestTarget();
+    const macroActive = this.#autoCombatMode !== "off";
+    if (macroActive && (!target?.alive || !target.hostile)) {
+      target = this.acquireNearestTarget(
+        true,
+        this.autoCombatAcquisitionRadius(),
+        this.#autoCombatPositionMode === "fixed" ? this.#autoCombatPositionAnchor : null,
+      );
+      if (!target) this.selectTarget(null);
     }
-    if (!target) return;
+    if (!target) {
+      this.returnToAutoCombatAnchor();
+      return;
+    }
+    if (
+      macroActive
+      && this.#autoCombatPositionMode === "fixed"
+      && this.#autoCombatPositionAnchor
+      && this.#macroOwnsTarget
+      && Math.hypot(
+        target.position.x - this.#autoCombatPositionAnchor.x,
+        target.position.y - this.#autoCombatPositionAnchor.y,
+      ) > 10
+    ) {
+      this.selectTarget(null);
+      this.returnToAutoCombatAnchor();
+      return;
+    }
     this.#hud.setTarget(target);
     if (!target.alive || !target.hostile) return;
 
-    if (this.#autoCombat && this.#queuedSkillSlot === null && this.#macroDecisionCooldown <= 0) {
-      const offensive = this.#skills.skills.filter((skill) => skill.target === "enemy");
-      for (let offset = 0; offset < offensive.length; offset++) {
-        const index = (this.#macroSkillCursor + offset) % offensive.length;
-        const skill = offensive[index]!;
+    const macroSkills = this.#autoCombatMode === "magic" ? this.macroOffensiveSkills() : [];
+    if (
+      this.#autoCombatMode === "magic"
+      && this.#queuedSkillSlot === null
+      && this.#macroDecisionCooldown <= 0
+    ) {
+      for (let offset = 0; offset < macroSkills.length; offset++) {
+        const index = (this.#macroSkillCursor + offset) % macroSkills.length;
+        const skill = macroSkills[index]!;
         if (this.#skills.remaining(skill.slot) > 0 || this.#playerState.snapshot.mp < skill.mana) continue;
         this.#queuedSkillSlot = skill.slot;
-        this.#macroSkillCursor = (index + 1) % offensive.length;
+        this.#queuedSkillOrigin = "macro";
+        this.#macroSkillCursor = (index + 1) % macroSkills.length;
         break;
       }
-      this.#macroDecisionCooldown = 2.1;
+      this.#macroDecisionCooldown = 0.2;
     }
 
     const dx = target.position.x - this.#player.position.x;
@@ -555,14 +622,41 @@ export class GameApp {
     const queuedSkill = this.#queuedSkillSlot === null
       ? null
       : this.#skills.skill(this.#queuedSkillSlot);
+    const macroRangeSkill = this.#autoCombatMode === "magic"
+      ? macroSkills[this.#macroSkillCursor % Math.max(1, macroSkills.length)] ?? null
+      : null;
     const basicRange = this.#activeClassKey === "huntress"
       ? 13.5
       : (this.#activeClassKey === "foema" ? 7 : 2.35);
-    const attackRange = (queuedSkill?.range || basicRange)
+    const attackRange = (queuedSkill?.range || macroRangeSkill?.range || basicRange)
       + (this.#activeClassKey === "huntress" && SPECTRAL_FORCE.alwaysLearned
         ? SPECTRAL_FORCE.attackRangeBonus
         : 0);
     if (distance > attackRange) {
+      const macroControlsMovement = macroActive && this.#queuedSkillOrigin !== "manual";
+      if (
+        macroControlsMovement
+        && this.#autoCombatMode === "magic"
+      ) {
+        // A short-range skill may be selected while another configured skill
+        // can reach this same target. Discard only that macro decision and let
+        // the next frame advance the rotation instead of reacquiring forever.
+        if (queuedSkill && this.#queuedSkillOrigin === "macro") {
+          this.#queuedSkillSlot = null;
+          this.#queuedSkillOrigin = null;
+          this.#macroDecisionCooldown = 0;
+        }
+        if (distance > this.autoCombatImmediateRange() && this.#macroOwnsTarget) {
+          this.selectTarget(null);
+        }
+        this.#player.stop();
+        return;
+      }
+      if (macroControlsMovement && this.#autoCombatPositionMode === "stationary") {
+        if (this.#macroOwnsTarget) this.selectTarget(null);
+        this.#player.stop();
+        return;
+      }
       if (this.#targetApproachCooldown <= 0) {
         const standOff = Math.max(1.2, attackRange - 0.85);
         this.#player.moveTo({
@@ -576,10 +670,15 @@ export class GameApp {
     this.#player.faceToward(target.position);
 
     if (queuedSkill) {
+      if (this.#attackCooldown > 0) return;
       this.#queuedSkillSlot = null;
+      this.#queuedSkillOrigin = null;
       this.castSkill(queuedSkill, target);
       return;
     }
+    // Retail g_GameAuto mode 2 calls AutoSkillUse only. Waiting for mana or a
+    // cooldown must never silently turn the magical profile into MAutoAttack.
+    if (this.#autoCombatMode === "magic") return;
     if (this.#attackCooldown > 0) return;
 
     const player = this.#playerState.snapshot;
@@ -676,16 +775,207 @@ export class GameApp {
     );
   }
 
-  private toggleAutoCombat(): void {
-    this.#autoCombat = !this.#autoCombat;
-    this.#hud.setAutoCombat(this.#autoCombat);
-    if (!this.#autoCombat) {
-      this.#queuedSkillSlot = null;
-      this.#hud.addLog("Macro de combate desativado.", "system");
+  private cycleAutoCombatMode(): void {
+    this.setAutoCombatMode(nextAutoCombatMode(this.#autoCombatMode));
+  }
+
+  private setAutoCombatMode(mode: AutoCombatMode): void {
+    if (mode === this.#autoCombatMode) {
+      this.#hud.setAutoCombat(mode, this.#macroSkillSlots);
       return;
     }
-    this.#hud.addLog("Macro ativo · buscando hostis e alternando skills.", "system");
-    this.acquireNearestTarget();
+    this.#autoCombatMode = mode;
+    this.#macroDecisionCooldown = 0;
+    this.#macroSkillCursor = 0;
+    this.#autoCombatSupportCooldown = 0;
+    this.#autoCombatSupportCursor = 0;
+    if (this.#queuedSkillOrigin === "macro") {
+      this.#queuedSkillSlot = null;
+      this.#queuedSkillOrigin = null;
+    }
+    if ((mode === "off" || mode === "support") && this.#macroOwnsTarget) {
+      this.selectTarget(null);
+      this.#player?.stop();
+    }
+    this.#hud.setAutoCombat(mode, this.#macroSkillSlots);
+    if (mode === "off") {
+      this.#hud.addLog("C.C desligado.", "system");
+      return;
+    }
+    if (mode === "physical") {
+      this.#hud.addLog("C.C físico · ataque básico automático.", "system");
+    } else if (mode === "support") {
+      this.#hud.addLog("C.C suporte · mantendo buffs e recuperação, sem atacar.", "system");
+    } else if (this.#macroSkillSlots.length === 0) {
+      this.#hud.addLog("C.C mágico sem skills ofensivas configuradas.", "system");
+    } else {
+      this.#hud.addLog("C.C mágico · usando a rotação configurada da barra.", "system");
+    }
+    if (mode === "support") return;
+    if (!this.#selectedTargetId) {
+      this.acquireNearestTarget(
+        true,
+        this.autoCombatAcquisitionRadius(),
+        this.#autoCombatPositionMode === "fixed" ? this.#autoCombatPositionAnchor : null,
+      );
+    }
+  }
+
+  private syncAutoCombatAuxiliary(): void {
+    this.#hud.setAutoCombatAuxiliary(
+      this.#autoCombatRecoveryThreshold,
+      this.#autoCombatMountThreshold,
+      this.#autoCombatPositionMode,
+    );
+  }
+
+  private setAutoCombatPositionMode(mode: AutoCombatPositionMode): void {
+    this.#autoCombatPositionMode = mode;
+    this.#autoCombatPositionAnchor = mode === "fixed" && this.#player
+      ? { ...this.#player.position }
+      : null;
+    if (mode === "stationary") this.#player?.stop();
+    this.syncAutoCombatAuxiliary();
+    const description = mode === "continuous"
+      ? "perseguição contínua"
+      : (mode === "fixed" ? "posição fixa gravada" : "sem perseguição");
+    this.#hud.addLog(`C.C · ${description}.`, "system");
+  }
+
+  private refreshAutoCombatPositionAnchor(position: WydPosition): void {
+    if (this.#autoCombatPositionMode !== "fixed") return;
+    this.#autoCombatPositionAnchor = { ...position };
+  }
+
+  private updateAutoCombatRecovery(deltaSeconds: number): void {
+    this.#autoCombatRecoveryCooldown = Math.max(0, this.#autoCombatRecoveryCooldown - deltaSeconds);
+    if (
+      this.#autoCombatMode === "off"
+      || this.#autoCombatRecoveryThreshold <= 0
+      || this.#autoCombatRecoveryCooldown > 0
+    ) return;
+    const snapshot = this.#playerState.snapshot;
+    const threshold = this.#autoCombatRecoveryThreshold / 100;
+    const needsHp = snapshot.maxHp > 0 && snapshot.hp / snapshot.maxHp < threshold;
+    const needsMp = snapshot.maxMp > 0 && snapshot.mp / snapshot.maxMp < threshold;
+    if (!needsHp && !needsMp) return;
+    // The client evaluates HP before MP. Keep that ordering even after the
+    // player rearranges consumables between inventory bags.
+    let slot = needsHp
+      ? snapshot.inventory.findIndex((stack) => (
+        stack?.item.kind === "consumable" && (stack.item.heal ?? 0) > 0
+      ))
+      : -1;
+    if (slot < 0 && needsMp) {
+      slot = snapshot.inventory.findIndex((stack) => (
+        stack?.item.kind === "consumable" && (stack.item.mana ?? 0) > 0
+      ));
+    }
+    if (slot < 0 || !this.#playerState.useInventorySlot(slot)) {
+      this.#autoCombatRecoveryCooldown = 1;
+      return;
+    }
+    this.#autoCombatRecoveryCooldown = 0.9;
+    this.#hud.addLog("C.C usou uma poção de recuperação.", "system");
+  }
+
+  private updateAutoCombatSupport(deltaSeconds: number): boolean {
+    this.#autoCombatSupportCooldown = Math.max(0, this.#autoCombatSupportCooldown - deltaSeconds);
+    if (
+      this.#autoCombatMode === "off"
+      || this.#autoCombatSupportCooldown > 0
+      || this.#attackCooldown > 0
+    ) return false;
+    const supportSkills = this.#skills.skills.filter((skill) => (
+      skill.slot >= 1
+      && skill.slot <= 9
+      && (
+        skill.kind === "summon"
+        || (skill.kind === "buff" && AUTO_COMBAT_BUFF_CLASSIC_INDICES.has(skill.classicIndex))
+      )
+    ));
+    for (let offset = 0; offset < supportSkills.length; offset++) {
+      const index = (this.#autoCombatSupportCursor + offset) % supportSkills.length;
+      const skill = supportSkills[index]!;
+      if (this.#skills.remaining(skill.slot) > 0 || this.#playerState.snapshot.mp < skill.mana) continue;
+      if (
+        skill.kind === "summon"
+        && (this.#beastMasterSummons.get(skill.classicIndex)?.length ?? 0) === BEAST_MASTER_SUMMON_PACK_SIZE
+        && (this.#autoCombatSummonRefreshAt.get(skill.classicIndex) ?? 0) > performance.now()
+      ) continue;
+      const activeBuff = skill.kind === "buff" ? this.#skills.buff(skill.classicIndex) : null;
+      if (activeBuff && activeBuff.remainingSeconds > 3) continue;
+      this.#autoCombatSupportCursor = (index + 1) % supportSkills.length;
+      this.#autoCombatSupportCooldown = 0.65;
+      if (skill.kind === "summon") this.castSummonSkill(skill);
+      else this.castBuffSkill(skill);
+      return true;
+    }
+    this.#autoCombatSupportCooldown = 0.5;
+    return false;
+  }
+
+  private setMacroSkillSlots(requestedSlots: readonly number[]): void {
+    const allowed = new Set(offensiveBarSkillSlots(this.#skills.skills));
+    const normalized: number[] = [];
+    for (const slot of requestedSlots) {
+      if (!allowed.has(slot) || normalized.includes(slot) || normalized.length >= 10) continue;
+      normalized.push(slot);
+    }
+    this.#macroSkillSlots = normalized;
+    this.#macroSkillSlotsByClass.set(this.#activeClassKey, [...normalized]);
+    this.#macroSkillCursor = 0;
+    this.#macroDecisionCooldown = 0;
+    if (
+      this.#queuedSkillOrigin === "macro"
+      && (this.#queuedSkillSlot === null || !normalized.includes(this.#queuedSkillSlot))
+    ) {
+      this.#queuedSkillSlot = null;
+      this.#queuedSkillOrigin = null;
+    }
+    this.#hud.setAutoCombat(this.#autoCombatMode, normalized);
+  }
+
+  private macroOffensiveSkills(): readonly ClassSkill[] {
+    const bySlot = new Map(this.#skills.skills.map((skill) => [skill.slot, skill]));
+    return this.#macroSkillSlots.flatMap((slot) => {
+      const skill = bySlot.get(slot);
+      return skill && isOffensiveBarSkill(skill) ? [skill] : [];
+    });
+  }
+
+  private autoCombatImmediateRange(): number {
+    const base = this.#autoCombatMode === "magic"
+      ? Math.max(0, ...this.macroOffensiveSkills().map((skill) => skill.range))
+      : (this.#activeClassKey === "huntress" ? 13.5 : (this.#activeClassKey === "foema" ? 7 : 2.35));
+    return Math.max(1.2, base + (
+      this.#activeClassKey === "huntress" && SPECTRAL_FORCE.alwaysLearned
+        ? SPECTRAL_FORCE.attackRangeBonus
+        : 0
+    ));
+  }
+
+  private autoCombatAcquisitionRadius(): number {
+    if (this.#autoCombatMode === "magic" || this.#autoCombatPositionMode === "stationary") {
+      return this.autoCombatImmediateRange();
+    }
+    return 8;
+  }
+
+  private returnToAutoCombatAnchor(): void {
+    if (
+      this.#autoCombatMode === "off"
+      || this.#autoCombatPositionMode !== "fixed"
+      || !this.#autoCombatPositionAnchor
+      || !this.#player
+    ) return;
+    const dx = this.#autoCombatPositionAnchor.x - this.#player.position.x;
+    const dy = this.#autoCombatPositionAnchor.y - this.#player.position.y;
+    if (Math.hypot(dx, dy) <= 0.65) return;
+    if (this.#targetApproachCooldown <= 0) {
+      this.#player.moveTo(this.#autoCombatPositionAnchor);
+      this.#targetApproachCooldown = 0.35;
+    }
   }
 
   private requestSkill(slot: number): void {
@@ -708,7 +998,8 @@ export class GameApp {
       return;
     }
     this.#queuedSkillSlot = slot;
-    if (!this.#selectedTargetId) this.acquireNearestTarget();
+    this.#queuedSkillOrigin = "manual";
+    if (!this.#selectedTargetId) this.acquireNearestTarget(false);
   }
 
   private requestCatalogSkill(classicIndex: number): void {
@@ -733,6 +1024,10 @@ export class GameApp {
         : `${skill.name} recarrega em ${this.#skills.remaining(skill.slot).toFixed(1)}s.`, "system");
       return;
     }
+    // The retail C.C refreshes a live invocation only after roughly 80 s.
+    // Tracking that window avoids rebuilding the same ten-model pack on every
+    // skill cooldown while still allowing an immediate retry after a load loss.
+    this.#autoCombatSummonRefreshAt.set(skill.classicIndex, performance.now() + 80_000);
 
     this.breakInvisibility();
     this.#player.stop();
@@ -883,6 +1178,7 @@ export class GameApp {
       for (const summon of summons) summon.release();
     }
     this.#beastMasterSummons.clear();
+    this.#autoCombatSummonRefreshAt.clear();
   }
 
   private castSkill(skill: ClassSkill, target: ClassicMonsterSnapshot): void {
@@ -1140,18 +1436,23 @@ export class GameApp {
     this.#hud.addLog("Invisibilidade desfeita pela ação.", "system");
   }
 
-  private acquireNearestTarget(): ClassicMonsterSnapshot | null {
+  private acquireNearestTarget(
+    forMacro = false,
+    radius = 32,
+    anchor: WydPosition | null = null,
+  ): ClassicMonsterSnapshot | null {
     if (!this.#player || !this.#boundSpawns) return null;
     let nearest: ClassicMonsterSnapshot | null = null;
-    let nearestDistance = 32;
+    let nearestDistance = Math.max(0, radius);
     for (const target of this.#boundSpawns.snapshots()) {
       if (!target.alive || !target.hostile) continue;
+      if (anchor && Math.hypot(target.position.x - anchor.x, target.position.y - anchor.y) > 10) continue;
       const distance = Math.hypot(target.position.x - this.#player.position.x, target.position.y - this.#player.position.y);
       if (distance >= nearestDistance) continue;
       nearest = target;
       nearestDistance = distance;
     }
-    if (nearest && nearest.id !== this.#selectedTargetId) this.selectTarget(nearest);
+    if (nearest && nearest.id !== this.#selectedTargetId) this.selectTarget(nearest, forMacro);
     return nearest;
   }
 
@@ -1161,9 +1462,9 @@ export class GameApp {
     return new THREE.Vector3(scene.x, this.#world.heightAt(position) + heightOffset, scene.z);
   }
 
-  private selectTarget(target: ClassicMonsterSnapshot | null): void {
+  private selectTarget(target: ClassicMonsterSnapshot | null, macroOwned = false): void {
     this.#selectedTargetId = target?.id ?? null;
-    this.#attackCooldown = 0;
+    this.#macroOwnsTarget = target !== null && macroOwned;
     this.#targetApproachCooldown = 0;
     this.#hud.setTarget(target);
     this.#clickMarker.visible = false;
@@ -1180,6 +1481,8 @@ export class GameApp {
     if (this.#playerState.snapshot.alive) return;
     this.#pendingBowAttacks.length = 0;
     this.#pendingSkillEvents.length = 0;
+    this.#queuedSkillSlot = null;
+    this.#queuedSkillOrigin = null;
     this.#skills.clearBuffs();
     this.clearBeastMasterSummons();
     this.#buffVisualPulseRemaining.clear();
@@ -1188,6 +1491,7 @@ export class GameApp {
     this.#player?.setInvisible(false);
     this.#respawnRemaining = 4.5;
     this.#selectedTargetId = null;
+    this.#macroOwnsTarget = false;
     this.#hud.setTarget(null);
     playOptionalPlayerAction(this.#player, "playDeath");
     this.#hud.addLog("Você morreu · retornando a Armia…", "system");
@@ -1223,6 +1527,21 @@ export class GameApp {
       });
       if (added > 0) this.#hud.addLog("Drop: Poção de Cura.", "reward");
     }
+    if (event.seed % 100 >= 34 && event.seed % 100 < 58) {
+      const added = this.#playerState.addItem({
+        key: "pocao-mana-pequena",
+        name: "Poção de Mana",
+        description: "Recupera 50 pontos de MP.",
+        rarity: "common",
+        maxStack: 50,
+        value: 35,
+        kind: "consumable",
+        classicIndex: 405,
+        previewModelType: 53,
+        mana: 50,
+      });
+      if (added > 0) this.#hud.addLog("Drop: Poção de Mana.", "reward");
+    }
     if (event.seed % 29 === 0) {
       const added = this.#playerState.addItem({
         key: "fragmento-wyd",
@@ -1245,12 +1564,18 @@ export class GameApp {
     this.#playerState.revive();
     this.#pendingBowAttacks.length = 0;
     this.#pendingSkillEvents.length = 0;
+    this.#queuedSkillSlot = null;
+    this.#queuedSkillOrigin = null;
+    this.#selectedTargetId = null;
+    this.#macroOwnsTarget = false;
+    this.#hud.setTarget(null);
     this.#skills.clearBuffs();
     this.#buffVisualPulseRemaining.clear();
     this.#skillEffects.clear();
     this.#player.setInvisible(false);
     this.#damageNumbers.clear();
     this.#player.teleport(ARMIA_SPAWN);
+    this.refreshAutoCombatPositionAnchor(ARMIA_SPAWN);
     playOptionalPlayerAction(this.#player, "playIdle");
     this.#cameraRig.update(this.#player.object.position, 1);
     this.#hud.addLog("Você retornou a Armia.", "system");
@@ -1336,6 +1661,11 @@ export class GameApp {
 
     const previousKey = this.#activeClassKey;
     const requestId = ++this.#classLoadId;
+    this.#classSwitchInFlight = true;
+    if (this.#queuedSkillOrigin === "macro") {
+      this.#queuedSkillSlot = null;
+      this.#queuedSkillOrigin = null;
+    }
     this.#outfitLoadId++;
     select.disabled = true;
     const outfit = document.querySelector<HTMLSelectElement>("#outfit-select");
@@ -1363,13 +1693,25 @@ export class GameApp {
       this.#pendingBowAttacks.length = 0;
       this.#pendingSkillEvents.length = 0;
       this.#queuedSkillSlot = null;
+      this.#queuedSkillOrigin = null;
       this.#macroSkillCursor = 0;
+      this.#macroDecisionCooldown = 0;
+      this.#autoCombatSupportCursor = 0;
+      this.#autoCombatSupportCooldown = 0;
       this.#buffVisualPulseRemaining.clear();
       this.#skillEffects.clear();
       this.#etherealExplosionEffects.clear();
       this.#player?.setInvisible(false);
       this.#playerState.setName(definition.name);
-      this.#hud.configureSkills(this.#skills.skills, (slot) => this.requestSkill(slot));
+      this.#hud.configureSkills(
+        this.#skills.skills.map((skill) => ({ ...skill, offensive: isOffensiveBarSkill(skill) })),
+        (slot) => this.requestSkill(slot),
+      );
+      this.#macroSkillSlots = [
+        ...(this.#macroSkillSlotsByClass.get(definition.key) ?? offensiveBarSkillSlots(this.#skills.skills)),
+      ];
+      this.#macroSkillSlotsByClass.set(definition.key, [...this.#macroSkillSlots]);
+      this.#hud.setAutoCombat(this.#autoCombatMode, this.#macroSkillSlots);
       this.#hud.setBuffs([]);
       this.#hud.setActiveSkillClass(definition.key);
       select.value = definition.key;
@@ -1380,6 +1722,7 @@ export class GameApp {
       this.#hud.addLog(`${definition.name} equipado com ${definition.defaultWeapon.name}.`, "system");
     }).finally(() => {
       if (requestId === this.#classLoadId) {
+        this.#classSwitchInFlight = false;
         select.disabled = false;
       }
     });
@@ -1587,6 +1930,9 @@ export class GameApp {
     this.#streamingPaused = true;
     this.#pendingBowAttacks.length = 0;
     this.#pendingSkillEvents.length = 0;
+    this.#queuedSkillSlot = null;
+    this.#queuedSkillOrigin = null;
+    this.selectTarget(null);
     this.#skillEffects.clear();
     this.#etherealExplosionEffects.clear();
     this.#damageNumbers.clear();
@@ -1598,6 +1944,7 @@ export class GameApp {
       await this.#world.ensureCurrent(destination, true);
       if (requestId !== this.#teleportId) return;
       this.#player.teleport(destination);
+      this.refreshAutoCombatPositionAnchor(destination);
       this.#cameraRig.update(this.#player.object.position, 1);
       this.#clickMarker.visible = false;
       this.activateField(destination, true);
@@ -1705,6 +2052,34 @@ function createClickMarker(): THREE.Mesh {
   marker.rotation.x = -Math.PI / 2;
   marker.visible = false;
   return marker;
+}
+
+// Exact buff indices maintained by g_GameAuto in the audited 7.54 client.
+// Invisibility #95 is intentionally absent: auto-casting it drains Huntress
+// MP and the following offensive action cancels it immediately.
+const AUTO_COMBAT_BUFF_CLASSIC_INDICES: ReadonlySet<number> = new Set([
+  3, 5, 9, 11, 37, 41, 43, 44, 45, 46, 53, 54, 64,
+  66, 68, 70, 71, 75, 76, 77, 81, 85, 87, 89, 92,
+]);
+
+function isOffensiveBarSkill(skill: ClassSkill): boolean {
+  return skill.slot >= 1
+    && skill.slot <= 9
+    && skill.target === "enemy"
+    && skill.aggressive === 1
+    && skill.damageCoefficient > 0;
+}
+
+function offensiveBarSkillSlots(skills: readonly ClassSkill[]): number[] {
+  return skills
+    .filter(isOffensiveBarSkill)
+    .map((skill) => skill.slot)
+    .slice(0, 10);
+}
+
+function clampAutoCombatThreshold(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(90, Math.round(value / 10) * 10));
 }
 
 function playOptionalPlayerAction(

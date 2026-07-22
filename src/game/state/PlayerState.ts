@@ -193,6 +193,19 @@ export class PlayerState {
       previewModelType: 53,
       heal: 50,
     }, 5, false);
+    this.addItem({
+      key: "pocao-mana-pequena",
+      name: "Poção de Mana",
+      description: "Recupera 50 pontos de MP.",
+      rarity: "common",
+      maxStack: 50,
+      value: 35,
+      kind: "consumable",
+      // UseMPotion accepts the classic 405..409 family; 405 is its first tier.
+      classicIndex: 405,
+      previewModelType: 53,
+      mana: 50,
+    }, 5, false);
     const skytalos: InventoryItem = {
       key: "skytalos-ancient-2551-plus15",
       name: "Skytalos(Anct) +15",

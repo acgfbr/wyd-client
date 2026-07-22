@@ -70,7 +70,9 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
 - Unicórnio item `2381`/visual `336`, `hs01` variante `07` completa em três
   partes e ações do bloco `[horse] 31`. A sela agora segue o bone `4` e a
   transformação `SetVecMantua(2, 31)`; aguarda homologação visual.
-- Macro `F`, montaria `R`, arco à distância e hotkeys de skill `1–9`.
+- C.C `F` com modos físico, mágico e suporte, montaria `R`, arco à distância e
+  hotkeys de skill `1–9`. O clique no botão redondo agora abre a caixa clássica
+  em vez de alterar silenciosamente o estado.
 - Troca jogável entre TransKnight, Foema, BeastMaster e Huntress: os rigs
   `ch01/ch02`, `bExpand`, armaduras da seleção clássica, armas Ancient, bancos
   a pé/montado e attachments de mão já foram derivados do cliente. Cada classe
@@ -99,9 +101,12 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
 - Poder/dano e geometria visual das skills ainda são aproximações; nomes,
   mana, delay, range, alvo, ações e estados dos primeiros loadouts das quatro
   classes já vêm do `SkillData.bin`.
-- Fórmula de dano offline e rotação do macro ainda precisam ser confrontadas
-  com o cliente/servidor disponível. Enquanto o servidor não existe, cada
-  nível concede `+3 ATQ` no estado do frontend e o combate usa esse total.
+- A fórmula de dano continua sendo um mock offline. A rotação foi confrontada
+  com o cliente: o C.C clássico usa somente a skill selecionada e o macro `Y`
+  separado gira os últimos N atalhos. A lista ordenável da versão web é uma
+  extensão deliberada pedida para este projeto; não é apresentada como regra
+  do servidor. Enquanto o servidor não existe, cada nível concede `+3 ATQ` no
+  estado do frontend e o combate usa esse total.
 
 ## Fila obrigatória
 
@@ -236,16 +241,28 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
     soluções rejeitadas, riscos, débitos, procedimentos de importação/build e
     um histórico cronológico das mudanças relevantes. Manter o documento vivo
     a partir daí, sem transformar `PENDENCIAS.md` em diário de implementação.
-15. Menu do jogo e configuração `C.C`. O botão `MENU` já abre o primeiro painel
-    local de acesso a Personagem/Inventário/Skills; completar as opções do menu
-    a partir do painel de sistema do cliente. Transformar `C.C` em configuração
-    explícita do macro, com `desligado`, `dano físico` e `mago`. A origem usa
-    `B_CCATTACK` e `g_GameAuto` (`0..3`): modo `1` chama `MAutoAttack`, modo `2`
-    chama `AutoSkillUse` e o painel expõe até dez skills. Na versão web, os dois
-    perfis devem consumir apenas skills ofensivas colocadas na barra, na ordem
-    configurada, respeitando alvo, alcance, mana e cooldown; a troca de perfil
-    não pode inventar skills fora da barra. `F` e o clique em `C.C` precisam
-    refletir o mesmo estado, e o futuro servidor será autoritativo sobre dano.
+15. Menu do jogo e configuração `C.C` — **frontend concluído e auditado**. A
+    origem ativa não usa o handler legado `B_CCATTACK`: `B_CCMODE_SYSTEM`
+    (`66570`) mostra/esconde o painel `66817`, com `120×30` e quatro controles
+    `29×29`. A versão web reproduz essa geometria imediatamente acima do botão
+    e usa os crops reais `455/456/458/459/460/463/464/465` do atlas
+    `main.wyt`. O clique no `C.C` somente abre/fecha a caixa; o primeiro ícone e
+    `F` percorrem o mesmo estado `0` desligado, `1` físico, `2` mágico e `3`
+    suporte. O físico chama o ataque básico, o mágico nunca cai em ataque
+    básico quando aguarda mana/cooldown e o suporte mantém buffs, evocações e
+    recuperação sem atacar. HP/MP automático e movimento contínuo/fixo/parado
+    funcionam no mock; o percentual de HP/ração da montaria fica configurável,
+    mas sem efeito até existir estado autoritativo da montaria. A extensão do
+    modo mágico aceita até dez skills ofensivas realmente presentes na barra,
+    permite incluir/remover/reordenar e preserva uma configuração por classe.
+    Alvos e skills adquiridos manualmente são separados dos adquiridos pelo
+    macro; desligar não cancela uma ação manual. Troca de classe, morte,
+    respawn e teleporte limpam somente o estado transitório necessário. A
+    auditoria também registrou que o macro `Y`/`m_cAutoAttack` do cliente é um
+    sistema separado, que gira os últimos N atalhos; a lista ordenável web é
+    uma decisão explícita do projeto. O menu recebeu as opções clássicas de
+    servidor/personagem/saída como estados honestamente bloqueados pela rede.
+    Dano, sessão e regras econômicas continuam destinados ao futuro servidor.
 
 ## Convenções do projeto
 

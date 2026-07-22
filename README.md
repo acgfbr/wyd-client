@@ -19,7 +19,8 @@ reutilizado.
 - 14 montarias clássicas nível 120, incluindo Unicórnio e Grifo.
 - NPCs e monstros com animação, autonomia, separação, combate, morte e respawn.
 - Movimento por WASD/clique, câmera clássica, zoom amplo e modo G.
-- Macro de combate, arco, dano/crítico, skills e buffs da Huntress.
+- C.C clássico com modos físico, mágico e suporte, arco, dano/crítico, skills e
+  buffs da Huntress.
 - HUD clássico e inventário 7.54 com quatro bolsas, drag/drop, equipamento e
   preview 3D por clique, além do catálogo de skills e seletor de mapas.
 
@@ -179,7 +180,8 @@ bun run import:ui -- "/caminho/para/Origem"
 | `Q` / `E` | Girar a câmera pelo teclado |
 | `G` | Modo GM: velocidade extrema, invencibilidade e sem colisão |
 | `R` | Montar/desmontar |
-| `F` | Ligar/desligar o macro de combate |
+| `F` | Alternar C.C: desligado → físico → mágico → suporte |
+| Clique em `C.C` | Abrir/fechar a caixa clássica de configuração |
 | `1`–`9` | Usar skills da barra |
 | `I` | Abrir/fechar inventário, trajes e montarias |
 | Clique em um item | Prender o preview 3D ao cursor; outro clique solta/move/equipa |
@@ -188,6 +190,24 @@ bun run import:ui -- "/caminho/para/Origem"
 | Abas de bolsa | Alternar entre as quatro páginas de 15 espaços |
 | `K` | Abrir/fechar catálogo de skills |
 | `V` | Ligar/desligar todos os efeitos visuais |
+
+### Caixa C.C
+
+O clique no botão redondo `C.C` apenas abre ou fecha a caixa original de
+`120×30`; o primeiro ícone alterna o modo. Os outros três controles ajustam a
+recuperação automática de HP/MP, o limite reservado à montaria e a política de
+movimento (contínua, posição fixa ou parada). Os ícones são crops reais do
+atlas clássico `main.wyt` importado como `main.png`.
+
+- Físico procura hostis próximos e usa o ataque básico.
+- Mágico usa somente as skills ofensivas selecionadas na extensão da caixa,
+  respeitando a ordem, mana, cooldown e alcance, sem cair em ataque básico.
+- Suporte mantém buffs/evocações e recuperação, sem atacar.
+- `F` altera o mesmo estado mostrado na caixa; ele não abre a interface.
+
+O percentual da montaria já é configurável, mas ainda não alimenta uma regra
+local porque HP e ração da montaria pertencem ao futuro estado autoritativo do
+servidor.
 
 ## Deploy na Vercel com `public/game-data`
 
