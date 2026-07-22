@@ -54,6 +54,7 @@ interface ClassicSkillCatalog {
 }
 
 export class GameHud {
+  onSkillClassSelected: ((classKey: string) => void) | null = null;
   readonly #target = requireElement<HTMLElement>("#target-status");
   readonly #targetName = requireElement<HTMLElement>("#target-name");
   readonly #targetLevel = requireElement<HTMLElement>("#target-level");
@@ -72,6 +73,7 @@ export class GameHud {
   #buffSignature = "";
   #skillCatalog: ClassicSkillCatalog | null = null;
   #skillCatalogJob: Promise<void> | null = null;
+  #activeClassKey = "huntress";
 
   constructor() {
     document.querySelector<HTMLElement>("[data-inventory-close]")?.addEventListener("click", () => {
@@ -80,7 +82,10 @@ export class GameHud {
     document.querySelector<HTMLElement>("[data-skills-close]")?.addEventListener("click", () => {
       this.toggleSkills(false);
     });
-    this.#skillClassSelect.addEventListener("change", () => this.renderSkillCatalog());
+    this.#skillClassSelect.addEventListener("change", () => {
+      this.renderSkillCatalog();
+      this.onSkillClassSelected?.(this.#skillClassSelect.value);
+    });
   }
 
   bindPlayer(state: PlayerState): void {
@@ -121,14 +126,31 @@ export class GameHud {
   }
 
   configureSkills(skills: readonly SkillHudEntry[], onUse: (slot: number) => void): void {
-    for (const skill of skills) {
-      const button = document.querySelector<HTMLButtonElement>(`#skill-slot-${skill.slot}`);
+    for (let slot = 1; slot <= 9; slot++) {
+      const button = document.querySelector<HTMLButtonElement>(`#skill-slot-${slot}`);
       if (!button) continue;
+      const skill = skills.find((candidate) => candidate.slot === slot);
+      const name = button.querySelector<HTMLElement>(".skill-name");
+      const icon = button.querySelector<HTMLElement>(".quickslot-icon");
+      if (!skill) {
+        button.disabled = true;
+        button.title = `${slot} · espaço de skill vazio`;
+        button.setAttribute("aria-label", button.title);
+        if (name) name.textContent = "";
+        if (icon) {
+          icon.classList.remove("is-classic-skill");
+          icon.textContent = "";
+          icon.style.removeProperty("--skill-icon-x");
+          icon.style.removeProperty("--skill-icon-y");
+        }
+        button.onclick = null;
+        this.setSkillCooldown(slot, 0, 0);
+        continue;
+      }
+      button.disabled = false;
       button.title = `${skill.slot} · ${skill.name} · ${skill.mana} MP`;
       button.setAttribute("aria-label", button.title);
-      const name = button.querySelector<HTMLElement>(".skill-name");
       if (name) name.textContent = skill.shortName;
-      const icon = button.querySelector<HTMLElement>(".quickslot-icon");
       if (icon && skill.classicIndex !== undefined) {
         const iconIndex = Math.max(0, Math.min(152, Math.trunc(skill.classicIndex)));
         icon.classList.add("is-classic-skill");
@@ -137,6 +159,14 @@ export class GameHud {
         icon.style.setProperty("--skill-icon-y", `${-Math.floor(iconIndex / 16) * 21}px`);
       }
       button.onclick = () => onUse(skill.slot);
+    }
+  }
+
+  setActiveSkillClass(classKey: string): void {
+    this.#activeClassKey = classKey;
+    if (this.#skillCatalog?.classes.some((entry) => entry.key === classKey)) {
+      this.#skillClassSelect.value = classKey;
+      this.renderSkillCatalog();
     }
   }
 
@@ -209,8 +239,8 @@ export class GameHud {
           option.textContent = entry.name;
           return option;
         }));
-        this.#skillClassSelect.value = this.#skillCatalog.classes.some((entry) => entry.key === "huntress")
-          ? "huntress"
+        this.#skillClassSelect.value = this.#skillCatalog.classes.some((entry) => entry.key === this.#activeClassKey)
+          ? this.#activeClassKey
           : (this.#skillCatalog.classes[0]?.key ?? "");
         this.renderSkillCatalog();
       })

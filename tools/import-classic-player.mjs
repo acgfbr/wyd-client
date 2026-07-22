@@ -3,6 +3,7 @@ import path from "node:path";
 import process from "node:process";
 import { HUNTRESS_LOOKS } from "../src/game/player/HuntressLooks.ts";
 import { MOUNT_LOOKS } from "../src/game/player/MountLooks.ts";
+import { CLASSIC_PLAYER_CLASSES } from "../src/game/player/PlayerClasses.ts";
 
 const projectRoot = path.resolve(import.meta.dirname, "..");
 const clientRoot = path.resolve(process.argv[2] ?? path.join(projectRoot, "../tjs/Origem"));
@@ -41,9 +42,51 @@ for (const look of HUNTRESS_LOOKS) {
   }
 }
 
-// Item #2551 Skytalos(Anct), like base item #826, maps mesh 762 to bow16.msa.
-await copyFile(path.join(meshRoot, "bow16.msa"), path.join(meshesRoot, "bow16.msa"));
-await writeFile(path.join(texturesRoot, "bow16.dds"), decodeWys(await readFile(path.join(meshRoot, "bow16.wys"))));
+// Base bodies and the post-InitObject class-selection looks. The Huntress
+// wardrobe above remains the playable default; these assets make all four
+// exact ch01/ch02 class definitions self-contained for the runtime adapter.
+for (const playerClass of CLASSIC_PLAYER_CLASSES) {
+  for (const look of [
+    { parts: playerClass.baseParts },
+    playerClass.selection.look,
+    ...playerClass.looks,
+  ]) {
+    for (const part of look.parts) {
+      if (!importedMeshes.has(part.meshStem)) {
+        await copyFile(
+          path.join(meshRoot, `${part.meshStem}.msh`),
+          path.join(meshesRoot, `${part.meshStem}.msh`),
+        );
+        importedMeshes.add(part.meshStem);
+      }
+      if (!importedTextures.has(part.textureStem)) {
+        await writeFile(
+          path.join(texturesRoot, `${part.textureStem}.dds`),
+          decodeWys(await readFile(path.join(meshRoot, `${part.textureStem}.wys`))),
+        );
+        importedTextures.add(part.textureStem);
+      }
+    }
+  }
+}
+
+// Canonical selchar weapons plus the existing playable Skytalos. MSA and WYS
+// share the stems recorded in PlayerClasses; repeated assets are deduplicated.
+const importedWeapons = new Set();
+for (const playerClass of CLASSIC_PLAYER_CLASSES) {
+  for (const weapon of [playerClass.selection.weapon, playerClass.defaultWeapon]) {
+    if (importedWeapons.has(weapon.meshStem)) continue;
+    await copyFile(
+      path.join(meshRoot, `${weapon.meshStem}.msa`),
+      path.join(meshesRoot, `${weapon.meshStem}.msa`),
+    );
+    await writeFile(
+      path.join(texturesRoot, `${weapon.textureStem}.dds`),
+      decodeWys(await readFile(path.join(meshRoot, `${weapon.textureStem}.wys`))),
+    );
+    importedWeapons.add(weapon.meshStem);
+  }
+}
 
 // Equip[14] variants use nine distinct rigs. Keep one skeleton/animation bank
 // per family and deduplicate mesh/texture files shared by multiple mounts.
@@ -96,7 +139,7 @@ await writeFile(
 );
 
 console.log(
-  `${HUNTRESS_LOOKS.length} looks da Huntress, Skytalos, ${MOUNT_LOOKS.length} montarias e Griupan importados para ${outputRoot}`,
+  `${CLASSIC_PLAYER_CLASSES.length} classes (${HUNTRESS_LOOKS.length} looks da Huntress), ${importedWeapons.size} armas, ${MOUNT_LOOKS.length} montarias e Griupan importados para ${outputRoot}`,
 );
 
 function decodeWys(encoded) {

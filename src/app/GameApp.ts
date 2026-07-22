@@ -3,10 +3,10 @@ import { ClassicAssetSource } from "../assets/ClassicAssetSource";
 import { WydCamera } from "../camera/WydCamera";
 import { Player } from "../game/Player";
 import {
-  HUNTRESS_SKILLS,
-  HuntressSkillSystem,
-  type HuntressSkill,
-} from "../game/combat/HuntressSkills";
+  ClassSkillSystem,
+  type ClassSkill,
+  type ClassicClassKey,
+} from "../game/combat/ClassSkills";
 import { SPECTRAL_FORCE } from "../game/combat/SpectralForce";
 import type {
   ClassicMonsterAttackEvent,
@@ -25,6 +25,10 @@ import {
   HUNTRESS_LOOKS,
   huntressLook,
 } from "../game/player/HuntressLooks";
+import {
+  CLASSIC_PLAYER_CLASSES,
+  classicPlayerClass,
+} from "../game/player/PlayerClasses";
 import {
   DEFAULT_MOUNT_LOOK_KEY,
   MOUNT_LOOKS,
@@ -55,6 +59,7 @@ interface PendingBowAttack {
   readonly targetId: string;
   readonly damage: number;
   readonly critical: boolean;
+  readonly classKey: ClassicClassKey;
   remainingSeconds: number;
 }
 
@@ -79,7 +84,8 @@ export class GameApp {
   readonly #input: GameInput;
   readonly #hud = new GameHud();
   readonly #playerState = new PlayerState("Huntress");
-  readonly #skills = new HuntressSkillSystem();
+  #skills = new ClassSkillSystem("huntress");
+  #activeClassKey: ClassicClassKey = "huntress";
   readonly #combatEffects = new HuntressCombatEffects();
   readonly #skillEffects: ClassicHuntressSkillEffects;
   readonly #etherealExplosionEffects: ClassicEtherealExplosionEffect;
@@ -112,6 +118,7 @@ export class GameApp {
   #heldGroundDestination: WydPosition | null = null;
   #heldGroundMode: HeldGroundMode | null = null;
   #outfitLoadId = 0;
+  #classLoadId = 0;
   #mountLoadId = 0;
 
   constructor(private readonly container: HTMLElement) {
@@ -159,7 +166,7 @@ export class GameApp {
     this.#input.onEffectsToggle = () => this.toggleEffects();
     this.#input.onSkill = (slot) => this.requestSkill(slot);
     this.#hud.bindPlayer(this.#playerState);
-    this.#hud.configureSkills(HUNTRESS_SKILLS, (slot) => this.requestSkill(slot));
+    this.#hud.configureSkills(this.#skills.skills, (slot) => this.requestSkill(slot));
     this.#hud.addLog("Armia carregada. Explore o mundo clássico.", "system");
     if (reducedGpuProfile) {
       document.documentElement.dataset.wydRenderProfile = "mobile";
@@ -183,6 +190,7 @@ export class GameApp {
     void this.#skillEffects.prepareClassic(assets);
     void this.#etherealExplosionEffects.prepareClassic(assets);
     this.configureMapSelector(assets);
+    this.configureClassSelector();
     this.configureOutfitSelector();
     this.configureMountSelector();
     const map = assets.manifest.maps[assets.manifest.defaultMap];
@@ -198,7 +206,7 @@ export class GameApp {
     this.#player = new Player(world, spawn);
     this.#player.setEffectsEnabled(this.#effectsEnabled);
     this.#scene.add(this.#player.object);
-    void this.#player.loadClassicAvatar(assets, DEFAULT_HUNTRESS_LOOK_KEY).then((loaded) => {
+    void this.#player.loadClassicAvatar(assets, "huntress", DEFAULT_HUNTRESS_LOOK_KEY).then((loaded) => {
       const status = document.querySelector<HTMLElement>("#outfit-status");
       if (!loaded) {
         if (status) status.textContent = "Visual indisponível";
@@ -267,7 +275,7 @@ export class GameApp {
     this.updatePendingSkillEvents(dt);
     if (wasInvisible && !this.#skills.hasBuff(95)) this.#player?.setInvisible(false);
     this.#hud.setBuffs(this.#skills.activeBuffs());
-    for (const skill of HUNTRESS_SKILLS) {
+    for (const skill of this.#skills.skills) {
       this.#hud.setSkillCooldown(skill.slot, this.#skills.remaining(skill.slot), this.#skills.ratio(skill.slot));
     }
     if (this.#player) {
@@ -480,7 +488,7 @@ export class GameApp {
     if (!target.alive || !target.hostile) return;
 
     if (this.#autoCombat && this.#queuedSkillSlot === null && this.#macroDecisionCooldown <= 0) {
-      const offensive = HUNTRESS_SKILLS.filter((skill) => skill.target === "enemy");
+      const offensive = this.#skills.skills.filter((skill) => skill.target === "enemy");
       for (let offset = 0; offset < offensive.length; offset++) {
         const index = (this.#macroSkillCursor + offset) % offensive.length;
         const skill = offensive[index]!;
@@ -497,9 +505,14 @@ export class GameApp {
     const distance = Math.hypot(dx, dy);
     const queuedSkill = this.#queuedSkillSlot === null
       ? null
-      : (HUNTRESS_SKILLS.find((skill) => skill.slot === this.#queuedSkillSlot) ?? null);
-    const attackRange = (queuedSkill?.range || 13.5)
-      + (SPECTRAL_FORCE.alwaysLearned ? SPECTRAL_FORCE.attackRangeBonus : 0);
+      : this.#skills.skill(this.#queuedSkillSlot);
+    const basicRange = this.#activeClassKey === "huntress"
+      ? 13.5
+      : (this.#activeClassKey === "foema" ? 7 : 2.35);
+    const attackRange = (queuedSkill?.range || basicRange)
+      + (this.#activeClassKey === "huntress" && SPECTRAL_FORCE.alwaysLearned
+        ? SPECTRAL_FORCE.attackRangeBonus
+        : 0);
     if (distance > attackRange) {
       if (this.#targetApproachCooldown <= 0) {
         const standOff = Math.max(1.2, attackRange - 0.85);
@@ -540,6 +553,7 @@ export class GameApp {
       targetId: target.id,
       damage,
       critical,
+      classKey: this.#activeClassKey,
       remainingSeconds: attack.releaseDelaySeconds,
     });
   }
@@ -555,11 +569,9 @@ export class GameApp {
       const target = attack.spawns.snapshot(attack.targetId);
       if (!target?.alive || !target.hostile) continue;
 
-      // TMHuman creates arrow type 151 from 70% of the Huntress pick height.
-      // Skin 1 is 2.0 units tall and the current avatar scale is 0.9.
       const from = this.combatPoint(this.#player.position, 1.26);
       const to = this.combatPoint(target.position, 0.85);
-      this.#combatEffects.shoot(from, to, 0xe7cf86, () => {
+      const applyHit = () => {
         const result = attack.spawns.strikeTarget(attack.targetId, attack.damage);
         if (!result.ok) return;
         this.#damageNumbers.show(
@@ -574,7 +586,14 @@ export class GameApp {
           `${attack.critical ? "CRÍTICO · " : ""}${result.damage} em ${result.target.name}.`,
           "damage",
         );
-      }, 1, 50);
+      };
+      if (attack.classKey === "huntress" || attack.classKey === "foema") {
+        const color = attack.classKey === "huntress" ? 0xe7cf86 : 0xc8a4ff;
+        this.#combatEffects.shoot(from, to, color, applyHit, 1, 50);
+      } else {
+        this.#combatEffects.burst(to, attack.classKey === "transknight" ? 0xa9eaff : 0xff713d, 0.72);
+        applyHit();
+      }
     }
   }
 
@@ -619,7 +638,7 @@ export class GameApp {
   }
 
   private requestSkill(slot: number): void {
-    const skill = HUNTRESS_SKILLS.find((candidate) => candidate.slot === slot);
+    const skill = this.#skills.skill(slot);
     if (!skill || !this.#playerState.snapshot.alive) return;
     if (skill.target === "self") {
       this.castBuffSkill(skill);
@@ -637,7 +656,7 @@ export class GameApp {
     if (!this.#selectedTargetId) this.acquireNearestTarget();
   }
 
-  private castSkill(skill: HuntressSkill, target: ClassicMonsterSnapshot): void {
+  private castSkill(skill: ClassSkill, target: ClassicMonsterSnapshot): void {
     if (!this.#player || !this.#boundSpawns || skill.target !== "enemy") return;
     const started = this.#skills.start(skill.slot, this.#playerState);
     if (!started.ok) {
@@ -647,10 +666,12 @@ export class GameApp {
     this.breakInvisibility();
     this.#player.stop();
     this.#player.faceToward(target.position);
-    const timing = this.#player.playHuntressSkill(skill.classicIndex);
+    const timing = this.#player.playClassSkill(skill);
     // Every offensive local route carries DoubleCritical bit 3 while the
     // passive #101 is learned; self buffs deliberately do not trigger it.
-    if (SPECTRAL_FORCE.alwaysLearned) this.#player.triggerSpectralForce();
+    if (this.#activeClassKey === "huntress" && SPECTRAL_FORCE.alwaysLearned) {
+      this.#player.triggerSpectralForce();
+    }
     this.#attackCooldown = Math.max(
       this.#attackCooldown,
       Math.max(0.42, (timing?.animationDurationSeconds ?? 0.54) - 0.12),
@@ -666,14 +687,14 @@ export class GameApp {
       if (!currentTarget?.alive || !currentTarget.hostile) return;
       const targetBase = this.combatPoint(currentTarget.position, 0);
 
-      if (skill.classicIndex === 72 || skill.classicIndex === 80) {
+      if (skill.classKey === "huntress" && (skill.classicIndex === 72 || skill.classicIndex === 80)) {
         this.#skillEffects.playAttackBurst(skill.classicIndex, targetBase);
         if (this.#effectsEnabled) this.#cameraRig.quake(1);
         this.applySkillImpact(skill, targetId, targetBase, false);
         return;
       }
 
-      if (skill.kind === "shadow") {
+      if (skill.classKey === "huntress" && skill.kind === "shadow") {
         // #88 has no arrow in the original; its five skinned clones are the
         // next isolated VFX port, so keep gameplay at the correct 500 ms.
         this.applySkillImpact(skill, targetId, targetBase, true);
@@ -681,7 +702,7 @@ export class GameApp {
       }
 
       const to = this.combatPoint(currentTarget.position, 0.8);
-      if (skill.classicIndex === 86) {
+      if (skill.classKey === "huntress" && skill.classicIndex === 86) {
         this.#etherealExplosionEffects.playEtherealExplosion(from, to, () => {
           if (
             spawns !== this.#boundSpawns
@@ -693,7 +714,17 @@ export class GameApp {
         });
         return;
       }
-      const arrowCount = skill.kind === "volley" ? 3 : 5;
+      if (skill.kind === "area" || skill.classKey === "transknight") {
+        this.#combatEffects.burst(
+          targetBase,
+          skill.color,
+          Math.max(0.9, Math.min(2.5, skill.radius || 0.9)),
+        );
+        if (skill.classicIndex === 23 && this.#effectsEnabled) this.#cameraRig.quake(1);
+        this.applySkillImpact(skill, targetId, targetBase, false);
+        return;
+      }
+      const arrowCount = skill.kind === "volley" ? 3 : (skill.classKey === "huntress" ? 5 : 1);
       this.#combatEffects.shoot(
         from,
         to,
@@ -705,7 +736,7 @@ export class GameApp {
     this.#hud.addLog(`${skill.name} · ${skill.mana} MP.`, "system");
   }
 
-  private castBuffSkill(skill: HuntressSkill): void {
+  private castBuffSkill(skill: ClassSkill): void {
     if (!this.#player || skill.kind !== "buff") return;
     const started = this.#skills.start(skill.slot, this.#playerState);
     if (!started.ok) {
@@ -716,7 +747,7 @@ export class GameApp {
     }
     if (skill.classicIndex !== 95) this.breakInvisibility();
     this.#player.stop();
-    const timing = this.#player.playHuntressSkill(skill.classicIndex);
+    const timing = this.#player.playClassSkill(skill);
     this.#attackCooldown = Math.max(
       this.#attackCooldown,
       Math.max(0.42, (timing?.animationDurationSeconds ?? 0.54) - 0.12),
@@ -728,15 +759,18 @@ export class GameApp {
       if (!active) return;
       if (skill.classicIndex === 76) this.#skillEffects.playImmunityCast(this.#player.object.position);
       if (skill.classicIndex === 81) this.#skillEffects.playSoulLinkCast(this.#player.object.position);
-      if (skill.classicIndex === 75) this.#buffVisualPulseRemaining.set(skill.classicIndex, 0);
+      this.#buffVisualPulseRemaining.set(skill.classicIndex, 0);
       if (skill.classicIndex === 95) this.#player.setInvisible(true);
+      if (skill.classKey !== "huntress") {
+        this.#combatEffects.burst(this.#player.object.position, skill.color, 1.15);
+      }
       this.#hud.addLog(`${skill.name} ativo por ${active.durationSeconds}s.`, "system");
     });
     this.#hud.addLog(`${skill.name} · ${skill.mana} MP.`, "system");
   }
 
   private applySkillImpact(
-    skill: HuntressSkill,
+    skill: ClassSkill,
     primaryTargetId: string,
     position: THREE.Vector3,
     showFallbackEffect: boolean,
@@ -768,11 +802,11 @@ export class GameApp {
   }
 
   private selectSkillTargets(
-    skill: HuntressSkill,
+    skill: ClassSkill,
     primary: ClassicMonsterSnapshot,
   ): ClassicMonsterSnapshot[] {
     if (!this.#boundSpawns || !this.#player) return [];
-    if (skill.kind === "volley") {
+    if (skill.kind === "volley" || skill.kind === "area") {
       return this.#boundSpawns.snapshots()
         .filter((candidate) => candidate.alive && candidate.hostile && (
           Math.hypot(
@@ -852,7 +886,9 @@ export class GameApp {
 
     const playerBase = player.object.position;
     for (const buff of active) {
-      const interval = buff.classicIndex === 75 ? 1 : 0;
+      const interval = buff.classicIndex === 75
+        ? 1
+        : (buff.classKey === "huntress" ? 0 : 2.4);
       if (interval === 0) continue;
       const remaining = (this.#buffVisualPulseRemaining.get(buff.classicIndex) ?? 0) - deltaSeconds;
       if (remaining > 0) {
@@ -860,6 +896,10 @@ export class GameApp {
         continue;
       }
       if (buff.classicIndex === 75) this.#skillEffects.playEnchantIce(playerBase);
+      else {
+        const skill = this.#skills.skills.find((candidate) => candidate.classicIndex === buff.classicIndex);
+        if (skill) this.#combatEffects.burst(playerBase, skill.color, 0.68);
+      }
       this.#buffVisualPulseRemaining.set(buff.classicIndex, interval);
     }
   }
@@ -1031,6 +1071,95 @@ export class GameApp {
     if (count) count.textContent = `${assets.manifest.fields.length} mapas · ${regions.length} regiões conectadas`;
   }
 
+  private configureClassSelector(): void {
+    const select = document.querySelector<HTMLSelectElement>("#player-class-select");
+    if (!select) return;
+    select.replaceChildren(...CLASSIC_PLAYER_CLASSES.map((definition) => {
+      const option = document.createElement("option");
+      option.value = definition.key;
+      option.textContent = definition.name;
+      return option;
+    }));
+    select.value = this.#activeClassKey;
+    document.querySelector<HTMLButtonElement>("#player-class-apply")
+      ?.addEventListener("click", () => this.requestPlayerClass(select.value));
+    this.syncClassControls();
+  }
+
+  private requestPlayerClass(classKey: string): void {
+    const definition = CLASSIC_PLAYER_CLASSES.find((candidate) => candidate.key === classKey);
+    const select = document.querySelector<HTMLSelectElement>("#player-class-select");
+    const apply = document.querySelector<HTMLButtonElement>("#player-class-apply");
+    const status = document.querySelector<HTMLElement>("#player-class-status");
+    if (!definition || !select) {
+      this.#hud.setActiveSkillClass(this.#activeClassKey);
+      return;
+    }
+    if (definition.key === this.#activeClassKey) {
+      select.value = this.#activeClassKey;
+      this.#hud.setActiveSkillClass(this.#activeClassKey);
+      return;
+    }
+    if (!this.#assets || !this.#player) return;
+
+    const previousKey = this.#activeClassKey;
+    const requestId = ++this.#classLoadId;
+    select.disabled = true;
+    if (apply) apply.disabled = true;
+    if (status) status.textContent = `Carregando ${definition.name}…`;
+    void this.#player.loadClassicAvatar(
+      this.#assets,
+      definition.key,
+      definition.defaultLookKey,
+    ).then((loaded) => {
+      if (requestId !== this.#classLoadId) return;
+      if (!loaded) {
+        select.value = previousKey;
+        this.#hud.setActiveSkillClass(previousKey);
+        if (status) status.textContent = `${classicPlayerClass(previousKey).name} · falha ao trocar`;
+        this.#hud.addLog(`${definition.name} não pôde ser carregado.`, "system");
+        return;
+      }
+
+      this.#activeClassKey = definition.key;
+      this.#skills.clear();
+      this.#skills = new ClassSkillSystem(definition.key);
+      this.#pendingBowAttacks.length = 0;
+      this.#pendingSkillEvents.length = 0;
+      this.#queuedSkillSlot = null;
+      this.#macroSkillCursor = 0;
+      this.#buffVisualPulseRemaining.clear();
+      this.#skillEffects.clear();
+      this.#etherealExplosionEffects.clear();
+      this.#player?.setInvisible(false);
+      this.#playerState.setName(definition.name);
+      this.#hud.configureSkills(this.#skills.skills, (slot) => this.requestSkill(slot));
+      this.#hud.setBuffs([]);
+      this.#hud.setActiveSkillClass(definition.key);
+      select.value = definition.key;
+      if (status) status.textContent = `${definition.name} · ${definition.defaultWeapon.name}`;
+      this.syncClassControls();
+      this.#hud.addLog(`${definition.name} equipado com ${definition.defaultWeapon.name}.`, "system");
+    }).finally(() => {
+      if (requestId === this.#classLoadId) {
+        select.disabled = false;
+        if (apply) apply.disabled = false;
+      }
+    });
+  }
+
+  private syncClassControls(): void {
+    const definition = classicPlayerClass(this.#activeClassKey);
+    const outfit = document.querySelector<HTMLSelectElement>("#outfit-select");
+    const outfitStatus = document.querySelector<HTMLElement>("#outfit-status");
+    const identity = document.querySelector<HTMLElement>(".player-identity small");
+    if (outfit) outfit.disabled = this.#activeClassKey !== "huntress";
+    if (outfitStatus && this.#activeClassKey !== "huntress") {
+      outfitStatus.textContent = `${definition.selection.look.name} · visual clássico da classe`;
+    }
+    if (identity) identity.textContent = definition.defaultWeapon.name;
+  }
+
   private configureOutfitSelector(): void {
     const select = document.querySelector<HTMLSelectElement>("#outfit-select");
     if (!select) return;
@@ -1047,13 +1176,13 @@ export class GameApp {
   private readonly outfitChanged = (): void => {
     const select = document.querySelector<HTMLSelectElement>("#outfit-select");
     const status = document.querySelector<HTMLElement>("#outfit-status");
-    if (!select || !this.#assets || !this.#player) return;
+    if (!select || !this.#assets || !this.#player || this.#activeClassKey !== "huntress") return;
     const requestedKey = select.value;
     const requestedLook = huntressLook(requestedKey);
     const requestId = ++this.#outfitLoadId;
     select.disabled = true;
     if (status) status.textContent = `Vestindo ${requestedLook.name}…`;
-    void this.#player.loadClassicAvatar(this.#assets, requestedKey).then((loaded) => {
+    void this.#player.loadClassicAvatar(this.#assets, "huntress", requestedKey).then((loaded) => {
       if (requestId !== this.#outfitLoadId) return;
       select.value = this.#player?.avatarLookKey ?? DEFAULT_HUNTRESS_LOOK_KEY;
       if (loaded) {

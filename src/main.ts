@@ -76,6 +76,14 @@ app.innerHTML = `
     <header><strong>INVENTÁRIO</strong><button type="button" aria-label="Fechar inventário" data-inventory-close>×</button></header>
     <div class="inventory-caption">Equipamento</div>
     <div class="inventory-outfit">
+      <label for="player-class-select">Classe ativa</label>
+      <span class="player-class-picker">
+        <select id="player-class-select" aria-label="Selecionar classe do personagem">
+          <option value="huntress">Huntress</option>
+        </select>
+        <button id="player-class-apply" type="button">Trocar</button>
+      </span>
+      <small id="player-class-status">Huntress · personagem atual</small>
       <label for="outfit-select">Traje da Huntress</label>
       <select id="outfit-select" aria-label="Selecionar traje da Huntress"><option>Carregando…</option></select>
       <small id="outfit-status">Carregando visual clássico…</small>

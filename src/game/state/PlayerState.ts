@@ -56,8 +56,10 @@ export class PlayerState {
   #attack = 52;
   #defense = 14;
   #coins = 0;
+  #name: string;
 
-  constructor(readonly name = "Aventureiro") {
+  constructor(name = "Aventureiro") {
+    this.#name = name;
     this.addItem({
       key: "pocao-cura-pequena",
       name: "Poção de Cura",
@@ -90,7 +92,7 @@ export class PlayerState {
 
   get snapshot(): PlayerSnapshot {
     return {
-      name: this.name,
+      name: this.#name,
       level: this.#level,
       experience: this.#experience,
       nextLevelExperience: experienceForNextLevel(this.#level),
@@ -104,6 +106,13 @@ export class PlayerState {
       alive: this.#hp > 0,
       inventory: this.#inventory.map((stack) => stack ? { item: stack.item, quantity: stack.quantity } : null),
     };
+  }
+
+  setName(name: string): void {
+    const next = name.trim();
+    if (!next || next === this.#name) return;
+    this.#name = next;
+    this.emit();
   }
 
   subscribe(listener: (snapshot: PlayerSnapshot) => void): () => void {

@@ -2,11 +2,13 @@ import * as THREE from "three";
 import type { ClassicAssetSource } from "../assets/ClassicAssetSource";
 import type { ClassicWorld } from "../world/ClassicWorld";
 import { toScene, type WydPosition } from "../world/coordinates";
+import type { ClassSkill } from "./combat/ClassSkills";
 import { ClassicPlayerAvatar } from "./player/ClassicPlayerAvatar";
 import { ClassicMount } from "./player/ClassicMount";
 import { ClassicFamiliar } from "./player/ClassicFamiliar";
 import { DEFAULT_HUNTRESS_LOOK_KEY } from "./player/HuntressLooks";
 import { DEFAULT_MOUNT_LOOK_KEY } from "./player/MountLooks";
+import type { ClassicPlayerClassKey } from "./player/PlayerClasses";
 
 const WAYPOINT_REACHED_DISTANCE = 0.18;
 const NAVIGATION_SUBSTEP = 0.45;
@@ -57,6 +59,7 @@ export class Player {
   #effectsEnabled = true;
   #invisible = false;
   #avatarAction: string | null = null;
+  #avatarClassKey: ClassicPlayerClassKey = "huntress";
   #avatarLookKey = DEFAULT_HUNTRESS_LOOK_KEY;
   #mountLookKey = DEFAULT_MOUNT_LOOK_KEY;
   #classicYaw = -Math.PI / 2;
@@ -71,6 +74,8 @@ export class Player {
   get speedBoost(): boolean { return this.#speedBoost; }
   get hasClassicAvatar(): boolean { return this.#avatar !== null; }
   get mounted(): boolean { return this.#mounted; }
+  get avatarClassKey(): ClassicPlayerClassKey { return this.#avatar?.playerClass.key ?? this.#avatarClassKey; }
+  get avatarClassName(): string { return this.#avatar?.playerClass.name ?? "Huntress"; }
   get avatarLookKey(): string { return this.#avatar?.look.key ?? this.#avatarLookKey; }
   get avatarLookName(): string | null { return this.#avatar?.look.name ?? null; }
   get mountLookKey(): string { return this.#mount?.look.key ?? this.#mountLookKey; }
@@ -103,11 +108,16 @@ export class Player {
     this.syncObject();
   }
 
-  /** Replaces the loading capsule with the classic six-piece Huntress look. */
-  async loadClassicAvatar(assets: ClassicAssetSource, lookKey = this.#avatarLookKey): Promise<boolean> {
+  /** Replaces the loading capsule with one of the four classic player rigs. */
+  async loadClassicAvatar(
+    assets: ClassicAssetSource,
+    classKey: ClassicPlayerClassKey = this.#avatarClassKey,
+    lookKey?: string,
+  ): Promise<boolean> {
     const generation = ++this.#avatarLoadGeneration;
     try {
-      const avatar = await ClassicPlayerAvatar.load(assets, lookKey);
+      const requestedLook = lookKey ?? (classKey === this.#avatarClassKey ? this.#avatarLookKey : undefined);
+      const avatar = await ClassicPlayerAvatar.load(assets, classKey, requestedLook);
       if (!avatar) return false;
       if (this.#disposed || generation !== this.#avatarLoadGeneration) {
         avatar.release();
@@ -115,6 +125,7 @@ export class Player {
       }
       this.unloadClassicAvatar();
       this.#avatar = avatar;
+      this.#avatarClassKey = avatar.playerClass.key;
       this.#avatarLookKey = avatar.look.key;
       avatar.setEffectsEnabled(this.#effectsEnabled);
       this.#fallback.visible = false;
@@ -278,6 +289,26 @@ export class Player {
   playHuntressSkill(classicIndex: number): PlayerSkillTiming | null {
     if (this.#dead) return null;
     const action = this.playAvatarAction(huntressSkillActions(classicIndex, this.#mounted), true);
+    if (this.#mounted) this.#mount?.setMoving(false);
+    if (action) {
+      this.#actionLockRemaining = Math.max(
+        0.3,
+        action.durationSeconds - CLASSIC_BOW_ACTION_END_TRIM_SECONDS,
+      );
+    }
+    return {
+      actionName: action?.name ?? null,
+      effectDelaySeconds: 0.5,
+      animationDurationSeconds: action?.durationSeconds ?? 0,
+    };
+  }
+
+  playClassSkill(skill: Pick<ClassSkill, "classicIndex" | "action1" | "action2">): PlayerSkillTiming | null {
+    if (this.#dead) return null;
+    const action = this.playAvatarAction(
+      classSkillActions(skill, this.#avatarClassKey, this.#mounted),
+      true,
+    );
     if (this.#mounted) this.#mount?.setMoving(false);
     if (action) {
       this.#actionLockRemaining = Math.max(
@@ -869,6 +900,44 @@ function huntressSkillActions(classicIndex: number, mounted: boolean): readonly 
       // Act2=9/10 (ATTACK05/06) inherit the authored bow SKILL03 clip.
       return ["SKILL03", "SKILL02", "ATTACK1"];
   }
+}
+
+function classSkillActions(
+  skill: Pick<ClassSkill, "action1" | "action2">,
+  classKey: ClassicPlayerClassKey,
+  mounted: boolean,
+): readonly string[] {
+  const sequence = classKey === "foema" || classKey === "huntress"
+    ? skill.action2
+    : skill.action1;
+  const value = sequence[mounted ? 3 : 0] ?? 0;
+  const authored = classicSkillMotion(value - 1, mounted);
+  if (mounted) return authored
+    ? [authored, "MSKIL01", "MATT3", "MATT1"]
+    : ["MSKIL01", "MATT3", "MATT1"];
+  return authored
+    ? [authored, "SKILL03", "SKILL02", "SKILL01", "ATTACK1"]
+    : ["SKILL03", "SKILL02", "SKILL01", "ATTACK1"];
+}
+
+function classicSkillMotion(motion: number, mounted: boolean): string | null {
+  const base = new Map<number, string>([
+    [4, "ATTACK1"], [5, "ATTACK2"], [6, "ATTACK3"],
+    [7, "SKILL01"], [8, "SKILL02"], [9, "SKILL03"],
+    [18, "MERCHL"], [23, "HOLY"],
+  ]).get(motion) ?? null;
+  if (!mounted || !base) return base;
+  const mountedActions: Readonly<Record<string, string>> = {
+    ATTACK1: "MATT1",
+    ATTACK2: "MATT2",
+    ATTACK3: "MATT3",
+    SKILL01: "MSKIL01",
+    SKILL02: "MSKIL02",
+    SKILL03: "MSKIL03",
+    MERCHL: "MMERCHL",
+    HOLY: "MHOLY",
+  };
+  return mountedActions[base] ?? null;
 }
 
 function classicYawForVelocity(dx: number, dy: number): number {

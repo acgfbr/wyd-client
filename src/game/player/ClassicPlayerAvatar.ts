@@ -13,19 +13,22 @@ import {
 } from "../npcs/ClassicSkinnedAssetLibrary";
 import { MonsterCatalog } from "../npcs/MonsterCatalog";
 import {
-  DEFAULT_HUNTRESS_LOOK_KEY,
-  huntressLook,
-  type HuntressLookDefinition,
-} from "./HuntressLooks";
+  classicPlayerClass,
+  type ClassicPlayerClassDefinition,
+  type ClassicPlayerClassKey,
+  type ClassicPlayerLookDefinition,
+  type ClassicPlayerWeaponDefinition,
+} from "./PlayerClasses";
 
-const HUNTRESS_ACTIONS = [
+const PLAYER_ACTIONS = [
   "STAND01", "STAND02", "WALK", "RUN", "ATTACK1", "ATTACK2", "ATTACK3",
   "SKILL01", "SKILL02", "SKILL03", "STRIKE", "DIE", "DEAD", "MERCHL", "HOLY",
   "MSTND01", "MWALK", "MRUN", "MATT1", "MATT2", "MATT3",
   "MSKIL01", "MSKIL02", "MSKIL03", "MSTRIKE", "MDIE", "MDEAD",
+  "MMERCHL", "MHOLY",
 ] as const;
 
-const MOUNTED_HUNTRESS_ACTIONS = HUNTRESS_ACTIONS.filter((action) => action.startsWith("M"));
+const MOUNTED_PLAYER_ACTIONS = PLAYER_ACTIONS.filter((action) => action.startsWith("M"));
 
 const SKYTALOS_ANCIENT_ITEM_INDEX = 2551;
 const SKYTALOS_REFINEMENT = 15;
@@ -39,7 +42,7 @@ interface ClassicRefinementState {
 
 interface ClassicWeaponVisual {
   readonly object: THREE.Group;
-  readonly refinement: ClassicRefinementState;
+  readonly refinement: ClassicRefinementState | null;
   readonly spectralForce: ClassicSpectralForceWeaponEffect | null;
 }
 
@@ -51,7 +54,8 @@ export interface ClassicAvatarAction {
 export class ClassicPlayerAvatar {
   readonly object: THREE.Group;
   readonly templateKey: string;
-  readonly look: HuntressLookDefinition;
+  readonly playerClass: ClassicPlayerClassDefinition;
+  readonly look: ClassicPlayerLookDefinition;
   readonly #lease: ClassicSkinnedInstanceLease;
   readonly #weapon: ClassicWeaponVisual | null;
   #mounted = false;
@@ -60,14 +64,16 @@ export class ClassicPlayerAvatar {
   private constructor(
     lease: ClassicSkinnedInstanceLease,
     weapon: ClassicWeaponVisual | null,
-    look: HuntressLookDefinition,
+    playerClass: ClassicPlayerClassDefinition,
+    look: ClassicPlayerLookDefinition,
   ) {
     this.#lease = lease;
     this.#weapon = weapon;
+    this.playerClass = playerClass;
     this.look = look;
-    this.templateKey = `Huntress_${look.key}_Skytalos`;
+    this.templateKey = `${playerClass.name}_${look.key}_${playerClass.defaultWeapon.key}`;
     this.object = lease.model.object;
-    this.object.name = `classic-player-huntress-${look.key}-skytalos`;
+    this.object.name = `classic-player-${playerClass.key}-${look.key}-${playerClass.defaultWeapon.key}`;
     lease.model.setClassicTransform({
       yaw: -Math.PI / 2,
       scale: 0.9,
@@ -77,34 +83,37 @@ export class ClassicPlayerAvatar {
 
   static async load(
     assets: ClassicAssetSource,
-    lookKey = DEFAULT_HUNTRESS_LOOK_KEY,
+    classKey: ClassicPlayerClassKey = "huntress",
+    lookKey?: string,
   ): Promise<ClassicPlayerAvatar | null> {
-    const look = huntressLook(lookKey);
+    const playerClass = classicPlayerClass(classKey);
+    const look = playerClass.looks.find((candidate) => candidate.key === lookKey)
+      ?? playerClass.looks.find((candidate) => candidate.key === playerClass.defaultLookKey)
+      ?? playerClass.selection.look;
     const catalog = await MonsterCatalog.load(assets);
     const library = new ClassicSkinnedAssetLibrary(assets, catalog);
     const lease = await library.createInstance({
-      skin: 1,
+      skin: playerClass.skin,
       parts: look.parts.map((part, index) => ({
-        name: `huntress-part-${index + 1}`,
+        name: `${playerClass.key}-part-${index + 1}`,
         mesh: `player/meshes/${part.meshStem}.msh`,
         texture: `player/textures/${part.textureStem}.dds`,
         alpha: part.alpha,
       })),
-      actions: HUNTRESS_ACTIONS,
-      // Skytalos has EF_WTYPE=101 and EF_POS=64. CheckWeapon selects bank 6
-      // for the Huntress (skin 1) on foot and bank 5 while mounted. The latter
-      // contains ch020626, the rider's authored bow attack instead of the
-      // standing ch020705 pose.
-      animationWeaponType: 6,
+      actions: PLAYER_ACTIONS,
+      animationWeaponType: playerClass.defaultWeapon.animationWeaponType,
       animationWeaponTypeByAction: Object.fromEntries(
-        MOUNTED_HUNTRESS_ACTIONS.map((action) => [action, 5]),
+        MOUNTED_PLAYER_ACTIONS.map((action) => [
+          action,
+          playerClass.defaultWeapon.mountedAnimationWeaponType,
+        ]),
       ),
       initialAction: "STAND02",
-      actionVariant: 1,
+      actionVariant: playerClass.classIndex,
     });
     if (!lease) return null;
-    const weapon = await attachSkytalos(assets, lease).catch(() => null);
-    return new ClassicPlayerAvatar(lease, weapon, look);
+    const weapon = await attachClassicWeapon(assets, lease, playerClass.defaultWeapon).catch(() => null);
+    return new ClassicPlayerAvatar(lease, weapon, playerClass, look);
   }
 
   setYaw(yaw: number): void {
@@ -137,7 +146,7 @@ export class ClassicPlayerAvatar {
 
   setEffectsEnabled(enabled: boolean): void {
     if (!this.#weapon) return;
-    this.#weapon.refinement.enabled.value = enabled ? 1 : 0;
+    if (this.#weapon.refinement) this.#weapon.refinement.enabled.value = enabled ? 1 : 0;
     this.#weapon.spectralForce?.setEnabled(enabled);
   }
 
@@ -163,8 +172,8 @@ export class ClassicPlayerAvatar {
     this.#lease.model.update(deltaSeconds);
     if (this.#weapon) {
       // TMMesh::Render(1): (serverTime % 4000) / 4000 is added to U and V.
-      const progress = this.#weapon.refinement.uvProgress;
-      progress.value = (progress.value + deltaSeconds / 4) % 1;
+      const progress = this.#weapon.refinement?.uvProgress;
+      if (progress) progress.value = (progress.value + deltaSeconds / 4) % 1;
       this.#weapon.spectralForce?.update(deltaSeconds);
     }
   }
@@ -178,6 +187,55 @@ export class ClassicPlayerAvatar {
     }
     this.#lease.release();
   }
+}
+
+async function attachClassicWeapon(
+  assets: ClassicAssetSource,
+  lease: ClassicSkinnedInstanceLease,
+  weapon: ClassicPlayerWeaponDefinition,
+): Promise<ClassicWeaponVisual> {
+  if (weapon.key === "skytalos-ancient") return attachSkytalos(assets, lease);
+  const meshResponse = await fetch(assets.dataUrl(`player/meshes/${weapon.meshStem}.msa`));
+  if (!meshResponse.ok) throw new Error(`MSA de ${weapon.name} indisponível`);
+  const model = parseMsa(await meshResponse.arrayBuffer());
+  const texture = await new ClassicDdsTextureLoader().loadAsync(
+    assets.dataUrl(`player/textures/${weapon.textureStem}.dds`),
+  );
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 4;
+  const materials = Array.from({ length: Math.max(1, model.textureNames.length) }, () => (
+    new THREE.MeshLambertMaterial({
+      name: `WYD ${weapon.name}`,
+      map: texture,
+      side: THREE.DoubleSide,
+      alphaTest: weapon.alpha === "C" ? 0 : 0.25,
+    })
+  ));
+  const mesh = new THREE.Mesh(model.geometry, materials);
+  mesh.name = `weapon-${weapon.key}-${weapon.itemIndex}`;
+  mesh.userData.itemIndex = weapon.itemIndex;
+  mesh.userData.weaponType = weapon.weaponType;
+  mesh.userData.refinement = 9;
+  mesh.userData.ancient = true;
+  mesh.castShadow = true;
+  mesh.frustumCulled = false;
+
+  const attachment = weapon.attachment;
+  const holder = new THREE.Group();
+  holder.name = `${weapon.key}-left-hand-anchor`;
+  holder.matrixAutoUpdate = false;
+  holder.matrix.copy(createClassicD3DLocalMatrix({
+    x: attachment.x,
+    y: attachment.y,
+    z: attachment.z,
+    yaw: THREE.MathUtils.degToRad(attachment.yawDegrees),
+    pitch: THREE.MathUtils.degToRad(attachment.pitchDegrees),
+    roll: THREE.MathUtils.degToRad(attachment.rollDegrees),
+  }));
+  holder.matrixWorldNeedsUpdate = true;
+  holder.add(mesh);
+  (lease.model.bones[attachment.boneIndex] ?? lease.model.object).add(holder);
+  return { object: holder, refinement: null, spectralForce: null };
 }
 
 function resetObjectTransform(object: THREE.Object3D): void {
