@@ -1,6 +1,6 @@
 import * as THREE from "three";
-import { DDSLoader } from "three/addons/loaders/DDSLoader.js";
 import type { ClassicAssetSource } from "../../assets/ClassicAssetSource";
+import { ClassicDdsTextureLoader } from "../../render/textures/ClassicDdsTextureLoader";
 import {
   ClassicSkinnedAssetLibrary,
   type ClassicSkinnedInstanceLease,
@@ -262,7 +262,7 @@ export class ClassicFamiliar {
 async function loadParticleTexture(assets: ClassicAssetSource): Promise<THREE.Texture | null> {
   const url = assets.effectTextureUrl(PARTICLE_TEXTURE_INDEX);
   if (!url) return null;
-  const texture = await new DDSLoader().loadAsync(url).catch(() => null);
+  const texture = await new ClassicDdsTextureLoader().loadAsync(url).catch(() => null);
   if (!texture) return null;
   texture.name = "griupan-effect-texture-2";
   texture.colorSpace = THREE.SRGBColorSpace;

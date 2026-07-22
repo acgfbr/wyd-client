@@ -1,7 +1,7 @@
 import * as THREE from "three";
-import { DDSLoader } from "three/addons/loaders/DDSLoader.js";
 import type { ClassicAssetSource } from "../../assets/ClassicAssetSource";
 import { parseMsa } from "../../formats/classic/Msa";
+import { ClassicDdsTextureLoader } from "../textures/ClassicDdsTextureLoader";
 
 const PROJECTILE_POOL_LIMIT = 64;
 const IMPACT_POOL_LIMIT = 64;
@@ -81,7 +81,7 @@ interface EtherealTrailVisual {
 export class ClassicEtherealExplosionEffect {
   readonly object = new THREE.Group();
   readonly #owner: THREE.Object3D;
-  readonly #dds = new DDSLoader();
+  readonly #dds = new ClassicDdsTextureLoader();
   readonly #projectiles: EtherealProjectileVisual[] = [];
   readonly #impacts: EtherealImpactVisual[] = [];
   readonly #trails: EtherealTrailVisual[] = [];

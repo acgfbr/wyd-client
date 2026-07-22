@@ -1,10 +1,10 @@
 import * as THREE from "three";
-import { DDSLoader } from "three/addons/loaders/DDSLoader.js";
 import type { ClassicAssetSource } from "../../assets/ClassicAssetSource";
 import type { MapObjectRecord } from "../../formats/classic/Dat";
 import { FIELD_WORLD_SIZE, toScene, type WydPosition } from "../../world/coordinates";
 import { fieldKey } from "../../world/regions";
 import type { ModelLibrary } from "../objects/ModelLibrary";
+import { ClassicDdsTextureLoader } from "../textures/ClassicDdsTextureLoader";
 
 // Exact TMHouse::InitObject owner -> water mesh mapping. These secondary MSA
 // files never appear as independent records in a Field DAT.
@@ -70,7 +70,7 @@ const fragmentShader = /* glsl */ `
 
 export class MapWater {
   readonly object = new THREE.Group();
-  readonly #loader = new DDSLoader();
+  readonly #loader = new ClassicDdsTextureLoader();
   readonly #materials = new Map<string, Promise<THREE.ShaderMaterial | null>>();
   readonly #fieldGroups = new Map<string, THREE.Group>();
   readonly #fieldModelTypes = new Map<string, readonly number[]>();

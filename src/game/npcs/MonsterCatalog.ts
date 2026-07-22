@@ -110,6 +110,8 @@ interface RawMonsterCatalog {
   readonly unresolvedTemplates: readonly string[];
 }
 
+const catalogJobs = new WeakMap<ClassicAssetSource, Promise<MonsterCatalog>>();
+
 /** Typed, indexed view over the compact importer JSON. */
 export class MonsterCatalog {
   readonly templates: readonly MonsterTemplate[];
@@ -142,15 +144,26 @@ export class MonsterCatalog {
   }
 
   static async load(assets: ClassicAssetSource): Promise<MonsterCatalog> {
-    // The importer intentionally keeps the same compact filename. Bypass the
-    // browser cache so a Vite reload never revives an older equipment/look map.
-    const response = await fetch(assets.dataUrl(assets.manifest.monsters.catalog), { cache: "no-store" });
-    if (!response.ok) throw new Error(`Falha ao carregar catalogo de monstros (${response.status})`);
-    const raw = await response.json() as RawMonsterCatalog;
-    if (raw.version !== 1 || !Array.isArray(raw.generators) || !Array.isArray(raw.templates)) {
-      throw new Error("Catalogo de monstros invalido");
-    }
-    return new MonsterCatalog(raw);
+    const cached = catalogJobs.get(assets);
+    if (cached) return cached;
+
+    // Spawn, environment, player, familiar and mount all consume the same
+    // immutable 850 KB catalog. Sharing the fetch + parsed object avoids five
+    // simultaneous JSON graphs during the mobile boot.
+    const job = (async () => {
+      const response = await fetch(assets.dataUrl(assets.manifest.monsters.catalog));
+      if (!response.ok) throw new Error(`Falha ao carregar catalogo de monstros (${response.status})`);
+      const raw = await response.json() as RawMonsterCatalog;
+      if (raw.version !== 1 || !Array.isArray(raw.generators) || !Array.isArray(raw.templates)) {
+        throw new Error("Catalogo de monstros invalido");
+      }
+      return new MonsterCatalog(raw);
+    })();
+    catalogJobs.set(assets, job);
+    void job.catch(() => {
+      if (catalogJobs.get(assets) === job) catalogJobs.delete(assets);
+    });
+    return job;
   }
 
   template(index: number): MonsterTemplate | null {

@@ -1,7 +1,7 @@
 import * as THREE from "three";
-import { DDSLoader } from "three/addons/loaders/DDSLoader.js";
 import type { ClassicAssetSource } from "../../assets/ClassicAssetSource";
 import { parseMsa } from "../../formats/classic/Msa";
+import { ClassicDdsTextureLoader } from "../textures/ClassicDdsTextureLoader";
 
 const CRITICAL_CORE_LIFETIME = 0.2;
 const CRITICAL_PARTICLE_LIFETIME = 0.3;
@@ -245,7 +245,7 @@ export class HuntressCombatEffects {
   }
 
   private async loadClassicCriticalResources(assets: ClassicAssetSource): Promise<ClassicCriticalResources> {
-    const loader = new DDSLoader();
+    const loader = new ClassicDdsTextureLoader();
     const texture = async (index: number): Promise<THREE.Texture> => {
       const url = assets.effectTextureUrl(index);
       if (!url) throw new Error(`Textura de efeito ${index} ausente do manifesto`);

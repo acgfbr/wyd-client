@@ -1,8 +1,8 @@
 import * as THREE from "three";
-import { DDSLoader } from "three/addons/loaders/DDSLoader.js";
 import type { ClassicAssetSource } from "../../assets/ClassicAssetSource";
 import { parseMsa } from "../../formats/classic/Msa";
 import { createClassicD3DLocalMatrix } from "../characters/ClassicSkinnedModel";
+import { ClassicDdsTextureLoader } from "../textures/ClassicDdsTextureLoader";
 
 // TMEffectSWSwing::Render, m_cSForce == 2 (Huntress bow WTYPE 101).
 const EFFECT_LIFETIME_SECONDS = 1.5;
@@ -76,7 +76,7 @@ export class ClassicSpectralForceWeaponEffect {
       throw new Error("Texturas clássicas da Força Espectral indisponíveis");
     }
 
-    const loader = new DDSLoader();
+    const loader = new ClassicDdsTextureLoader();
     let textures: THREE.Texture[] = [];
     try {
       textures = await Promise.all([

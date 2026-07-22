@@ -1,10 +1,10 @@
 import * as THREE from "three";
-import { DDSLoader } from "three/addons/loaders/DDSLoader.js";
 import type { ClassicAssetSource } from "../../assets/ClassicAssetSource";
 import { parseMsa } from "../../formats/classic/Msa";
+import { ClassicDdsTextureLoader } from "../textures/ClassicDdsTextureLoader";
 
 export class ModelLibrary {
-  readonly #loader = new DDSLoader();
+  readonly #loader = new ClassicDdsTextureLoader();
   readonly #cache = new Map<number, { references: number; promise: Promise<THREE.Group | null> }>();
 
   constructor(private readonly assets: ClassicAssetSource) {}

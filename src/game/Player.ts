@@ -757,16 +757,21 @@ export class Player {
       ) {
         this.playAvatarAction(this.#mounted ? ["MDEAD", "MDIE", "DEAD"] : ["DEAD", "DIE"]);
       }
-    } else if (this.#actionLockRemaining > 0) {
+    } else if (this.#actionLockRemaining > 0 && !moving) {
       this.#actionLockRemaining = Math.max(0, this.#actionLockRemaining - deltaSeconds);
     } else {
+      // Movement is an explicit action interrupt. In particular, the macro can
+      // acquire its next target while the previous bow take is still locked;
+      // carrying that lock into locomotion made the rider and mount slide in
+      // their idle/attack poses until the clip elapsed.
+      this.#actionLockRemaining = 0;
       this.playAvatarAction(this.#mounted
         ? [moving ? "MRUN" : "MSTND01", moving ? "MWALK" : "STAND01"]
         : [moving ? "RUN" : "STAND02", moving ? "WALK" : "STAND01"]);
     }
     avatar.update(deltaSeconds);
     if (this.#mounted) {
-      if (!this.#dead && this.#actionLockRemaining <= 0) this.#mount?.setMoving(moving);
+      if (!this.#dead) this.#mount?.setMoving(moving && this.#actionLockRemaining <= 0);
       this.#mount?.update(deltaSeconds);
     }
   }

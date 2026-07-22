@@ -1,7 +1,7 @@
 import * as THREE from "three";
-import { DDSLoader } from "three/addons/loaders/DDSLoader.js";
 import type { ClassicAssetSource } from "../../assets/ClassicAssetSource";
 import type { TrnBlock } from "../../formats/classic/Trn";
+import { ClassicDdsTextureLoader } from "../textures/ClassicDdsTextureLoader";
 
 const vertexShader = /* glsl */ `
   attribute vec3 color;
@@ -59,7 +59,7 @@ const fragmentShader = /* glsl */ `
 `;
 
 export class TerrainMaterialLibrary {
-  readonly #loader = new DDSLoader();
+  readonly #loader = new ClassicDdsTextureLoader();
   readonly #materials = new Map<string, THREE.ShaderMaterial>();
   readonly #textures = new Map<number, THREE.Texture>();
   readonly #whiteTexture = createWhiteTexture();

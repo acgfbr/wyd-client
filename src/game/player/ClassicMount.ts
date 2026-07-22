@@ -1,7 +1,7 @@
 import * as THREE from "three";
-import { DDSLoader } from "three/addons/loaders/DDSLoader.js";
 import type { ClassicAssetSource } from "../../assets/ClassicAssetSource";
 import { parseAni, type AniAnimation } from "../../formats/classic/Ani";
+import { ClassicDdsTextureLoader } from "../../render/textures/ClassicDdsTextureLoader";
 import {
   ClassicSkinnedAssetLibrary,
   type ClassicSkinnedInstanceLease,
@@ -211,7 +211,7 @@ async function loadMountLevelEffect(
 ): Promise<MountLevelEffect | null> {
   const url = assets.effectTextureUrl(MOUNT_LEVEL_EFFECT_TEXTURE);
   if (!url) return null;
-  const texture = await new DDSLoader().loadAsync(url);
+  const texture = await new ClassicDdsTextureLoader().loadAsync(url);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.anisotropy = 4;
   texture.wrapS = THREE.RepeatWrapping;

@@ -34,6 +34,7 @@ import { HuntressCombatEffects } from "../render/effects/HuntressCombatEffects";
 import { ClassicDamageNumbers } from "../render/effects/ClassicDamageNumbers";
 import { ClassicHuntressSkillEffects } from "../render/effects/ClassicHuntressSkillEffects";
 import { ClassicEtherealExplosionEffect } from "../render/effects/ClassicEtherealExplosionEffect";
+import { configureClassicDdsTextureSupport } from "../render/textures/ClassicDdsTextureLoader";
 import {
   connectedFieldRegions,
   fieldKey,
@@ -69,6 +70,8 @@ export class GameApp {
   readonly #camera = new THREE.PerspectiveCamera(45, 1, 0.966, 1200);
   readonly #cameraRig = new WydCamera(this.#camera);
   readonly #renderer: THREE.WebGLRenderer;
+  readonly #mobileGpuProfile: boolean;
+  readonly #pixelRatio: number;
   readonly #clock = new THREE.Clock();
   readonly #raycaster = new THREE.Raycaster();
   readonly #clickMarker = createClickMarker();
@@ -112,12 +115,21 @@ export class GameApp {
   #mountLoadId = 0;
 
   constructor(private readonly container: HTMLElement) {
-    this.#renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
-    this.#renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    this.#renderer.shadowMap.enabled = true;
+    this.#mobileGpuProfile = isAppleMobileDevice();
+    this.#renderer = new THREE.WebGLRenderer({
+      antialias: !this.#mobileGpuProfile,
+      powerPreference: this.#mobileGpuProfile ? "default" : "high-performance",
+    });
+    const textureSupport = configureClassicDdsTextureSupport(this.#renderer);
+    const reducedGpuProfile = this.#mobileGpuProfile || textureSupport.mode === "cpu-rgba";
+    this.#pixelRatio = Math.min(window.devicePixelRatio, reducedGpuProfile ? 1 : 2);
+    this.#renderer.setPixelRatio(this.#pixelRatio);
+    this.#renderer.shadowMap.enabled = !reducedGpuProfile;
     this.#renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.#renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.#renderer.domElement.className = "game-canvas";
+    this.#renderer.domElement.addEventListener("webglcontextlost", this.webglContextLost);
+    this.#renderer.domElement.addEventListener("webglcontextrestored", this.webglContextRestored);
     this.container.appendChild(this.#renderer.domElement);
     this.#skillEffects = new ClassicHuntressSkillEffects(this.#scene);
     this.#etherealExplosionEffects = new ClassicEtherealExplosionEffect(this.#scene);
@@ -149,6 +161,15 @@ export class GameApp {
     this.#hud.bindPlayer(this.#playerState);
     this.#hud.configureSkills(HUNTRESS_SKILLS, (slot) => this.requestSkill(slot));
     this.#hud.addLog("Armia carregada. Explore o mundo clássico.", "system");
+    if (reducedGpuProfile) {
+      document.documentElement.dataset.wydRenderProfile = "mobile";
+      this.#hud.addLog(
+        textureSupport.mode === "cpu-rgba"
+          ? "Compatibilidade móvel · DDS convertido para RGBA."
+          : "Compatibilidade móvel · render econômico ativo.",
+        "system",
+      );
+    }
     window.addEventListener("resize", this.resize);
     this.resize();
   }
@@ -223,12 +244,14 @@ export class GameApp {
     this.#scene.add(new THREE.HemisphereLight(0xdce9f5, 0x473d2c, 1.4));
     const sun = new THREE.DirectionalLight(0xffe7be, 2.2);
     sun.position.set(-35, 75, -28);
-    sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
-    sun.shadow.camera.left = -75;
-    sun.shadow.camera.right = 75;
-    sun.shadow.camera.top = 75;
-    sun.shadow.camera.bottom = -75;
+    sun.castShadow = !this.#mobileGpuProfile;
+    if (!this.#mobileGpuProfile) {
+      sun.shadow.mapSize.set(2048, 2048);
+      sun.shadow.camera.left = -75;
+      sun.shadow.camera.right = 75;
+      sun.shadow.camera.top = 75;
+      sun.shadow.camera.bottom = -75;
+    }
     this.#scene.add(sun);
     this.#camera.position.set(20, 24, 27);
   }
@@ -504,6 +527,11 @@ export class GameApp {
     const critical = criticalRoll < 0.35;
     const damage = Math.max(1, Math.round(player.attack * variance * (critical ? 1.65 : 1)));
     this.breakInvisibility();
+    // Reaching bow range ends the approach before the take starts. This keeps
+    // the mounted animal planted during the release instead of letting the
+    // remaining stand-off waypoint trigger its RUN/take-off curve mid-shot.
+    this.#player.stop();
+    this.#player.faceToward(target.position);
     const attack = this.#player.playAttack();
     if (!attack) return;
     this.#attackCooldown = 0.72;
@@ -961,7 +989,23 @@ export class GameApp {
     this.#camera.aspect = width / height;
     this.#camera.updateProjectionMatrix();
     this.#renderer.setSize(width, height, false);
-    this.#damageNumbers.resize(width, height, Math.min(window.devicePixelRatio, 2));
+    this.#damageNumbers.resize(width, height, this.#pixelRatio);
+  };
+
+  private readonly webglContextLost = (event: Event): void => {
+    event.preventDefault();
+    this.#streamingPaused = true;
+    this.#renderer.setAnimationLoop(null);
+    const loading = document.querySelector<HTMLElement>("#loading");
+    loading?.classList.remove("is-hidden");
+    const status = document.querySelector<HTMLElement>("#loading-status");
+    if (status) {
+      status.textContent = "A memória gráfica foi reiniciada. Recarregue a página para voltar a Armia.";
+    }
+  };
+
+  private readonly webglContextRestored = (): void => {
+    window.location.reload();
   };
 
   private configureMapSelector(assets: ClassicAssetSource): void {
@@ -1171,6 +1215,13 @@ function fieldCenter(column: number, row: number): WydPosition {
     x: column * FIELD_WORLD_SIZE + FIELD_WORLD_SIZE / 2,
     y: row * FIELD_WORLD_SIZE + FIELD_WORLD_SIZE / 2,
   };
+}
+
+function isAppleMobileDevice(): boolean {
+  const userAgent = navigator.userAgent;
+  return /iPhone|iPad|iPod/i.test(userAgent)
+    // iPadOS desktop mode identifies itself as Macintosh.
+    || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 }
 
 function drawMinimapPlaceholder(canvas: HTMLCanvasElement, label: string): void {

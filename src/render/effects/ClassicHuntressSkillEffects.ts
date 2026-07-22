@@ -1,7 +1,7 @@
 import * as THREE from "three";
-import { DDSLoader } from "three/addons/loaders/DDSLoader.js";
 import type { ClassicAssetSource } from "../../assets/ClassicAssetSource";
 import { parseMsa } from "../../formats/classic/Msa";
+import { ClassicDdsTextureLoader } from "../textures/ClassicDdsTextureLoader";
 
 export type ClassicHuntressAttackBurstIndex = 72 | 80;
 
@@ -153,7 +153,7 @@ interface EnchantIceVisual {
  */
 export class ClassicHuntressSkillEffects {
   readonly object = new THREE.Group();
-  readonly #dds = new DDSLoader();
+  readonly #dds = new ClassicDdsTextureLoader();
   readonly #attackPool: AttackVisual[] = [];
   readonly #enchantIcePool: EnchantIceVisual[] = [];
   readonly #immunityCastPool: ImmunityCastVisual[] = [];

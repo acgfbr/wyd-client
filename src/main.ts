@@ -104,8 +104,16 @@ app.innerHTML = `
   <div class="controls-hint"><span>WASD</span> mover · <span>Q/E</span> câmera · <span>RODA</span> zoom · <span>I</span> inventário · <span>K</span> skills · <span>G</span> GM · <span>R</span> montaria · <span>F</span> auto-combate · <span>V</span> efeitos</div>
 `;
 
-new GameApp(app).start().catch((error: unknown) => {
+function showBootError(error: unknown): void {
   console.error(error);
   const status = document.querySelector<HTMLElement>("#loading-status");
   if (status) status.textContent = error instanceof Error ? error.message : "Falha ao iniciar";
-});
+}
+
+try {
+  const game = new GameApp(app);
+  void game.start().catch(showBootError);
+} catch (error) {
+  // WebGLRenderer can fail synchronously before start() returns a Promise.
+  showBootError(error);
+}

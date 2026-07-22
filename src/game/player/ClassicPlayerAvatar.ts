@@ -1,5 +1,4 @@
 import * as THREE from "three";
-import { DDSLoader } from "three/addons/loaders/DDSLoader.js";
 import type { ClassicAssetSource } from "../../assets/ClassicAssetSource";
 import { parseMsa } from "../../formats/classic/Msa";
 import {
@@ -7,6 +6,7 @@ import {
   type ClassicBaseAttachmentTransform,
 } from "../../render/characters/ClassicSkinnedModel";
 import { ClassicSpectralForceWeaponEffect } from "../../render/effects/ClassicSpectralForceWeaponEffect";
+import { ClassicDdsTextureLoader } from "../../render/textures/ClassicDdsTextureLoader";
 import {
   ClassicSkinnedAssetLibrary,
   type ClassicSkinnedInstanceLease,
@@ -196,7 +196,7 @@ async function attachSkytalos(
   const model = parseMsa(await meshResponse.arrayBuffer());
   const refinementUrl = assets.effectTextureUrl(SKYTALOS_REFINEMENT_TEXTURE);
   if (!refinementUrl) throw new Error("Multitextura +15 do Skytalos indisponível");
-  const loader = new DDSLoader();
+  const loader = new ClassicDdsTextureLoader();
   const [texture, refinementTexture] = await Promise.all([
     loader.loadAsync(assets.dataUrl("player/textures/bow16.dds")),
     loader.loadAsync(refinementUrl),

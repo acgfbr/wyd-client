@@ -1,10 +1,10 @@
 import * as THREE from "three";
-import { DDSLoader } from "three/addons/loaders/DDSLoader.js";
 import type { ClassicAssetSource } from "../../assets/ClassicAssetSource";
 import { parseAni, type AniAnimation } from "../../formats/classic/Ani";
 import { parseBon, type BonSkeleton } from "../../formats/classic/Bon";
 import { parseMsh, type MshModel } from "../../formats/classic/Msh";
 import { ClassicSkinnedModel, type ClassicSkinnedPart } from "../../render/characters/ClassicSkinnedModel";
+import { ClassicDdsTextureLoader } from "../../render/textures/ClassicDdsTextureLoader";
 import type { MonsterCatalog, MonsterTemplate, MonsterVisualFamily } from "./MonsterCatalog";
 
 // Parsed assets are cheap to reuse but were previously retained for every map
@@ -79,7 +79,7 @@ interface MaterialEntry {
  * materials/textures are reference-counted and disappear with the last actor.
  */
 export class ClassicSkinnedAssetLibrary {
-  readonly #dds = new DDSLoader();
+  readonly #dds = new ClassicDdsTextureLoader();
   readonly #buffers = new Map<string, Promise<ArrayBuffer | null>>();
   readonly #skeletons = new Map<string, Promise<BonSkeleton | null>>();
   readonly #meshes = new Map<string, Promise<MshModel | null>>();
