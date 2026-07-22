@@ -1,7 +1,10 @@
 import * as THREE from "three";
 import type { ClassicAssetSource } from "../../assets/ClassicAssetSource";
 import { toScene, type WydPosition } from "../../world/coordinates";
-import type { BeastMasterSummonDefinition } from "../combat/BeastMasterSummons";
+import {
+  BEAST_MASTER_SUMMON_ACTIONS,
+  type BeastMasterSummonDefinition,
+} from "../combat/BeastMasterSummons";
 import type { ClassicMonsterSnapshot } from "../npcs/ClassicMonsterGameplay";
 import {
   ClassicSkinnedAssetLibrary,
@@ -9,12 +12,6 @@ import {
 } from "../npcs/ClassicSkinnedAssetLibrary";
 import { MonsterCatalog } from "../npcs/MonsterCatalog";
 
-const SUMMON_ACTIONS = [
-  "STAND01", "STAND02", "WALK", "RUN",
-  "ATTACK1", "ATTACK2", "ATTACK3",
-  "STRIKE", "DIE", "DEAD",
-  "LEVELUP",
-] as const;
 const OWNER_FOLLOW_START_DISTANCE = 4;
 const OWNER_FOLLOW_STOP_DISTANCE = 2;
 const OWNER_TELEPORT_DISTANCE = 25;
@@ -68,6 +65,9 @@ export class ClassicBeastMasterSummon {
     this.definition = definition;
     this.#lease = lease;
     this.#position = { ...spawn };
+    const phaseSeed = Math.abs(Math.sin(spawn.x * 12.9898 + spawn.y * 78.233));
+    this.#attackSequence = Math.floor(phaseSeed * 3);
+    this.#attackCooldownRemaining = 0.15 + phaseSeed * 0.65;
     this.object.name = `classic-bm-summon-${definition.key}`;
     this.object.userData.beastMasterSummon = true;
     this.object.userData.summonKey = definition.key;
@@ -99,7 +99,7 @@ export class ClassicBeastMasterSummon {
         texture: part.texture,
         alpha: part.alpha,
       })),
-      actions: SUMMON_ACTIONS,
+      actions: BEAST_MASTER_SUMMON_ACTIONS,
       initialAction: "LEVELUP",
     });
     return lease ? new ClassicBeastMasterSummon(definition, lease, spawn) : null;

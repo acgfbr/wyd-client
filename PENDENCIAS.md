@@ -44,6 +44,12 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
   a pé/montado e attachments de mão já foram derivados do cliente. Cada classe
   possui traje base/armadura no seletor e um primeiro loadout auditado de três
   ataques e dois buffs; a Huntress conserva seus nove slots atuais.
+- BeastMaster possui as oito evocações de Natureza auditadas (`#56–#63`):
+  Condor, Javali, Lobo, Urso, Grande Tigre, Gorila, Dragão Negro e Succubus.
+  BON/MSH/DDS, variantes LOOK_INFO e ações AniSound/ValidIndex são reais; no
+  mock offline, cada cast cria a formação de 10 solicitada, que segue o dono,
+  procura hostis e ataca. Grande Tigre ocupa o atalho `9`; as oito continuam
+  utilizáveis pelo catálogo `K`.
 - Controle contínuo implementado: manter o esquerdo atualiza o destino a cada
   `200 ms`; manter esquerdo+direito avança na direção da câmera e permite
   esterçar com o direito. A célula isolada em `2164,2102` agora recebe um
@@ -117,10 +123,14 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
    unidade ao alcance e acopla o `SForce` clássico de três camadas à arma em
    ataques normais e skills ofensivas, sem ocupar slot ou criar buff temporário.
    Esse recorte da Huntress está homologado; o épico só fecha depois da matriz
-   completa das quatro classes. Para BeastMaster, implementar também as
-   evocações reais: criação do summon, skin/LOOK_INFO, VFX de entrada, tempo de
-   vida, seguimento, escolha de alvo, ataque, morte e descarte/streaming conforme
-   as rotinas originais, sem reutilizar o familiar Griupan como substituto.
+   completa das quatro classes. As oito evocações reais do BeastMaster já têm
+   criação, skin/LOOK_INFO, animação `LEVELUP`, seguimento, escolha de alvo,
+   ataque e descarte local, sem reutilizar o Griupan. A auditoria confirmou que
+   tempo de vida, IA, morte e remoção chegam do servidor como entidades
+   `TMHuman`, não são regras do cliente; enquanto rede está fora do escopo, a
+   formação de 10 e sua IA são uma política explícita do frontend. Ainda faltam
+   portar fielmente `TMEffectStart`/`TMEffectLevelUp` e, no futuro, substituir a
+   simulação local pelos packets autoritativos do servidor.
 8. Isolamento completo do modo G.
 9. Progressão e painel de personagem: reproduzir a janela de status clássica,
     guardar `STR/INT/DEX/CON` e pontos livres, permitir distribuição e calcular

@@ -148,7 +148,13 @@ export class ClassicSkinnedAssetLibrary {
           if (released) return;
           released = true;
           model.object.removeFromParent();
-          for (const mesh of model.meshes) mesh.geometry.dispose();
+          for (const mesh of model.meshes) {
+            // WebGLRenderer lazily creates a boneTexture for larger rigs.
+            // Geometry/material disposal does not release that GPU texture;
+            // every streamed actor or BM re-summon owns its Skeleton instance.
+            mesh.skeleton.dispose();
+            mesh.geometry.dispose();
+          }
           for (const key of materialKeys) this.releaseMaterial(key);
         },
       };

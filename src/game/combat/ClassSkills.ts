@@ -389,6 +389,7 @@ const BEASTMASTER_SUMMON_ACTIONS: Readonly<Record<number, readonly [ClassicActio
   62: [[9, 0, 0, 6, 0, 0, 0, 0], [8, 0, 0, 7, 0, 0, 0, 0]],
   63: [[8, 0, 0, 6, 0, 0, 0, 0], [8, 0, 0, 6, 0, 0, 0, 0]],
 };
+const BEASTMASTER_SUMMON_HOTBAR_ORDER = [56, 57, 58, 60, 59, 61, 62, 63] as const;
 
 /** BeastMaster records #48/#49/#50/#53/#54 and nature summons #56-#63. */
 export const BEASTMASTER_SKILLS = defineLoadout("beastmaster", [
@@ -537,10 +538,12 @@ export const BEASTMASTER_SKILLS = defineLoadout("beastmaster", [
     color: 0xffeeff,
     effectKey: "beastmaster-elemental-strength",
   },
-  ...BEAST_MASTER_SUMMONS.map((summon, index): ClassSkillDefinition => {
+  ...BEAST_MASTER_SUMMONS.map((summon): ClassSkillDefinition => {
     const [action1, action2] = BEASTMASTER_SUMMON_ACTIONS[summon.skill.classicIndex]!;
     return {
-      slot: 6 + index,
+      // The four visible summon slots keep Grande Tigre on key 9. The other
+      // invocations remain directly castable from the classic skill window.
+      slot: 6 + BEASTMASTER_SUMMON_HOTBAR_ORDER.indexOf(summon.skill.classicIndex),
       classicIndex: summon.skill.classicIndex,
       name: `Evocar ${summon.name}`,
       shortName: summon.name.replace(" Selvagem", "").replace(" Gigante", ""),

@@ -56,6 +56,7 @@ const ARMIA_SPAWN = { x: 2100, y: 2100 } as const;
 const CLICK_MARKER_LIFETIME = 0.72;
 const HELD_GROUND_UPDATE_SECONDS = 0.2;
 const HELD_GROUND_DESTINATION_EPSILON = 0.08;
+const BEAST_MASTER_SUMMON_PACK_SIZE = 10;
 
 interface PendingBowAttack {
   readonly spawns: ClassicSpawnManager;
@@ -124,7 +125,7 @@ export class GameApp {
   #classLoadId = 0;
   #mountLoadId = 0;
   #summonGeneration = 0;
-  readonly #beastMasterSummons = new Map<number, ClassicBeastMasterSummon>();
+  readonly #beastMasterSummons = new Map<number, ClassicBeastMasterSummon[]>();
 
   constructor(private readonly container: HTMLElement) {
     this.#mobileGpuProfile = isAppleMobileDevice();
@@ -698,17 +699,25 @@ export class GameApp {
       Math.max(0.42, (timing?.animationDurationSeconds ?? 0.54) - 0.12),
     );
     const owner = this.#player.position;
-    const angle = definition.skill.instanceValue * 2.399963229728653;
-    const spawn = {
-      x: owner.x + Math.cos(angle) * 2.1,
-      y: owner.y + Math.sin(angle) * 2.1,
-    };
+    const baseAngle = definition.skill.instanceValue * 2.399963229728653;
+    const spawns = Array.from({ length: BEAST_MASTER_SUMMON_PACK_SIZE }, (_, index) => {
+      const angle = baseAngle + index * Math.PI * 2 / BEAST_MASTER_SUMMON_PACK_SIZE;
+      const radius = 2.1 + (index % 2) * 0.75;
+      return {
+        x: owner.x + Math.cos(angle) * radius,
+        y: owner.y + Math.sin(angle) * radius,
+      };
+    });
     const generation = this.#summonGeneration;
     const delay = timing?.effectDelaySeconds ?? 0.5;
     this.scheduleSkillEvent(delay, () => {
       if (!this.#assets) return;
-      void ClassicBeastMasterSummon.load(definition, spawn, this.#assets).then((summon) => {
-        if (!summon) {
+      const assets = this.#assets;
+      void Promise.all(spawns.map((spawn) => (
+        ClassicBeastMasterSummon.load(definition, spawn, assets)
+      ))).then((loaded) => {
+        const summons = loaded.filter((summon): summon is ClassicBeastMasterSummon => summon !== null);
+        if (summons.length === 0) {
           this.#hud.addLog(`${definition.name} não pôde ser materializado.`, "system");
           return;
         }
@@ -718,15 +727,21 @@ export class GameApp {
           || !this.#player
           || !this.#world
         ) {
-          summon.release();
+          for (const summon of summons) summon.release();
           return;
         }
-        this.#beastMasterSummons.get(skill.classicIndex)?.release();
-        this.#beastMasterSummons.set(skill.classicIndex, summon);
-        this.#scene.add(summon.object);
-        summon.update(0, this.#player.position, null, this.summonEnvironment(), () => undefined);
-        this.#combatEffects.burst(summon.object.position, skill.color, 1.2);
-        this.#hud.addLog(`${definition.name} foi evocado.`, "system");
+        for (const oldSummon of this.#beastMasterSummons.get(skill.classicIndex) ?? []) oldSummon.release();
+        this.#beastMasterSummons.set(skill.classicIndex, summons);
+        const environment = this.summonEnvironment();
+        for (const summon of summons) {
+          this.#scene.add(summon.object);
+          summon.update(0, this.#player.position, null, environment, () => undefined);
+        }
+        this.#combatEffects.burst(this.#player.object.position, skill.color, 1.5);
+        this.#hud.addLog(`${summons.length}× ${definition.name} evocados.`, "system");
+        if (summons.length !== BEAST_MASTER_SUMMON_PACK_SIZE) {
+          this.#hud.addLog(`Evocação parcial: ${summons.length}/${BEAST_MASTER_SUMMON_PACK_SIZE}.`, "system");
+        }
       }).catch((error: unknown) => {
         console.warn(`Evocação ${definition.key} indisponível`, error);
         this.#hud.addLog(`${definition.name} não pôde ser materializado.`, "system");
@@ -739,27 +754,32 @@ export class GameApp {
     if (!this.#player || !this.#world || this.#activeClassKey !== "beastmaster") return;
     const target = this.beastMasterSummonTarget();
     const environment = this.summonEnvironment();
-    for (const summon of this.#beastMasterSummons.values()) {
-      const angle = summon.definition.skill.instanceValue * 2.399963229728653;
-      const ownerAnchor = {
-        x: this.#player.position.x + Math.cos(angle) * 1.15,
-        y: this.#player.position.y + Math.sin(angle) * 1.15,
-      };
-      const attackSpread = summon.definition.pickSize[0] * 0.5 + 0.35;
-      const summonTarget = target ? {
-        ...target,
-        position: {
-          x: target.position.x + Math.cos(angle) * attackSpread,
-          y: target.position.y + Math.sin(angle) * attackSpread,
-        },
-      } : null;
-      summon.update(
-        deltaSeconds,
-        ownerAnchor,
-        summonTarget,
-        environment,
-        (snapshot, definition) => this.applyBeastMasterSummonStrike(snapshot.id, definition),
-      );
+    for (const summons of this.#beastMasterSummons.values()) {
+      for (let index = 0; index < summons.length; index++) {
+        const summon = summons[index]!;
+        const angle = summon.definition.skill.instanceValue * 2.399963229728653
+          + index * Math.PI * 2 / Math.max(1, summons.length);
+        const formationRadius = 1.65 + (index % 2) * 0.7;
+        const ownerAnchor = {
+          x: this.#player.position.x + Math.cos(angle) * formationRadius,
+          y: this.#player.position.y + Math.sin(angle) * formationRadius,
+        };
+        const attackSpread = summon.definition.pickSize[0] * 0.5 + formationRadius * 0.55;
+        const summonTarget = target ? {
+          ...target,
+          position: {
+            x: target.position.x + Math.cos(angle) * attackSpread,
+            y: target.position.y + Math.sin(angle) * attackSpread,
+          },
+        } : null;
+        summon.update(
+          deltaSeconds,
+          ownerAnchor,
+          summonTarget,
+          environment,
+          (snapshot, definition) => this.applyBeastMasterSummonStrike(snapshot.id, definition),
+        );
+      }
     }
   }
 
@@ -815,7 +835,9 @@ export class GameApp {
 
   private clearBeastMasterSummons(): void {
     this.#summonGeneration++;
-    for (const summon of this.#beastMasterSummons.values()) summon.release();
+    for (const summons of this.#beastMasterSummons.values()) {
+      for (const summon of summons) summon.release();
+    }
     this.#beastMasterSummons.clear();
   }
 

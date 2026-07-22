@@ -13,7 +13,9 @@ reutilizado.
 
 - 111 Fields importados, nomeados, conectados e carregados dinamicamente.
 - Terreno, objetos, colisão, pontes, água, efeitos ambientais e minimapa.
+- TransKnight, Foema, BeastMaster e Huntress com visuais, armas e skills por classe.
 - Huntress com Mulher Kalintz, Skytalos Ancient +15 animado e Griupan.
+- Oito evocações naturais do BeastMaster; cada uso materializa um grupo de 10.
 - 14 montarias clássicas nível 120, incluindo Unicórnio e Grifo.
 - NPCs e monstros com animação, autonomia, separação, combate, morte e respawn.
 - Movimento por WASD/clique, câmera clássica, zoom amplo e modo G.
@@ -33,6 +35,23 @@ reutilizado.
 | Buff persistente da Huntress | Catálogo clássico de skills |
 | --- | --- |
 | ![Buff persistente da Huntress](docs/screenshots/05-buffs-huntress.jpg) | ![Catálogo de skills importado do cliente](docs/screenshots/06-catalogo-skills.jpg) |
+
+### As quatro classes clássicas
+
+| TransKnight com Machado Gaoth | Foema com Dordje |
+| --- | --- |
+| ![TransKnight equipado com Machado Gaoth Ancient](docs/screenshots/09-classe-transknight.jpg) | ![Foema equipada com Dordje Ancient](docs/screenshots/10-classe-foema.jpg) |
+
+| BeastMaster com Martelo Kaumodaki | Huntress com Skytalos |
+| --- | --- |
+| ![BeastMaster equipado com Martelo Kaumodaki Ancient](docs/screenshots/11-classe-beastmaster.jpg) | ![Huntress equipada com Skytalos Ancient](docs/screenshots/12-classe-huntress.jpg) |
+
+### Evocações do BeastMaster
+
+O slot `9` da barra evoca o **Grande Tigre**. Assim como as demais evocações
+naturais do BeastMaster, cada uso cria uma formação com 10 criaturas.
+
+![BeastMaster acompanhado por 10 Grandes Tigres evocados](docs/screenshots/13-beastmaster-10-grandes-tigres.jpg)
 
 | Criaturas no mundo aberto | Visão geral de Armia |
 | --- | --- |
