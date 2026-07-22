@@ -1,0 +1,310 @@
+import * as THREE from "three";
+import { DDSLoader } from "three/addons/loaders/DDSLoader.js";
+import type { ClassicAssetSource } from "../../assets/ClassicAssetSource";
+import { parseAni, type AniAnimation } from "../../formats/classic/Ani";
+import { parseBon, type BonSkeleton } from "../../formats/classic/Bon";
+import { parseMsh, type MshModel } from "../../formats/classic/Msh";
+import { ClassicSkinnedModel, type ClassicSkinnedPart } from "../../render/characters/ClassicSkinnedModel";
+import type { MonsterCatalog, MonsterTemplate, MonsterVisualFamily } from "./MonsterCatalog";
+
+export interface ClassicSkinnedLookPart {
+  readonly name?: string;
+  readonly mesh: string;
+  readonly texture: string | null;
+  /** MeshTextureList cAlpha. `C` is rendered opaque without alpha test. */
+  readonly alpha?: string | null;
+}
+
+/** Generic request shared by NPCs, monsters and future TMTree instances. */
+export interface ClassicSkinnedLook {
+  readonly skin: number;
+  readonly parts: readonly ClassicSkinnedLookPart[];
+  /** Allows player-only rigs that are not referenced by any NPC generator. */
+  readonly family?: MonsterVisualFamily;
+  readonly actions?: readonly string[];
+  readonly initialAction?: string;
+  readonly actionVariant?: number;
+}
+
+export interface ClassicSkinnedInstanceLease {
+  readonly model: ClassicSkinnedModel;
+  readonly availableActions: readonly string[];
+  actionDurationSeconds(name: string): number | null;
+  /** Idempotent: frees per-instance geometry and releases shared GPU assets. */
+  release(): void;
+}
+
+interface ParsedPart {
+  readonly name?: string;
+  readonly model: MshModel;
+  readonly texture: string | null;
+  readonly alpha: string | null;
+}
+
+interface ParsedDefinition {
+  readonly skin: number;
+  readonly skeleton: BonSkeleton;
+  readonly parts: readonly ParsedPart[];
+  readonly clips: readonly {
+    readonly name: string;
+    readonly animation: AniAnimation;
+    readonly quarterStepMs: number;
+    readonly loop: boolean;
+  }[];
+  readonly initialClip: string | null;
+}
+
+interface MaterialEntry {
+  references: number;
+  readonly promise: Promise<{ readonly material: THREE.MeshLambertMaterial; readonly texture: THREE.Texture | null }>;
+}
+
+/**
+ * Lazy classic skin asset cache. Parsed CPU data remains reusable; GPU
+ * materials/textures are reference-counted and disappear with the last actor.
+ */
+export class ClassicSkinnedAssetLibrary {
+  readonly #dds = new DDSLoader();
+  readonly #buffers = new Map<string, Promise<ArrayBuffer | null>>();
+  readonly #skeletons = new Map<string, Promise<BonSkeleton | null>>();
+  readonly #meshes = new Map<string, Promise<MshModel | null>>();
+  readonly #animations = new Map<string, Promise<AniAnimation | null>>();
+  readonly #definitions = new Map<string, Promise<ParsedDefinition | null>>();
+  readonly #materials = new Map<string, MaterialEntry>();
+
+  constructor(
+    private readonly assets: ClassicAssetSource,
+    private readonly catalog: MonsterCatalog,
+  ) {}
+
+  createTemplateInstance(templateIndex: number): Promise<ClassicSkinnedInstanceLease | null> {
+    const template = this.catalog.template(templateIndex);
+    if (!template?.visual) return Promise.resolve(null);
+    return this.createInstance({
+      skin: template.visual.skin,
+      parts: template.visual.parts.map((part) => ({
+        name: `part-${part[0]}`,
+        mesh: part[4],
+        texture: part[5],
+        alpha: part[6],
+      })),
+      actions: ["STAND01", "WALK", "ATTACK1", "STRIKE", "DIE", "DEAD"],
+      initialAction: "STAND01",
+      actionVariant: animationVariant(template),
+    });
+  }
+
+  async createInstance(look: ClassicSkinnedLook): Promise<ClassicSkinnedInstanceLease | null> {
+    const definition = await this.definition(look);
+    if (!definition) return null;
+
+    const materialKeys: string[] = [];
+    try {
+      const parts: ClassicSkinnedPart[] = [];
+      for (const part of definition.parts) {
+        const key = `${part.texture ?? `fallback:${definition.skin}`}|alpha:${part.alpha ?? "?"}`;
+        const material = await this.retainMaterial(key, part.texture, definition.skin, part.alpha);
+        materialKeys.push(key);
+        parts.push({ name: part.name, model: part.model, material });
+      }
+      const model = new ClassicSkinnedModel({
+        skeleton: definition.skeleton,
+        parts,
+        clips: definition.clips.map((clip) => ({
+          name: clip.name,
+          animation: clip.animation,
+          quarterStepMs: clip.quarterStepMs,
+          loop: clip.loop,
+        })),
+        initialClip: definition.initialClip ?? undefined,
+        mirrorModelZ: true,
+        axisMode: definition.skin >= 45 && definition.skin <= 57 ? "late" : "standard",
+      });
+      const actionDurations = new Map(definition.clips.map((clip) => [
+        clip.name,
+        (clip.animation.tickCount * 4 * clip.quarterStepMs) / 1_000,
+      ]));
+      let released = false;
+      return {
+        model,
+        availableActions: [...actionDurations.keys()],
+        actionDurationSeconds: (name) => actionDurations.get(name) ?? null,
+        release: () => {
+          if (released) return;
+          released = true;
+          model.object.removeFromParent();
+          for (const mesh of model.meshes) mesh.geometry.dispose();
+          for (const key of materialKeys) this.releaseMaterial(key);
+        },
+      };
+    } catch {
+      for (const key of materialKeys) this.releaseMaterial(key);
+      return null;
+    }
+  }
+
+  private definition(look: ClassicSkinnedLook): Promise<ParsedDefinition | null> {
+    const actions = [...new Set(look.actions?.length ? look.actions : ["STAND01"])];
+    const actionVariant = Math.max(0, Math.min(3, Math.trunc(look.actionVariant ?? 0)));
+    const key = [
+      look.skin,
+      actions.join(","),
+      look.initialAction ?? "",
+      actionVariant,
+      ...look.parts.map((part) => `${part.mesh}>${part.texture ?? "-"}>${part.alpha ?? "?"}`),
+    ].join("|");
+    let promise = this.#definitions.get(key);
+    if (!promise) {
+      promise = this.loadDefinition(look, actions, actionVariant).catch(() => null);
+      this.#definitions.set(key, promise);
+    }
+    return promise;
+  }
+
+  private async loadDefinition(
+    look: ClassicSkinnedLook,
+    actions: readonly string[],
+    actionVariant: number,
+  ): Promise<ParsedDefinition | null> {
+    const family = look.family ?? this.catalog.visualFamily(look.skin);
+    if (!family?.skeleton || look.parts.length === 0) return null;
+    const skeleton = await this.skeleton(family.skeleton);
+    if (!skeleton) return null;
+
+    const parts = (await Promise.all(look.parts.map(async (part): Promise<ParsedPart | null> => {
+      const model = await this.mesh(part.mesh);
+      if (!model || model.influenceCount < 1) return null;
+      return { name: part.name, model, texture: part.texture, alpha: part.alpha ?? null };
+    }))).filter((part): part is ParsedPart => part !== null);
+    if (parts.length === 0) return null;
+
+    const clips = (await Promise.all(actions.map(async (action) => {
+      const actionValues = family.actions?.[action];
+      if (!actionValues && action !== "STAND01") return null;
+      const pairOffset = actionValues && actionValues.length >= 9 ? actionVariant * 2 : 0;
+      const clipSlot = actionValues?.[pairOffset] ?? actionValues?.[0] ?? 0;
+      const quarterStepMs = Math.max(1, actionValues?.[pairOffset + 1] ?? actionValues?.[1] ?? 20);
+      const clipPath = family.clips[clipSlot] ?? (action === "STAND01" ? family.clips.find((entry) => entry !== null) : null) ?? null;
+      const animation = clipPath ? await this.animation(clipPath) : null;
+      return animation ? {
+        name: action,
+        animation,
+        quarterStepMs,
+        loop: action === "STAND01"
+          || action === "STAND02"
+          || action === "WALK"
+          || action === "RUN"
+          || action === "MSTND01"
+          || action === "MSTND02"
+          || action === "MWALK"
+          || action === "MRUN",
+      } : null;
+    }))).filter((clip): clip is NonNullable<typeof clip> => clip !== null);
+    return {
+      skin: look.skin,
+      skeleton,
+      parts,
+      clips,
+      initialClip: clips.some((clip) => clip.name === look.initialAction)
+        ? (look.initialAction ?? null)
+        : (clips[0]?.name ?? null),
+    };
+  }
+
+  private buffer(file: string): Promise<ArrayBuffer | null> {
+    let promise = this.#buffers.get(file);
+    if (!promise) {
+      promise = fetch(this.assets.dataUrl(file))
+        .then((response) => response.ok ? response.arrayBuffer() : null)
+        .catch(() => null);
+      this.#buffers.set(file, promise);
+    }
+    return promise;
+  }
+
+  private skeleton(file: string): Promise<BonSkeleton | null> {
+    let promise = this.#skeletons.get(file);
+    if (!promise) {
+      promise = this.buffer(file).then((buffer) => buffer ? parseBon(buffer) : null).catch(() => null);
+      this.#skeletons.set(file, promise);
+    }
+    return promise;
+  }
+
+  private mesh(file: string): Promise<MshModel | null> {
+    let promise = this.#meshes.get(file);
+    if (!promise) {
+      promise = this.buffer(file).then((buffer) => buffer ? parseMsh(buffer) : null).catch(() => null);
+      this.#meshes.set(file, promise);
+    }
+    return promise;
+  }
+
+  private animation(file: string): Promise<AniAnimation | null> {
+    let promise = this.#animations.get(file);
+    if (!promise) {
+      promise = this.buffer(file).then((buffer) => buffer ? parseAni(buffer) : null).catch(() => null);
+      this.#animations.set(file, promise);
+    }
+    return promise;
+  }
+
+  private async retainMaterial(
+    key: string,
+    textureFile: string | null,
+    skin: number,
+    alpha: string | null,
+  ): Promise<THREE.MeshLambertMaterial> {
+    let entry = this.#materials.get(key);
+    if (!entry) {
+      entry = { references: 0, promise: this.loadMaterial(textureFile, skin, alpha) };
+      this.#materials.set(key, entry);
+    }
+    entry.references++;
+    return (await entry.promise).material;
+  }
+
+  private releaseMaterial(key: string): void {
+    const entry = this.#materials.get(key);
+    if (!entry) return;
+    entry.references = Math.max(0, entry.references - 1);
+    if (entry.references !== 0) return;
+    this.#materials.delete(key);
+    void entry.promise.then(({ material, texture }) => {
+      material.dispose();
+      texture?.dispose();
+    }).catch(() => undefined);
+  }
+
+  private async loadMaterial(textureFile: string | null, skin: number, alpha: string | null): Promise<{
+    readonly material: THREE.MeshLambertMaterial;
+    readonly texture: THREE.Texture | null;
+  }> {
+    const texture = textureFile
+      ? await this.#dds.loadAsync(this.assets.dataUrl(textureFile)).catch(() => null)
+      : null;
+    if (texture) {
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.anisotropy = 4;
+    }
+    return {
+      texture,
+      material: new THREE.MeshLambertMaterial({
+        map: texture,
+        color: texture ? 0xffffff : fallbackColor(skin),
+        // CMesh::Render disables D3DRS_ALPHATESTENABLE only for cAlpha 'C'.
+        // Dragon alpha in this mode is lighting data, not cutout transparency.
+        alphaTest: alpha === "C" ? 0 : 0.35,
+        side: THREE.DoubleSide,
+      }),
+    };
+  }
+}
+
+function animationVariant(template: MonsterTemplate): number {
+  return Math.max(0, Math.min(3, Math.trunc(template.characterClass ?? 0)));
+}
+
+function fallbackColor(skin: number): THREE.Color {
+  return new THREE.Color().setHSL((skin * 0.071) % 1, 0.3, 0.46);
+}

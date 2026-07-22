@@ -1,0 +1,259 @@
+import * as THREE from "three";
+import type { MapObjectRecord } from "../../formats/classic/Dat";
+import { FIELD_WORLD_SIZE, toScene, type WydPosition } from "../../world/coordinates";
+import { fieldKey } from "../../world/regions";
+import type { ModelLibrary } from "../objects/ModelLibrary";
+
+const EFFECT_MESH_TYPES = new Set([506, 532]);
+const EFFECT_CYCLE_MS = 5_000;
+
+interface AnimatedMaterial {
+  readonly material: THREE.MeshBasicMaterial;
+  readonly baseRed: number;
+  readonly baseGreen: number;
+  readonly baseBlue: number;
+  readonly baseAlpha: number;
+  readonly scrollingTexture: THREE.Texture | null;
+}
+
+interface FieldResources {
+  readonly retainedTypes: Set<number>;
+  readonly materials: Set<THREE.Material>;
+  readonly ownedTextures: Set<THREE.Texture>;
+}
+
+/** MSA-based DAT effects which are neither static scenery nor billboards. */
+export class MapMeshEffects {
+  readonly object = new THREE.Group();
+  readonly #fieldGroups = new Map<string, THREE.Group>();
+  readonly #fieldResources = new Map<string, FieldResources>();
+  readonly #generations = new Map<string, number>();
+  readonly #shadeGeometry = new THREE.CircleGeometry(1, 24);
+  readonly #shadeMaterial = createShadeMaterial();
+
+  constructor(
+    private readonly models: ModelLibrary,
+    private readonly origin: WydPosition,
+  ) {
+    this.object.name = "map-mesh-effects";
+  }
+
+  async addBlock(column: number, row: number, records: readonly MapObjectRecord[]): Promise<void> {
+    const key = fieldKey(column, row);
+    this.removeBlock(column, row);
+    const matching = records.filter((record) => EFFECT_MESH_TYPES.has(record.type));
+    if (matching.length === 0) return;
+
+    const generation = (this.#generations.get(key) ?? 0) + 1;
+    this.#generations.set(key, generation);
+    const group = new THREE.Group();
+    group.name = `mesh-effects-${key}`;
+    this.#fieldGroups.set(key, group);
+    this.object.add(group);
+
+    const resources: FieldResources = {
+      retainedTypes: new Set(),
+      materials: new Set(),
+      ownedTextures: new Set(),
+    };
+    this.#fieldResources.set(key, resources);
+
+    const prototypes = new Map<number, THREE.Group | null>();
+    const types = [...new Set(matching.map((record) => record.type))];
+    await Promise.all(types.map(async (type) => {
+      resources.retainedTypes.add(type);
+      prototypes.set(type, await this.models.retain(type));
+    }));
+    if (!this.isCurrent(key, generation, group)) return;
+
+    const materialCaches = new Map<number, Map<THREE.Material, AnimatedMaterial>>();
+    for (const record of matching) {
+      const prototype = prototypes.get(record.type);
+      if (!prototype) continue;
+      let cache = materialCaches.get(record.type);
+      if (!cache) {
+        cache = new Map();
+        materialCaches.set(record.type, cache);
+      }
+
+      const instance = prototype.clone(true);
+      const scene = toScene({
+        x: column * FIELD_WORLD_SIZE + record.localX,
+        y: row * FIELD_WORLD_SIZE + record.localY,
+      }, this.origin);
+      instance.position.set(scene.x, record.height, scene.z);
+      instance.scale.set(record.scaleH || 1, record.scaleV || 1, record.scaleH || 1);
+      // TMEffectMesh passes (angle - 90deg, 0, 90deg) to TMMesh, whose
+      // renderer contributes another -90deg pitch. This is the converted
+      // right-handed YXZ orientation used by the classic windmill as well.
+      instance.rotation.set(Math.PI / 2, -(record.angle - Math.PI / 2), Math.PI / 2, "YXZ");
+      instance.name = `map-mesh-effect-${record.type}`;
+      installEffectMaterials(instance, record.type, cache, resources);
+      group.add(instance);
+    }
+
+    const lights = matching.filter((record) => record.type === 506);
+    if (lights.length > 0) group.add(this.createShades(column, row, lights));
+  }
+
+  removeBlock(column: number, row: number): void {
+    const key = fieldKey(column, row);
+    this.#generations.set(key, (this.#generations.get(key) ?? 0) + 1);
+    const group = this.#fieldGroups.get(key);
+    if (group) {
+      this.#fieldGroups.delete(key);
+      this.object.remove(group);
+      group.traverse((child) => {
+        if (child instanceof THREE.Mesh) child.onBeforeRender = () => undefined;
+      });
+      group.clear();
+    }
+
+    const resources = this.#fieldResources.get(key);
+    if (!resources) return;
+    this.#fieldResources.delete(key);
+    for (const material of resources.materials) material.dispose();
+    for (const texture of resources.ownedTextures) texture.dispose();
+    for (const type of resources.retainedTypes) this.models.release(type);
+  }
+
+  private isCurrent(key: string, generation: number, group: THREE.Group): boolean {
+    return this.#generations.get(key) === generation && this.#fieldGroups.get(key) === group;
+  }
+
+  private createShades(column: number, row: number, records: readonly MapObjectRecord[]): THREE.InstancedMesh {
+    const shades = new THREE.InstancedMesh(this.#shadeGeometry, this.#shadeMaterial, records.length);
+    shades.name = "map-effect-506-ground-shades";
+    shades.frustumCulled = false;
+    const transform = new THREE.Object3D();
+    for (let index = 0; index < records.length; index++) {
+      const record = records[index]!;
+      const scene = toScene({
+        x: column * FIELD_WORLD_SIZE + record.localX,
+        y: row * FIELD_WORLD_SIZE + record.localY,
+      }, this.origin);
+      transform.position.set(scene.x, record.height + 0.015, scene.z);
+      transform.rotation.set(-Math.PI / 2, 0, 0);
+      transform.scale.setScalar(2.4);
+      transform.updateMatrix();
+      shades.setMatrixAt(index, transform.matrix);
+    }
+    shades.instanceMatrix.needsUpdate = true;
+    return shades;
+  }
+}
+
+function installEffectMaterials(
+  instance: THREE.Group,
+  type: number,
+  cache: Map<THREE.Material, AnimatedMaterial>,
+  resources: FieldResources,
+): void {
+  instance.traverse((child) => {
+    if (!(child instanceof THREE.Mesh)) return;
+    // ModelLibrary adds the ordinary MSA base pitch. EffectMesh supplies its
+    // complete three-axis transform above, so retaining both would double it.
+    child.rotation.set(0, 0, 0);
+    const sources = Array.isArray(child.material) ? child.material : [child.material];
+    const animated = sources.map((source) => {
+      let entry = cache.get(source);
+      if (!entry) {
+        entry = createAnimatedMaterial(source, type, resources);
+        cache.set(source, entry);
+      }
+      return entry;
+    });
+    child.material = Array.isArray(child.material)
+      ? animated.map((entry) => entry.material)
+      : animated[0]!.material;
+    child.castShadow = false;
+    child.receiveShadow = false;
+    child.renderOrder = 3;
+    child.onBeforeRender = () => animateMaterials(animated, type);
+  });
+}
+
+function createAnimatedMaterial(
+  source: THREE.Material,
+  type: number,
+  resources: FieldResources,
+): AnimatedMaterial {
+  const textured = source as THREE.Material & { map?: THREE.Texture | null };
+  let map = textured.map ?? null;
+  let scrollingTexture: THREE.Texture | null = null;
+  if (type === 532 && map) {
+    map = map.clone();
+    map.wrapS = THREE.RepeatWrapping;
+    map.wrapT = THREE.RepeatWrapping;
+    map.needsUpdate = true;
+    scrollingTexture = map;
+    resources.ownedTextures.add(map);
+  }
+
+  const packedColor = type === 506 ? 0x44554444 : 0xaaaaaaaa;
+  const baseAlpha = ((packedColor >>> 24) & 0xff) / 255;
+  const baseRed = ((packedColor >>> 16) & 0xff) / 255;
+  const baseGreen = ((packedColor >>> 8) & 0xff) / 255;
+  const baseBlue = (packedColor & 0xff) / 255;
+  const material = new THREE.MeshBasicMaterial({
+    name: `WYD map EffectMesh ${type}`,
+    map,
+    color: new THREE.Color().setRGB(baseRed, baseGreen, baseBlue),
+    opacity: baseAlpha,
+    transparent: true,
+    depthTest: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    side: THREE.DoubleSide,
+    fog: false,
+    toneMapped: false,
+  });
+  resources.materials.add(material);
+  return { material, baseRed, baseGreen, baseBlue, baseAlpha, scrollingTexture };
+}
+
+function animateMaterials(materials: readonly AnimatedMaterial[], type: number): void {
+  const now = performance.now();
+  const progress = (now % EFFECT_CYCLE_MS) / EFFECT_CYCLE_MS;
+  const shine = 0.8 + Math.sin(progress * Math.PI * 2) * 0.2;
+  for (const entry of materials) {
+    entry.material.color.setRGB(
+      entry.baseRed * shine,
+      entry.baseGreen * shine,
+      entry.baseBlue * shine,
+    );
+    entry.material.opacity = entry.baseAlpha * shine;
+    if (type === 532 && entry.scrollingTexture) {
+      // The original increments U by progress*0.001 every rendered frame.
+      // 0.03 UV/s matches that frame-dependent drift at its nominal 60 FPS.
+      entry.scrollingTexture.offset.x = (now * 0.00003) % 1;
+    }
+  }
+}
+
+function createShadeMaterial(): THREE.ShaderMaterial {
+  return new THREE.ShaderMaterial({
+    name: "WYD EffectMesh 506 ground shade",
+    transparent: true,
+    depthTest: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    side: THREE.DoubleSide,
+    toneMapped: false,
+    vertexShader: /* glsl */ `
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      varying vec2 vUv;
+      void main() {
+        float distanceFromCenter = length(vUv - vec2(0.5)) * 2.0;
+        float alpha = (1.0 - smoothstep(0.15, 1.0, distanceFromCenter)) * 0.16;
+        gl_FragColor = vec4(1.0, 0.86, 0.86, alpha);
+      }
+    `,
+  });
+}
