@@ -425,7 +425,7 @@ export const FOEMA_SKILLS = defineLoadout("foema", [
     tickType: 0,
     tickValue: 0,
     affectType: 9,
-    affectValue: 5,
+    affectValue: 90,
     affectTimeSeconds: 15,
     runtimeDurationSeconds: CLASS_BUFF_DURATION_SECONDS,
     aggressive: 0,

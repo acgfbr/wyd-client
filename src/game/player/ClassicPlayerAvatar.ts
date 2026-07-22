@@ -45,8 +45,16 @@ interface ClassicRefinementState {
 
 interface ClassicWeaponVisual {
   readonly object: THREE.Group;
+  readonly effectLength: number;
   readonly refinement: ClassicRefinementState | null;
   readonly spectralForce: ClassicSpectralForceWeaponEffect | null;
+}
+
+/** World-space copy of the live weapon segment used by fixed-function trails. */
+export interface ClassicWeaponEffectSegmentSample {
+  readonly side: "left" | "right";
+  readonly base: THREE.Vector3;
+  readonly tip: THREE.Vector3;
 }
 
 export interface ClassicAvatarAction {
@@ -164,6 +172,23 @@ export class ClassicPlayerAvatar {
     if (!this.#released && this.#weaponVisible) this.#weapon?.spectralForce?.trigger();
   }
 
+  sampleWeaponEffectSegments(out: ClassicWeaponEffectSegmentSample[]): number {
+    const weapon = this.#weapon;
+    if (this.#released || !this.#weaponVisible || !weapon || !weapon.object.visible) return 0;
+    let sample = out[0];
+    if (!sample) {
+      sample = { side: "left", base: new THREE.Vector3(), tip: new THREE.Vector3() };
+      out[0] = sample;
+    }
+    weapon.object.updateWorldMatrix(true, false);
+    sample.base.set(0, 0, 0).applyMatrix4(weapon.object.matrixWorld);
+    // TMEffectSWSwing shortens m_fMaxZ by 0.1 before choosing one of ten slots.
+    sample.tip
+      .set(0, 0, -Math.max(0, weapon.effectLength - 0.1))
+      .applyMatrix4(weapon.object.matrixWorld);
+    return 1;
+  }
+
   currentAnimationSnapshot(): ClassicSkinnedAnimationSnapshot | null {
     return this.#released ? null : this.#lease.model.currentAnimationSnapshot();
   }
@@ -257,7 +282,8 @@ async function attachClassicWeapon(
   holder.matrixWorldNeedsUpdate = true;
   holder.add(mesh);
   (lease.model.bones[attachment.boneIndex] ?? lease.model.object).add(holder);
-  return { object: holder, refinement: null, spectralForce: null };
+  const effectLength = Math.max(0, -(model.geometry.boundingBox?.min.z ?? 0));
+  return { object: holder, effectLength, refinement: null, spectralForce: null };
 }
 
 function resetObjectTransform(object: THREE.Object3D): void {
@@ -332,7 +358,7 @@ async function attachSkytalos(
     });
   if (spectralForce) holder.add(spectralForce.object);
   (lease.model.bones[24] ?? lease.model.object).add(holder);
-  return { object: holder, refinement, spectralForce };
+  return { object: holder, effectLength: classicMaxZ, refinement, spectralForce };
 }
 
 function createSkytalosMaterial(

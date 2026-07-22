@@ -1,11 +1,16 @@
 import * as THREE from "three";
 import type { ClassicAssetSource } from "../../assets/ClassicAssetSource";
+import type { ClassicWeaponEffectSegmentSample } from "../../game/player/ClassicPlayerAvatar";
 import { ClassicDdsTextureLoader } from "../textures/ClassicDdsTextureLoader";
+import { ClassicFoemaFirePhoenixEffects } from "./ClassicFoemaFirePhoenixEffects";
+import { ClassicFoemaIceSpearEffects } from "./ClassicFoemaIceSpearEffects";
+import { ClassicFoemaMagicWeaponEffects } from "./ClassicFoemaMagicWeaponEffects";
 
 export type FoemaPoisonEffectLevel = 0 | 1 | 2 | 3;
 
 export interface FoemaPersistentBuffVisualState {
   readonly thunder: boolean;
+  readonly magicWeapon: boolean;
   readonly mounted: boolean;
 }
 
@@ -138,7 +143,7 @@ interface ThunderCastVisual {
 }
 
 /**
- * Retail presentation for Foema #32/#33/#37/#40/#41.
+ * Retail presentation facade for Foema #32/#33/#34/#37/#38/#40/#41/#44.
  *
  * The implementation is a direct, bounded port of TMSkillFire.cpp:8-201,
  * TMSkillThunderBolt.cpp:10-67, TMSkillPoison.cpp:8-66,
@@ -162,6 +167,9 @@ export class ClassicFoemaSkillEffects {
   readonly #hastePool: HasteVisual[] = [];
   readonly #thunderCastPool: ThunderCastVisual[] = [];
   readonly #thunderBuff: ThunderBuffVisual;
+  readonly #iceSpearEffects: ClassicFoemaIceSpearEffects;
+  readonly #firePhoenixEffects: ClassicFoemaFirePhoenixEffects;
+  readonly #magicWeaponEffects: ClassicFoemaMagicWeaponEffects;
   #resources: ClassicFoemaResources | null = null;
   #preload: Promise<void> | null = null;
   #serial = 0;
@@ -175,15 +183,20 @@ export class ClassicFoemaSkillEffects {
     this.object.name = "classic-foema-skill-effects";
     this.#thunderBuff = this.createThunderBuffVisual();
     this.object.add(this.#thunderBuff.root);
+    this.#iceSpearEffects = new ClassicFoemaIceSpearEffects(this.object);
+    this.#firePhoenixEffects = new ClassicFoemaFirePhoenixEffects(this.object);
+    this.#magicWeaponEffects = new ClassicFoemaMagicWeaponEffects(this.object);
     scene.add(this.object);
   }
 
   /** Loads effect textures 0/7/33/45..50/52/56/109..116 exactly once. */
   async prepareClassic(assets: ClassicAssetSource): Promise<void> {
-    if (this.#disposed || this.#resources) return;
+    if (this.#disposed) return;
     if (this.#preload) return this.#preload;
 
-    const job = this.loadClassicResources(assets)
+    const coreJob = this.#resources
+      ? Promise.resolve()
+      : this.loadClassicResources(assets)
       .then((resources) => {
         if (this.#disposed) {
           disposeClassicResources(resources);
@@ -200,6 +213,19 @@ export class ClassicFoemaSkillEffects {
       })
       .catch((error: unknown) => {
         console.warn("Efeitos clássicos da Foema indisponíveis; usando fallback.", error);
+      });
+    const job = Promise.allSettled([
+      coreJob,
+      this.#iceSpearEffects.prepareClassic(assets),
+      this.#firePhoenixEffects.prepareClassic(assets),
+      this.#magicWeaponEffects.prepareClassic(assets),
+    ])
+      .then((results) => {
+        for (const result of results.slice(1)) {
+          if (result.status === "rejected") {
+            console.warn("Efeito avançado clássico da Foema indisponível; usando fallback.", result.reason);
+          }
+        }
       })
       .finally(() => {
         this.#preload = null;
@@ -212,6 +238,9 @@ export class ClassicFoemaSkillEffects {
     if (this.#disposed || this.#enabled === enabled) return;
     this.#enabled = enabled;
     this.object.visible = enabled;
+    this.#iceSpearEffects.setEnabled(enabled);
+    this.#firePhoenixEffects.setEnabled(enabled);
+    this.#magicWeaponEffects.setEnabled(enabled);
     if (!enabled) this.clear();
   }
 
@@ -219,6 +248,10 @@ export class ClassicFoemaSkillEffects {
     if (this.#disposed || !this.#enabled) return;
     const delta = Number.isFinite(deltaSeconds) ? Math.max(0, deltaSeconds) : 0;
     if (delta === 0) return;
+
+    this.#iceSpearEffects.update(delta);
+    this.#firePhoenixEffects.update(delta);
+    this.#magicWeaponEffects.update(delta);
 
     // Existing independent children advance before their parent controllers
     // emit this frame, so a newly emitted classic billboard starts at t=0.
@@ -273,8 +306,30 @@ export class ClassicFoemaSkillEffects {
       case 41:
         this.playHasteCast(worldPosition);
         return true;
+      case 44:
+        this.#magicWeaponEffects.playCast(worldPosition);
+        return true;
       default:
         return false;
+    }
+  }
+
+  /** Dedicated offensive dispatch; damage remains authoritative in GameApp. */
+  playAttack(
+    classicIndex: number,
+    casterFeet: THREE.Vector3,
+    targetFeet: THREE.Vector3,
+    poisonEffectLevel: FoemaPoisonEffectLevel = 0,
+  ): boolean {
+    switch (classicIndex) {
+      case 34:
+        this.#iceSpearEffects.play(casterFeet, targetFeet);
+        return true;
+      case 38:
+        this.#firePhoenixEffects.play(casterFeet, targetFeet);
+        return true;
+      default:
+        return this.playCast(classicIndex, targetFeet, poisonEffectLevel);
     }
   }
 
@@ -376,8 +431,15 @@ export class ClassicFoemaSkillEffects {
   syncPersistentBuffs(
     ownerWorldPosition: THREE.Vector3 | null,
     state: FoemaPersistentBuffVisualState,
+    weaponSegments: readonly ClassicWeaponEffectSegmentSample[] = [],
+    weaponSegmentCount = 0,
   ): void {
     if (this.#disposed) return;
+    this.#magicWeaponEffects.syncPersistent(
+      this.#enabled && state.magicWeapon,
+      weaponSegments,
+      weaponSegmentCount,
+    );
     const canShow = this.#enabled
       && state.thunder
       && ownerWorldPosition !== null
@@ -410,6 +472,9 @@ export class ClassicFoemaSkillEffects {
     for (const visual of this.#hastePool) deactivateHaste(visual);
     for (const visual of this.#thunderCastPool) deactivateThunderCast(visual);
     deactivateThunderBuff(this.#thunderBuff);
+    this.#iceSpearEffects.clear();
+    this.#firePhoenixEffects.clear();
+    this.#magicWeaponEffects.clear();
   }
 
   /** Terminal cleanup; clear() intentionally leaves every bounded pool reusable. */
@@ -417,6 +482,9 @@ export class ClassicFoemaSkillEffects {
     if (this.#disposed) return;
     this.#disposed = true;
     this.clear();
+    this.#iceSpearEffects.dispose();
+    this.#firePhoenixEffects.dispose();
+    this.#magicWeaponEffects.dispose();
     this.#owner.remove(this.object);
 
     for (const visual of this.#firePool) visual.shade.material.dispose();

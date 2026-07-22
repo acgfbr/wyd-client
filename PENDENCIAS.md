@@ -183,7 +183,15 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
    cliente. O primeiro lote dedicado de Foema cobre Ataque de Fogo `#32`,
    Relâmpago `#33`, Trovão `#37`, Névoa Venenosa `#40` e Velocidade `#41`; o
    Trovão separa o cast transitório de dois segundos dos anéis persistentes do
-   estado do buff. Skills ainda não citadas continuam abertas e não devem cair
+   estado do buff. O segundo lote da Foema também está implementado: Lança de
+   Gelo `#34` usa os modelos `708/707`, sombra móvel, flare e partículas do
+   FreezeBlade; Fênix de Fogo `#38` combina simultaneamente o pássaro `8` e a
+   onda `702`, com frames, trilhas, explosão radial e fogo final; Arma Mágica
+   `#44` possui o cast único `56/60` e, durante os `180 s` do mock, amostra a
+   matriz final da arma para emitir o rastro `56` ao longo da lâmina, inclusive
+   montado, sem o antigo pulso genérico no corpo. Os três preservam pools
+   limitados e separam o dano offline do momento do impacto visual. Skills ainda
+   não citadas continuam abertas e não devem cair
    silenciosamente em um efeito genérico ao serem promovidas.
    `#76/#81/#86/#101` estão homologadas; `#88` está implementada e aguarda a
    inspeção visual no navegador. O épico só fecha depois da matriz completa das
@@ -226,6 +234,11 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
     orbes laterais, readout integrado, botões redondos clicáveis e telemetria
     legível. O chat local segue `SEditableText::OnCharEvent` e
     `TMFieldScene::OnKeyReturn`; rede continua deliberadamente fora do escopo.
+    Falta reconstruir o HUD sobre o próprio personagem: nick sempre visível,
+    barra de HP e, ao enviar texto no chat, balão temporário acima do nick. A
+    ordem vertical deve ser balão, nome e HP, com offset, escala, duração,
+    oclusão e estilo derivados das rotinas do cliente clássico antes da
+    implementação, sem reutilizar arbitrariamente o painel de alvo dos mobs.
     Ainda é necessária homologação visual em 1024×768, desktop widescreen e
     iPhone; o detalhamento dos slots equipados já foi reconstruído a partir do
     `FieldScene2.bin`. A causa da

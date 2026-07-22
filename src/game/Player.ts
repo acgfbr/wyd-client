@@ -7,7 +7,10 @@ import {
   type ClassicSkinnedAfterimage,
 } from "../render/characters/ClassicSkinnedAfterimage";
 import type { ClassSkill } from "./combat/ClassSkills";
-import { ClassicPlayerAvatar } from "./player/ClassicPlayerAvatar";
+import {
+  ClassicPlayerAvatar,
+  type ClassicWeaponEffectSegmentSample,
+} from "./player/ClassicPlayerAvatar";
 import {
   ClassicMount,
   type ClassicMountAfterimageAnimationSnapshot,
@@ -106,6 +109,26 @@ export class Player {
   get mountLookKey(): string { return this.#mount?.look.key ?? this.#mountLookKey; }
   get mountName(): string | null { return this.#mount?.name ?? null; }
   get invisible(): boolean { return this.#invisible; }
+  /** Logical TMSkinMesh yaw used by owner-attached classic skill effects. */
+  get classicYaw(): number { return this.#classicYaw; }
+  /** All imported playable-class rigs currently use the retail 0.9 scale. */
+  get classicScale(): number { return 0.9; }
+
+  /**
+   * Samples m_vecSkinPos semantics without exposing the mutable avatar root.
+   * On foot this resolves to the player's feet; mounted it follows the exact
+   * rider bone used by ClassicPlayerAvatar.attachToMount.
+   */
+  sampleClassicSkinAnchor(out: THREE.Vector3): THREE.Vector3 {
+    const avatar = this.#avatar;
+    if (!avatar) return out.copy(this.object.position);
+    avatar.object.updateWorldMatrix(true, false);
+    return avatar.object.getWorldPosition(out);
+  }
+
+  sampleWeaponEffectSegments(out: ClassicWeaponEffectSegmentSample[]): number {
+    return this.#avatar?.sampleWeaponEffectSegments(out) ?? 0;
+  }
 
   constructor(private readonly world: ClassicWorld, spawn: WydPosition) {
     this.position = { ...spawn };
