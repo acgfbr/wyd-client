@@ -116,10 +116,14 @@ export class Player {
 
   /**
    * Samples m_vecSkinPos semantics without exposing the mutable avatar root.
-   * On foot this resolves to the player's feet; mounted it follows the exact
-   * rider bone used by ClassicPlayerAvatar.attachToMount.
+   * On foot this resolves to the player's feet. Mounted, it reproduces the
+   * two Render offsets transformed by the mount's live m_OutMatrix and the
+   * retail `-0.4 * m_fScale` vertical correction.
    */
   sampleClassicSkinAnchor(out: THREE.Vector3): THREE.Vector3 {
+    if (this.#mounted && this.#mount) {
+      return this.#mount.sampleRiderSkinPosition(out, this.classicScale);
+    }
     const avatar = this.#avatar;
     if (!avatar) return out.copy(this.object.position);
     avatar.object.updateWorldMatrix(true, false);

@@ -6476,6 +6476,48 @@
         "models/textures/effect-m001.dds"
       ]
     },
+    "712": {
+      "file": "models/712.msa",
+      "textures": [
+        "models/textures/mesh-stone01.dds"
+      ]
+    },
+    "713": {
+      "file": "models/713.msa",
+      "textures": [
+        "models/textures/mesh-stone01.dds"
+      ]
+    },
+    "714": {
+      "file": "models/714.msa",
+      "textures": [
+        "models/textures/mesh-stone01.dds"
+      ]
+    },
+    "715": {
+      "file": "models/715.msa",
+      "textures": [
+        "models/textures/mesh-stone01.dds"
+      ]
+    },
+    "716": {
+      "file": "models/716.msa",
+      "textures": [
+        "models/textures/mesh-stone01.dds"
+      ]
+    },
+    "717": {
+      "file": "models/717.msa",
+      "textures": [
+        "models/textures/mesh-stone01.dds"
+      ]
+    },
+    "718": {
+      "file": "models/718.msa",
+      "textures": [
+        "models/textures/mesh-stone01.dds"
+      ]
+    },
     "762": {
       "file": "models/762.msa",
       "textures": [

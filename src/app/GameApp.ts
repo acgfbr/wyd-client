@@ -69,6 +69,10 @@ const CLICK_MARKER_LIFETIME = 0.72;
 const HELD_GROUND_UPDATE_SECONDS = 0.2;
 const HELD_GROUND_DESTINATION_EPSILON = 0.08;
 const BEAST_MASTER_SUMMON_PACK_SIZE = 10;
+// SkillData preserves AffectValue 10 but the client never reveals whether the
+// server treats it as points or percent. The offline-only combat mock uses 10%
+// until the authoritative server formula replaces this policy.
+const BEAST_MASTER_WEAKEN_OFFLINE_RATIO = 0.1;
 
 interface PendingBowAttack {
   readonly spawns: ClassicSpawnManager;
@@ -128,6 +132,7 @@ export class GameApp {
   readonly #pendingBowAttacks: PendingBowAttack[] = [];
   readonly #pendingSkillEvents: PendingSkillEvent[] = [];
   readonly #buffVisualPulseRemaining = new Map<number, number>();
+  readonly #weakenedMonsters = new Map<string, number>();
   readonly #weaponEffectSegments: ClassicWeaponEffectSegmentSample[] = [];
   readonly #beastMasterSkinAnchor = new THREE.Vector3();
   #targetApproachCooldown = 0;
@@ -364,6 +369,7 @@ export class GameApp {
     this.updateClickMarker(dt);
     const wasInvisible = this.#skills.hasBuff(95);
     this.#skills.update(dt);
+    this.updateMonsterAffects(dt);
     this.#combatEffects.update(dt);
     this.#etherealExplosionEffects.update(dt);
     this.#levelUpEffects.update(dt);
@@ -545,6 +551,7 @@ export class GameApp {
     const spawns = this.#world?.spawns ?? null;
     if (!spawns || spawns === this.#boundSpawns) return;
     this.#pendingBowAttacks.length = 0;
+    this.#weakenedMonsters.clear();
     for (const unsubscribe of this.#spawnUnsubscribers) unsubscribe();
     this.#spawnUnsubscribers = [
       spawns.on("monsterAttack", (event) => this.receiveMonsterAttack(event)),
@@ -1287,6 +1294,49 @@ export class GameApp {
       : null;
     const delay = timing?.effectDelaySeconds ?? 0.5;
 
+    // #52/#55 are created directly inside TMFieldScene::OnPacketAttack; they
+    // do not use TMHuman's shared +500 ms effect event.
+    if (skill.classKey === "beastmaster" && (skill.classicIndex === 52 || skill.classicIndex === 55)) {
+      const currentTarget = spawns.snapshot(targetId);
+      if (currentTarget?.alive && currentTarget.hostile) {
+        const targetBase = this.combatPoint(currentTarget.position, 0);
+        if (skill.classicIndex === 52) {
+          this.#beastMasterSkillEffects.playAttack(
+            52,
+            casterBase,
+            targetBase,
+            this.#player.classicYaw,
+            undefined,
+            (sceneX, sceneZ) => {
+              const world = this.#world;
+              return world
+                ? world.heightAt(toWyd(sceneX, sceneZ, world.origin))
+                : targetBase.y;
+            },
+          );
+          this.applySkillImpact(skill, targetId, targetBase, false);
+        } else {
+          // Select once so EffectStart actors and the offline damage packet use
+          // exactly the same primary-first list of at most five entities.
+          const targets = this.selectSkillTargets(skill, currentTarget);
+          this.#beastMasterSkillEffects.playVengefulSpirit(
+            targetBase,
+            targets.map((affected) => ({
+              feet: this.combatPoint(affected.position, 0),
+              followTarget: () => {
+                if (spawns !== this.#boundSpawns) return null;
+                const live = spawns.snapshot(affected.id);
+                return live ? this.combatPoint(live.position, 0) : null;
+              },
+            })),
+          );
+          this.applySkillDamageToTargets(skill, targets);
+        }
+      }
+      this.#hud.addLog(`${skill.name} · ${skill.mana} MP.`, "system");
+      return;
+    }
+
     this.scheduleSkillEvent(delay, () => {
       if (spawns !== this.#boundSpawns) return;
       const currentTarget = spawns.snapshot(targetId);
@@ -1333,6 +1383,25 @@ export class GameApp {
         )
       ) {
         this.applySkillImpact(skill, targetId, targetBase, false);
+        return;
+      }
+
+      if (
+        skill.classKey === "beastmaster"
+        && skill.classicIndex === 51
+      ) {
+        this.#beastMasterSkillEffects.playAttack(
+          51,
+          this.combatPoint(this.#player!.position, 0),
+          beastMasterTargetSnapshot ?? targetBase,
+          this.#player!.classicYaw,
+          () => {
+            if (spawns !== this.#boundSpawns) return null;
+            const liveTarget = spawns.snapshot(targetId);
+            return liveTarget ? this.combatPoint(liveTarget.position, 0) : null;
+          },
+        );
+        this.applyMonsterWeaken(skill, this.selectSkillTargets(skill, currentTarget));
         return;
       }
 
@@ -1507,6 +1576,34 @@ export class GameApp {
       }
     }
     if (totalDamage > 0) this.#hud.addLog(`${skill.name}: ${totalDamage} de dano${targets.length > 1 ? ` em ${targets.length} alvos` : ""}.`, "damage");
+  }
+
+  private applyMonsterWeaken(
+    skill: ClassSkill,
+    targets: readonly ClassicMonsterSnapshot[],
+  ): void {
+    const duration = Math.max(0, skill.affectTimeSeconds);
+    if (duration <= 0) return;
+    for (const target of targets) {
+      this.#weakenedMonsters.set(
+        target.id,
+        Math.max(duration, this.#weakenedMonsters.get(target.id) ?? 0),
+      );
+    }
+    if (targets.length > 0) {
+      this.#hud.addLog(
+        `${skill.name}: Ataque(-) ${skill.affectValue} por ${duration}s em ${targets.length} alvo${targets.length === 1 ? "" : "s"}.`,
+        "system",
+      );
+    }
+  }
+
+  private updateMonsterAffects(deltaSeconds: number): void {
+    for (const [targetId, remaining] of this.#weakenedMonsters) {
+      const next = remaining - deltaSeconds;
+      if (next > 0) this.#weakenedMonsters.set(targetId, next);
+      else this.#weakenedMonsters.delete(targetId);
+    }
   }
 
   private selectSkillTargets(
@@ -1693,12 +1790,17 @@ export class GameApp {
     // is distinct from invulnerability: any action removes affect 28 first.
     if (this.#player?.speedBoost || this.#skills.hasBuff(95)) return;
     if (!this.#playerState.snapshot.alive) return;
-    const damage = this.#playerState.takeDamage(event.damage);
+    const weakened = (this.#weakenedMonsters.get(event.attacker.id) ?? 0) > 0;
+    const incomingDamage = weakened
+      ? Math.max(1, Math.round(event.damage * (1 - BEAST_MASTER_WEAKEN_OFFLINE_RATIO)))
+      : event.damage;
+    const damage = this.#playerState.takeDamage(incomingDamage);
     playOptionalPlayerAction(this.#player, "playHit");
     this.#hud.addLog(`${event.attacker.name} causou ${damage} de dano.`, "damage");
     if (this.#playerState.snapshot.alive) return;
     this.#pendingBowAttacks.length = 0;
     this.#pendingSkillEvents.length = 0;
+    this.#weakenedMonsters.clear();
     this.#queuedSkillSlot = null;
     this.#queuedSkillOrigin = null;
     this.#skills.clearBuffs();
@@ -1785,6 +1887,7 @@ export class GameApp {
     this.#playerState.revive();
     this.#pendingBowAttacks.length = 0;
     this.#pendingSkillEvents.length = 0;
+    this.#weakenedMonsters.clear();
     this.#queuedSkillSlot = null;
     this.#queuedSkillOrigin = null;
     this.#selectedTargetId = null;
@@ -1916,6 +2019,7 @@ export class GameApp {
       this.#skills = new ClassSkillSystem(definition.key);
       this.#pendingBowAttacks.length = 0;
       this.#pendingSkillEvents.length = 0;
+      this.#weakenedMonsters.clear();
       this.#queuedSkillSlot = null;
       this.#queuedSkillOrigin = null;
       this.#macroSkillCursor = 0;
@@ -2157,6 +2261,7 @@ export class GameApp {
     this.#streamingPaused = true;
     this.#pendingBowAttacks.length = 0;
     this.#pendingSkillEvents.length = 0;
+    this.#weakenedMonsters.clear();
     this.#queuedSkillSlot = null;
     this.#queuedSkillOrigin = null;
     this.selectTarget(null);

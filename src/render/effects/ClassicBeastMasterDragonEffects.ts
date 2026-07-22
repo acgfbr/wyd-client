@@ -13,9 +13,12 @@ import { ClassicDdsTextureLoader } from "../textures/ClassicDdsTextureLoader";
 type ClassicDragonSkillIndex = 48 | 49;
 type DragonMode = "inactive" | "flight" | "orbit";
 
-const DRAGON_POOL_PER_SKILL = 6;
+// Skill cooldown/range permit only one live projectile of each type in the
+// local-player runtime. A spare avoids allocation churn without cloning six
+// complete skinned rigs per skill during boot (important on mobile GPUs).
+const DRAGON_POOL_PER_SKILL = 2;
 const JUDGEMENT_POOL_LIMIT = 16;
-const TRAIL_POOL_LIMIT = 384;
+const TRAIL_POOL_LIMIT = 512;
 const FIRE_EMITTER_POOL_LIMIT = 16;
 const FIRE_PARTICLE_POOL_LIMIT = 128;
 const FIRE_SHADE_POOL_LIMIT = 24;
@@ -28,13 +31,16 @@ const ORBIT_RADIUS = 1;
 const ORBIT_HEIGHT = 0.5;
 const ORBIT_RADIANS_PER_SECOND = Math.PI * 2;
 
-const TRAIL_STEP_SECONDS = 1 / 30;
-const MAX_TRAIL_STEPS_PER_UPDATE = 4;
+const TRAIL_STEP_SECONDS = 1 / 60;
+// TMEffectSkinMesh emits once per FrameMove and never catches up missed frames.
+const MAX_TRAIL_STEPS_PER_UPDATE = 1;
 const FIRE_LIFETIME_SECONDS = 2.4;
 const FIRE_EMISSION_INTERVAL_SECONDS = 0.1;
 const FIRE_FIRST_EMISSION_SECONDS = FIRE_LIFETIME_SECONDS * 0.01;
 const FIRE_PARTICLE_LIFETIME_SECONDS = 0.5;
 const FIRE_SHADE_LIFETIME_SECONDS = 3.4;
+const FIRE_FRAME_MILLISECONDS = 11;
+const FIRE_TEXTURE_INDICES = [33, 34, 35, 36, 37, 38, 39, 40, 41] as const;
 
 const JUDGEMENT_LIFETIME_SECONDS = 3;
 const JUDGEMENT_CONTROLLER_LIFETIME_SECONDS = 0.6;
@@ -42,7 +48,7 @@ const JUDGEMENT_VISIBLE_AFTER_SECONDS = JUDGEMENT_LIFETIME_SECONDS * 0.05;
 const GROUND_Y_OFFSET = 0.015;
 
 const DRAGON_LOOKS: Readonly<Record<ClassicDragonSkillIndex, {
-  readonly action: "WALK" | "RUN";
+  readonly action: "RUN" | "ATTACK1";
   readonly mesh0: string;
   readonly mesh1: string;
   readonly texture: string;
@@ -51,20 +57,20 @@ const DRAGON_LOOKS: Readonly<Record<ClassicDragonSkillIndex, {
   readonly animationRate: number;
 }>> = {
   48: {
-    action: "WALK",
+    action: "RUN",
     mesh0: "monsters/meshes/dr010105.msh",
     mesh1: "monsters/meshes/dr010205.msh",
     texture: "monsters/textures/dr010106.dds",
     scale: 0.4,
-    animationRate: 17 / 5,
+    animationRate: 20 / 5,
   },
   49: {
-    action: "RUN",
+    action: "ATTACK1",
     mesh0: "monsters/meshes/dr010103.msh",
     mesh1: "monsters/meshes/dr010203.msh",
     texture: "monsters/textures/dr010103.dds",
     scale: 0.2,
-    animationRate: 20 / 4,
+    animationRate: 22 / 4,
   },
 };
 
@@ -72,7 +78,7 @@ interface DragonEffectResources {
   readonly library: ClassicSkinnedAssetLibrary;
   readonly trailTexture: THREE.Texture;
   readonly fireShadeTexture: THREE.Texture;
-  readonly fireTexture: THREE.Texture;
+  readonly fireTextures: readonly THREE.Texture[];
   readonly judgementTexture: THREE.Texture;
   readonly judgementCenterTexture: THREE.Texture;
   readonly dragons48: readonly DragonVisual[];
@@ -146,9 +152,11 @@ interface FireShadeVisual {
  * Presentation-only port of BeastMaster skill records #48 and #49.
  *
  * Both public positions are actor feet in Three.js world space. The exact
- * dr01 rigs, effect-local +1 Y and the retail scene-Z conversion are applied
- * internally. Damage, hit timing, sound 155/156 and server authority remain
- * with the caller.
+ * dr01 rigs and the retail scene-Z conversion are applied internally. The
+ * `Render(0, 1, 0)` arguments in TMEffectSkinMesh do not translate these
+ * models because TMSkinMesh keeps `m_bBaseMat = 0`; their roots stay at the
+ * interpolated ground height. Damage, hit timing, sound 155/156 and server
+ * authority remain with the caller.
  */
 export class ClassicBeastMasterDragonEffects {
   readonly object = new THREE.Group();
@@ -255,7 +263,7 @@ export class ClassicBeastMasterDragonEffects {
     dragon.orbitStartAngle = dragon.flightClassicAngle;
     dragon.root.position.copy(casterFeet);
     dragon.root.visible = false;
-    dragon.lease.model.object.position.set(0, 1, 0);
+    dragon.lease.model.object.position.set(0, 0, 0);
     dragon.lease.model.play(look.action, true);
     dragon.lease.model.setClassicTransform({
       // TMEffectSkinMesh inherits TMObject::SetAngle, which forwards m_fAngle
@@ -373,6 +381,7 @@ export class ClassicBeastMasterDragonEffects {
     dragon.orbitCenter.copy(dragon.destination);
     dragon.orbitStartAngle = dragon.flightClassicAngle;
     dragon.root.visible = true;
+    dragon.lease.model.play(DRAGON_LOOKS[49].action, true);
     dragon.lease.model.setClassicTransform({ yaw: 0, scale: DRAGON_LOOKS[49].scale });
     setDragonIntensity(dragon, 1);
     this.setOrbitPosition(dragon, 0, dragon.root.position);
@@ -385,7 +394,8 @@ export class ClassicBeastMasterDragonEffects {
     this.refreshFollowedTarget(dragon, dragon.orbitCenter);
     this.setOrbitPosition(dragon, dragon.elapsed, dragon.root.position);
     dragon.lastPosition.copy(dragon.root.position);
-    dragon.lease.model.update(delta * 4); // dr010103 quarter-step 20, forced FPS 5.
+    // motion type 3 restarts table[3] (ATTACK1, quarter-step 22) at FPS 5.
+    dragon.lease.model.update(delta * (22 / 5));
     this.emitDragonTrailSteps(dragon, previousElapsed, dragon.elapsed, true);
     if (dragon.elapsed >= ORBIT_LIFETIME_SECONDS) deactivateDragon(dragon);
   }
@@ -455,7 +465,7 @@ export class ClassicBeastMasterDragonEffects {
       particle.basePosition.set(
         position.x + (classicRandomStep(++this.#randomSerial, 1, 10) - 5) * 0.1,
         position.y,
-        position.z + (classicRandomStep(++this.#randomSerial, 2, 10) - 5) * 0.1,
+        position.z - (classicRandomStep(++this.#randomSerial, 2, 10) - 5) * 0.1,
       );
       particle.sprite.visible = false;
       particle.sprite.material.color.setHex(color).multiplyScalar(0);
@@ -661,7 +671,7 @@ export class ClassicBeastMasterDragonEffects {
     particle.basePosition.set(
       position.x + classicRandomStep(++this.#randomSerial, 0, 5) * 0.01,
       position.y,
-      position.z + classicRandomStep(++this.#randomSerial, 1, 5) * 0.01,
+      position.z - classicRandomStep(++this.#randomSerial, 1, 5) * 0.01,
     );
     particle.sprite.visible = false;
     this.updateFireParticleVisual(particle);
@@ -672,7 +682,7 @@ export class ClassicBeastMasterDragonEffects {
     if (free) return free;
     if (this.#fireParticles.length < FIRE_PARTICLE_POOL_LIMIT) {
       const sprite = createBrightSprite(
-        this.#resources!.fireTexture,
+        this.#resources!.fireTextures[0]!,
         `classic-beastmaster-dragon-fire-${this.#fireParticles.length}`,
       );
       const visual: FireParticleVisual = {
@@ -705,6 +715,16 @@ export class ClassicBeastMasterDragonEffects {
       return;
     }
     const progress = particle.elapsed / FIRE_PARTICLE_LIFETIME_SECONDS;
+    const frames = this.#resources?.fireTextures;
+    if (frames?.length) {
+      const frameIndex = Math.floor(
+        particle.elapsed * 1_000 / FIRE_FRAME_MILLISECONDS,
+      ) % frames.length;
+      const texture = frames[frameIndex]!;
+      if (particle.sprite.material.map !== texture) {
+        particle.sprite.material.map = texture;
+      }
+    }
     const scale = 0.7 + particle.elapsed;
     particle.sprite.position.copy(particle.basePosition);
     particle.sprite.position.y += progress * 3;
@@ -762,7 +782,7 @@ export class ClassicBeastMasterDragonEffects {
   }
 
   private async loadClassicResources(assets: ClassicAssetSource): Promise<DragonEffectResources> {
-    const textureIndices = [0, 7, 33, 418, 419] as const;
+    const textureIndices = [0, 7, ...FIRE_TEXTURE_INDICES, 418, 419] as const;
     const textureJob = Promise.allSettled(
       textureIndices.map((index) => this.loadEffectTexture(assets, index)),
     );
@@ -789,7 +809,8 @@ export class ClassicBeastMasterDragonEffects {
     );
     if (textureFailure || textures.length !== textureIndices.length) {
       for (const texture of textures) texture.dispose();
-      throw textureFailure?.reason ?? new Error("Texturas 0/7/33/418/419 incompletas");
+      throw textureFailure?.reason
+        ?? new Error("Texturas 0/7/33..41/418/419 incompletas");
     }
 
     const family = catalog.visualFamily(20);
@@ -818,20 +839,23 @@ export class ClassicBeastMasterDragonEffects {
         throw new Error("Rig dr01 incompleto para as skills 48/49");
       }
 
-      const [trailTexture, fireShadeTexture, fireTexture, judgementTexture, judgementCenterTexture]
-        = textures;
-      configureClassicBillboardUvs(trailTexture!, false);
-      configureClassicGroundPlaneUvs(fireShadeTexture!);
-      configureClassicBillboardUvs(fireTexture!, true);
-      configureClassicGroundPlaneUvs(judgementTexture!);
-      configureClassicGroundPlaneUvs(judgementCenterTexture!);
+      const trailTexture = textures[0]!;
+      const fireShadeTexture = textures[1]!;
+      const fireTextures = textures.slice(2, 2 + FIRE_TEXTURE_INDICES.length);
+      const judgementTexture = textures[2 + FIRE_TEXTURE_INDICES.length]!;
+      const judgementCenterTexture = textures[3 + FIRE_TEXTURE_INDICES.length]!;
+      configureClassicBillboardUvs(trailTexture, false);
+      configureClassicGroundPlaneUvs(fireShadeTexture);
+      for (const texture of fireTextures) configureClassicBillboardUvs(texture, true);
+      configureClassicGroundPlaneUvs(judgementTexture);
+      configureClassicGroundPlaneUvs(judgementCenterTexture);
       return {
         library,
-        trailTexture: trailTexture!,
-        fireShadeTexture: fireShadeTexture!,
-        fireTexture: fireTexture!,
-        judgementTexture: judgementTexture!,
-        judgementCenterTexture: judgementCenterTexture!,
+        trailTexture,
+        fireShadeTexture,
+        fireTextures,
+        judgementTexture,
+        judgementCenterTexture,
         dragons48: created.filter((dragon) => dragon.skill === 48),
         dragons49: created.filter((dragon) => dragon.skill === 49),
       };
@@ -884,7 +908,7 @@ export class ClassicBeastMasterDragonEffects {
       const root = new THREE.Group();
       root.name = `classic-beastmaster-dragon-${skill}`;
       root.visible = false;
-      lease.model.object.position.set(0, 1, 0);
+      lease.model.object.position.set(0, 0, 0);
       lease.model.setClassicTransform({ scale: look.scale, yaw: 0 });
       root.add(lease.model.object);
       return {
@@ -953,10 +977,8 @@ function setDragonIntensity(dragon: DragonVisual, intensity: number): void {
   const value = THREE.MathUtils.clamp(intensity, 0, 1);
   for (const material of dragon.materials) {
     material.color.setRGB(value, value, value);
-    if (dragon.skill === 48) {
-      const emissive = value * (0x4d / 0xff);
-      material.emissive.setRGB(emissive, emissive, emissive);
-    }
+    // TMEffectSkinMesh fades Diffuse through m_color, but EF_BRIGHT writes
+    // Emissive=.3 again on every Render. Keep that constant for #48.
     material.opacity = 1;
   }
 }
@@ -1107,7 +1129,7 @@ function disposeResources(resources: DragonEffectResources): void {
   const textures = new Set<THREE.Texture>([
     resources.trailTexture,
     resources.fireShadeTexture,
-    resources.fireTexture,
+    ...resources.fireTextures,
     resources.judgementTexture,
     resources.judgementCenterTexture,
   ]);

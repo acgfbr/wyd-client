@@ -127,6 +127,27 @@ export class ClassicMount {
     if (!this.#released) this.#lease.model.setClassicTransform({ yaw });
   }
 
+  /**
+   * Recreates the mounted branch that writes TMHuman::m_vecSkinPos.
+   *
+   * The rider itself is rendered through a rotated/scaled mantua basis, but
+   * m_vecSkinPos deliberately transforms only the two Render offsets through
+   * the mount's m_OutMatrix. `riderAnchor` is that live bone matrix.
+   */
+  sampleRiderSkinPosition(out: THREE.Vector3, riderScale: number): THREE.Vector3 {
+    if (this.#released) return out.copy(this.object.position);
+    const attachment = this.look.riderAttachment;
+    this.riderAnchor.updateWorldMatrix(true, false);
+    out.set(
+      attachment.length2 / this.look.mountScale,
+      attachment.length / this.look.mountScale,
+      0,
+    );
+    this.riderAnchor.localToWorld(out);
+    out.y -= 0.4 * riderScale;
+    return out;
+  }
+
   setMoving(moving: boolean): void {
     if (moving !== this.#moving) {
       this.#moving = moving;

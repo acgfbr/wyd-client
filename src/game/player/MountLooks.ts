@@ -304,6 +304,17 @@ function classicRiderAttachment(
     length2 = -0.1 * mountScale;
   }
 
+  // TMHuman applies these absolute offsets after the skin switch and before
+  // both rider Render and m_vecSkinPos sampling. Keeping them in the shared
+  // attachment definition prevents the actor and owner-bound VFX from
+  // disagreeing on bears/panthers and the two dr01 mounts.
+  if (skin === 29) {
+    length += 0.1;
+  } else if (skin === 20) {
+    length -= 0.1;
+    length2 -= 0.5;
+  }
+
   if (skin === 20 && meshIndex === 7) {
     return { length, scale: 1 / mountScale, length2, yaw: Math.PI / 2, pitch: -1.3707963 };
   }

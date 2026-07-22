@@ -318,7 +318,7 @@ export class ClassicBeastMasterBuffEffects {
       const addedScale = index * 0.3;
       const position = ownerFeet.clone();
       position.x += (classicRandomStep(randomSerial, 1, 10) - 5) * 0.02;
-      position.z += (classicRandomStep(randomSerial, 2, 10) - 5) * 0.02;
+      position.z -= (classicRandomStep(randomSerial, 2, 10) - 5) * 0.02;
       this.spawnParticle(
         this.#protectionCastPool,
         PROTECTION_CAST_POOL_LIMIT,
@@ -346,8 +346,11 @@ export class ClassicBeastMasterBuffEffects {
     for (let index = 0; index < 15; index++) {
       const randomSerial = ++this.#randomSerial;
       const offset = (classicRandomStep(randomSerial, 0, 5) - 3) * 0.1;
-      const position = ownerFeet.clone().addScalar(offset);
-      position.y += 5;
+      const position = ownerFeet.clone();
+      position.x += offset;
+      position.y += offset + 5;
+      // Classic +Z maps to scene -Z.
+      position.z -= offset;
       this.spawnParticle(
         this.#strengthCastPool,
         STRENGTH_CAST_POOL_LIMIT,
@@ -404,7 +407,11 @@ export class ClassicBeastMasterBuffEffects {
       this.#protectorPhase
       + delta * Math.PI * 2 / PROTECTOR_ORBIT_PERIOD_SECONDS
     ) % (Math.PI * 2);
-    const behindAngle = context.ownerClassicYaw - Math.PI;
+    // Player exposes the TMSkinMesh yaw. TMHuman keeps the opposite sign in
+    // m_fAngle, and motion type 5 uses that human angle for both following and
+    // the effect skin's own TMObject::SetAngle call.
+    const ownerHumanAngle = -context.ownerClassicYaw;
+    const behindAngle = ownerHumanAngle - Math.PI;
     const classicOffsetX = Math.cos(behindAngle) * PROTECTOR_FOLLOW_DISTANCE
       + Math.cos(this.#protectorPhase) * PROTECTOR_ORBIT_RADIUS;
     const classicOffsetY = Math.sin(behindAngle) * PROTECTOR_FOLLOW_DISTANCE
@@ -417,7 +424,7 @@ export class ClassicBeastMasterBuffEffects {
     );
     this.#protectorRoot.visible = true;
     resources.protectorLease.model.setClassicTransform({
-      yaw: context.ownerClassicYaw,
+      yaw: ownerHumanAngle,
       scale: PROTECTOR_MODEL_SCALE,
       mirrorModelZ: true,
     });
@@ -437,7 +444,7 @@ export class ClassicBeastMasterBuffEffects {
     const nRand = classicRandomStep(randomSerial, 2, 5);
     const position = protectorPosition.clone();
     position.x += (classicRandomStep(randomSerial, 0, 10) - 5) * 0.02;
-    position.z += (classicRandomStep(randomSerial, 1, 10) - 5) * 0.02;
+    position.z -= (classicRandomStep(randomSerial, 1, 10) - 5) * 0.02;
     this.spawnParticle(
       this.#protectionTrailPool,
       PROTECTION_TRAIL_POOL_LIMIT,
@@ -546,8 +553,8 @@ export class ClassicBeastMasterBuffEffects {
         continue;
       }
 
-      // The first half of TMSkillSlowSlash follows its owner, then freezes the
-      // last sampled target for the second half even if the affect just ended.
+      // The first half follows its owner; the second returns to the constructor
+      // target captured when this 250 ms controller was created.
       if (controller.elapsed <= 1 && this.#context) {
         controller.feet.copy(this.#context.ownerFeet);
       } else if (controller.elapsed > 1) {
@@ -570,7 +577,7 @@ export class ClassicBeastMasterBuffEffects {
     const nRand = classicRandomStep(randomSerial, 0, 32_768);
     const position = feet.clone();
     position.x += (nRand % 5 + 1) * 0.1;
-    position.z += nRand % 5 * 0.1;
+    position.z -= nRand % 5 * 0.1;
     this.spawnParticle(
       this.#strengthSlowPool,
       STRENGTH_SLOW_POOL_LIMIT,
@@ -660,14 +667,16 @@ export class ClassicBeastMasterBuffEffects {
         particle.sprite.position.x += Math.sin(phase) * particle.horizontalDistance;
       }
       if (particle.motion >= 3) {
-        particle.sprite.position.z += Math.cos(phase) * particle.horizontalDistance;
+        particle.sprite.position.z -= Math.cos(phase) * particle.horizontalDistance;
       }
       const width = Math.max(0, particle.baseWidth + particle.scaleVelocity * particle.elapsed);
       const height = Math.max(0, particle.baseHeight + particle.scaleVelocity * particle.elapsed);
       particle.sprite.scale.set(width, height, 1);
       const fade = Math.max(0, Math.sin(progress * Math.PI));
       particle.sprite.material.color.setHex(particle.color).multiplyScalar(fade);
-      particle.sprite.material.opacity = fade;
+      // EF_BRIGHT selects texture alpha; fading opacity too would square the
+      // retail sine curve that is already applied to vertex RGB.
+      particle.sprite.material.opacity = 1;
       particle.sprite.visible = progress >= PARTICLE_VISIBLE_FRACTION;
     }
   }
@@ -831,6 +840,7 @@ function isolateProtectorMaterials(
       const clone = material.clone();
       clone.transparent = true;
       clone.opacity = 1;
+      clone.alphaTest = 0;
       clone.depthTest = true;
       clone.depthWrite = false;
       clone.blending = THREE.CustomBlending;

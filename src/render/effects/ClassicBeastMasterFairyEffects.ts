@@ -6,7 +6,9 @@ import { parseMsh, type MshModel } from "../../formats/classic/Msh";
 import { ClassicSkinnedModel } from "../characters/ClassicSkinnedModel";
 import { ClassicDdsTextureLoader } from "../textures/ClassicDdsTextureLoader";
 
-const FAIRY_POOL_LIMIT = 12;
+// One cast owns three fairies; six instances retain one full spare cast while
+// avoiding six eagerly-cloned ag01 rigs on memory-constrained browsers.
+const FAIRY_POOL_LIMIT = 6;
 const TRAIL_POOL_LIMIT = 1_024;
 const FAIRIES_PER_CAST = 3;
 
@@ -48,7 +50,7 @@ interface FairyResources {
 
 interface FairyVisual {
   readonly model: ClassicSkinnedModel;
-  readonly material: THREE.MeshBasicMaterial;
+  readonly material: THREE.MeshLambertMaterial;
   readonly startWorld: THREE.Vector3;
   readonly targetWorld: THREE.Vector3;
   readonly positionWorld: THREE.Vector3;
@@ -264,16 +266,19 @@ export class ClassicBeastMasterFairyEffects {
   private createFairy(resources: FairyResources, index: number): FairyVisual {
     // Color fade is per effect instance in TMEffectSkinMesh, so materials must
     // not be shared by the pool even though their immutable DDS map is shared.
-    const material = new THREE.MeshBasicMaterial({
+    // TMEffectSkinMesh keeps D3D lighting active, writes the fading RGB into
+    // Diffuse and forces Emissive to 0.3 for EF_BRIGHT on every render.
+    const material = new THREE.MeshLambertMaterial({
       map: resources.modelTexture,
       color: 0xffffff,
+      emissive: 0x4d4d4d,
       transparent: true,
       opacity: 1,
       alphaTest: 0,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
       side: THREE.DoubleSide,
-      fog: false,
+      fog: true,
       toneMapped: false,
     });
     material.forceSinglePass = true;

@@ -246,6 +246,9 @@ usedObjectTypes.add(705); // Effect/energy02.msa — Escudo Mágico
 usedObjectTypes.add(706); // Effect/icefreeze1.msa — Lâmina Congelada
 usedObjectTypes.add(707); // Effect/icefreeze2.msa — Tempestade de Gelo
 usedObjectTypes.add(708); // Effect/icespear.msa — Lança de Gelo / Nevasca
+// Fúria de Gaia (#52) encadeia os sete segmentos de TMSkillFreezeBlade e
+// sobrescreve a textura de todos eles com mesh/stone01.wys.
+for (let type = 712; type <= 718; type++) usedObjectTypes.add(type);
 usedObjectTypes.add(2838); // Effect/crarmor.msa — Armadura Crítica
 usedObjectTypes.add(2840); // Effect/destiny.msa — Destino
 for (const [ownerType, waterType] of houseWaterCompanions) {
