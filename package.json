@@ -3,12 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "packageManager": "bun@1.3.11",
   "scripts": {
     "import:classic": "bun tools/import-classic-assets.mjs",
     "import:player": "bun tools/import-classic-player.mjs",
     "import:skills": "bun tools/import-classic-skills.mjs",
+    "import:ui": "bun tools/import-classic-ui.mjs",
+    "import:all": "bun tools/import-all-classic.mjs",
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest"
   },
