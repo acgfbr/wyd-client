@@ -80,9 +80,9 @@ export class PlayerState {
       kind: "equipment",
     }, 1, false);
     this.addItem({
-      key: "costume-succubus-4181",
-      name: "Conjunto Succubus",
-      description: "Traje clássico feminino · Item #4181 · equipado.",
+      key: "costume-mulher-kalintz-4156",
+      name: "Mulher Kalintz",
+      description: "Traje clássico feminino · Item #4156 · padrão da Huntress.",
       rarity: "epic",
       maxStack: 1,
       value: 350_000,

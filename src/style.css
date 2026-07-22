@@ -447,21 +447,6 @@ button, select { font: inherit; }
   font: 9px Tahoma, sans-serif;
 }
 .inventory-outfit select:disabled { color: #77736a; }
-.player-class-picker { display: grid; grid-template-columns: minmax(0, 1fr) 43px; gap: 3px; min-width: 0; }
-.player-class-picker select { width: 100%; }
-.player-class-picker button {
-  height: 20px;
-  padding: 0 3px;
-  border: 1px outset #716758;
-  border-radius: 0;
-  background: linear-gradient(#403a30, #1c1c1a);
-  color: #dfc982;
-  font: 700 7px Tahoma, sans-serif;
-  text-transform: uppercase;
-  cursor: pointer;
-}
-.player-class-picker button:hover { color: #fff1b8; }
-.player-class-picker button:disabled { color: #6d6960; cursor: wait; }
 .inventory-outfit small {
   grid-column: 1 / -1;
   overflow: hidden;
@@ -614,6 +599,9 @@ button, select { font: inherit; }
 .skill-catalog-entry.is-passive { border-color: #555c3a; opacity: .8; }
 .skill-catalog-entry.is-learned { border-color: #8f7c38; opacity: 1; box-shadow: inset 2px 0 #d7bc53; }
 .skill-catalog-entry.is-master { border-color: #775d2f; box-shadow: inset 2px 0 #b69245; }
+.skill-catalog-entry.is-castable { cursor: pointer; }
+.skill-catalog-entry.is-castable:hover,
+.skill-catalog-entry.is-castable:focus-visible { border-color: #c9ab58; background: linear-gradient(90deg, rgb(69 60 38 / 96%), rgb(18 22 20 / 94%)); outline: none; }
 .skill-catalog-entry > i {
   width: 32px;
   height: 32px;

@@ -172,13 +172,44 @@ const HUNTRESS_DEFAULT_WEAPON = weapon({
   attachment: CH02_LEFT_HAND,
 });
 
+const TRANSKNIGHT_BASE_LOOK = baseLook(
+  "transknight-base",
+  "Traje básico TransKnight",
+  "ch01",
+  1,
+  ["N", "A", "N", "C", "C", "N"],
+);
+
+const FOEMA_BASE_LOOK = baseLook(
+  "foema-base",
+  "Traje básico Foema",
+  "ch02",
+  1,
+  ["N", "A", "N", "N", "C", "C"],
+);
+
+const BEASTMASTER_BASE_LOOK = baseLook(
+  "beastmaster-base",
+  "Traje básico BeastMaster",
+  "ch01",
+  21,
+  ["N", "A", "N", "A", "C", "C"],
+);
+
+const HUNTRESS_BASE_LOOK = baseLook(
+  "huntress-base",
+  "Traje básico Huntress",
+  "ch02",
+  21,
+  ["N", "A", "C", "C", "C", "C"],
+);
+
 const TRANSKNIGHT_SELECTION_LOOK = selectionLook(
   "melpomene-selection",
   "Armadura Melpômene",
   1230,
   "ch01",
   41,
-  3,
   46,
   ["N", "N", "C", "C", "C", "C"],
   "UI/selchar.txt row 1 + TMHuman::InitObject FaceMesh=40",
@@ -190,7 +221,6 @@ const FOEMA_SELECTION_LOOK = selectionLook(
   1365,
   "ch02",
   41,
-  null,
   46,
   ["N", "A", "C", "C", "C", "C"],
   "UI/selchar.txt row 2 + TMHuman::InitObject FaceMesh=40",
@@ -202,7 +232,6 @@ const BEASTMASTER_SELECTION_LOOK = selectionLook(
   1515,
   "ch01",
   61,
-  85,
   66,
   ["N", "N", "C", "C", "C", "C"],
   "UI/selchar.txt row 3 + bExpand=1 + TMHuman::InitObject FaceMesh=40",
@@ -214,7 +243,6 @@ const HUNTRESS_SELECTION_LOOK = selectionLook(
   1665,
   "ch02",
   61,
-  85,
   66,
   ["A", "A", "C", "C", "C", "C"],
   "UI/selchar.txt row 4 + bExpand=1 + TMHuman::InitObject FaceMesh=40",
@@ -234,13 +262,13 @@ export const CLASSIC_PLAYER_CLASSES = [
     skin: 0,
     expand: 0,
     animationSet: "Knight",
-    baseParts: baseParts("ch01", 1, ["N", "A", "N", "C", "C", "N"]),
+    baseParts: TRANSKNIGHT_BASE_LOOK.parts,
     selection: selection(
       { face: 6, helm: 1417, body: 1230, mantle: 0, right: 0, left: 3605, refinement: 9 },
       TRANSKNIGHT_SELECTION_LOOK,
       TRANSKNIGHT_SELECTION_WEAPON,
     ),
-    looks: [TRANSKNIGHT_SELECTION_LOOK],
+    looks: [TRANSKNIGHT_SELECTION_LOOK, TRANSKNIGHT_BASE_LOOK],
     defaultLookKey: TRANSKNIGHT_SELECTION_LOOK.key,
     defaultWeapon: TRANSKNIGHT_SELECTION_WEAPON,
     source: "BASE_DefineSkinMeshType(1)=0; BoneAni4 ch01; AniSound4 [Knight]",
@@ -253,13 +281,13 @@ export const CLASSIC_PLAYER_CLASSES = [
     skin: 1,
     expand: 0,
     animationSet: "Mage",
-    baseParts: baseParts("ch02", 1, ["N", "A", "N", "N", "C", "C"]),
+    baseParts: FOEMA_BASE_LOOK.parts,
     selection: selection(
       { face: 16, helm: 44, body: 1365, mantle: 0, right: 0, left: 3733, refinement: 9 },
       FOEMA_SELECTION_LOOK,
       FOEMA_SELECTION_WEAPON,
     ),
-    looks: [FOEMA_SELECTION_LOOK],
+    looks: [FOEMA_SELECTION_LOOK, FOEMA_BASE_LOOK],
     defaultLookKey: FOEMA_SELECTION_LOOK.key,
     defaultWeapon: FOEMA_SELECTION_WEAPON,
     source: "BASE_DefineSkinMeshType(2)=1; BoneAni4 ch02; AniSound4 [Mage]",
@@ -272,13 +300,13 @@ export const CLASSIC_PLAYER_CLASSES = [
     skin: 0,
     expand: 1,
     animationSet: "Knight",
-    baseParts: baseParts("ch01", 21, ["N", "A", "N", "A", "C", "C"]),
+    baseParts: BEASTMASTER_BASE_LOOK.parts,
     selection: selection(
       { face: 26, helm: 44, body: 1515, mantle: 0, right: 0, left: 3785, refinement: 9 },
       BEASTMASTER_SELECTION_LOOK,
       BEASTMASTER_SELECTION_WEAPON,
     ),
-    looks: [BEASTMASTER_SELECTION_LOOK],
+    looks: [BEASTMASTER_SELECTION_LOOK, BEASTMASTER_BASE_LOOK],
     defaultLookKey: BEASTMASTER_SELECTION_LOOK.key,
     defaultWeapon: BEASTMASTER_SELECTION_WEAPON,
     source: "BASE_DefineSkinMeshType(4)=0; bExpand=1; BoneAni4 ch01; AniSound4 [Knight]",
@@ -291,13 +319,13 @@ export const CLASSIC_PLAYER_CLASSES = [
     skin: 1,
     expand: 1,
     animationSet: "Mage",
-    baseParts: baseParts("ch02", 21, ["N", "A", "C", "C", "C", "C"]),
+    baseParts: HUNTRESS_BASE_LOOK.parts,
     selection: selection(
       { face: 36, helm: 44, body: 1665, mantle: 0, right: 0, left: 3625, refinement: 9 },
       HUNTRESS_SELECTION_LOOK,
       HUNTRESS_SELECTION_WEAPON,
     ),
-    looks: HUNTRESS_LOOKS,
+    looks: [...HUNTRESS_LOOKS, HUNTRESS_SELECTION_LOOK, HUNTRESS_BASE_LOOK],
     defaultLookKey: DEFAULT_HUNTRESS_LOOK_KEY,
     defaultWeapon: HUNTRESS_DEFAULT_WEAPON,
     source: "BASE_DefineSkinMeshType(8)=1; bExpand=1; playable default preserved as Mulher Kalintz",
@@ -320,25 +348,38 @@ function baseParts(
   });
 }
 
+function baseLook(
+  key: string,
+  name: string,
+  base: "ch01" | "ch02",
+  variant: 1 | 21,
+  alpha: readonly ClassicAlphaMode[],
+): ClassicPlayerLookDefinition {
+  return {
+    key,
+    name,
+    itemIndex: null,
+    source: `BoneAni4 ${base} · corpo base da classe`,
+    parts: baseParts(base, variant, alpha),
+  };
+}
+
 function selectionLook(
   key: string,
   name: string,
   bodyItemIndex: number,
   base: "ch01" | "ch02",
   faceVariant: number,
-  helmetVariant: number | null,
   bodyVariant: number,
   alpha: readonly ClassicAlphaMode[],
   source: string,
 ): ClassicPlayerLookDefinition {
+  // InitObject forces HelmMesh=FaceMesh when the selection face has Mesh 40.
+  // The raw helmet items (1417/44) therefore never reach TMSkinMesh here.
   const parts: ClassicPlayerLookPart[] = [
     playerPart(base, 1, faceVariant, alpha[0] ?? "N"),
+    playerPart(base, 2, faceVariant, alpha[1] ?? "N"),
   ];
-  // Item #44 resolves Foema's helmet to ch020265, which is absent from the
-  // shipped Origem client. TMSkinMesh simply skips that failed mesh load.
-  if (helmetVariant !== null) {
-    parts.push(playerPart(base, 2, helmetVariant, alpha[1] ?? "N"));
-  }
   for (let part = 3; part <= 6; part++) {
     parts.push(playerPart(base, part, bodyVariant, alpha[part - 1] ?? "N"));
   }

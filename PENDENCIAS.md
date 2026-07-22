@@ -39,6 +39,11 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
   partes e ações do bloco `[horse] 31`. A sela agora segue o bone `4` e a
   transformação `SetVecMantua(2, 31)`; aguarda homologação visual.
 - Macro `F`, montaria `R`, arco à distância e hotkeys de skill `1–9`.
+- Troca jogável entre TransKnight, Foema, BeastMaster e Huntress: os rigs
+  `ch01/ch02`, `bExpand`, armaduras da seleção clássica, armas Ancient, bancos
+  a pé/montado e attachments de mão já foram derivados do cliente. Cada classe
+  possui traje base/armadura no seletor e um primeiro loadout auditado de três
+  ataques e dois buffs; a Huntress conserva seus nove slots atuais.
 - Controle contínuo implementado: manter o esquerdo atualiza o destino a cada
   `200 ms`; manter esquerdo+direito avança na direção da câmera e permite
   esterçar com o direito. A célula isolada em `2164,2102` agora recebe um
@@ -48,7 +53,8 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
 ## Provisório — não considerar fiel ainda
 
 - Poder/dano e geometria visual das skills ainda são aproximações; nomes,
-  mana, delay e range já vêm do bloco Huntress do `SkillData.bin`.
+  mana, delay, range, alvo, ações e estados dos primeiros loadouts das quatro
+  classes já vêm do `SkillData.bin`.
 - Fórmula de dano offline e rotação do macro ainda precisam ser confrontadas
   com o cliente/servidor disponível. Enquanto o servidor não existe, cada
   nível concede `+3 ATQ` no estado do frontend e o combate usa esse total.
@@ -111,7 +117,10 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
    unidade ao alcance e acopla o `SForce` clássico de três camadas à arma em
    ataques normais e skills ofensivas, sem ocupar slot ou criar buff temporário.
    Esse recorte da Huntress está homologado; o épico só fecha depois da matriz
-   completa das quatro classes.
+   completa das quatro classes. Para BeastMaster, implementar também as
+   evocações reais: criação do summon, skin/LOOK_INFO, VFX de entrada, tempo de
+   vida, seguimento, escolha de alvo, ataque, morte e descarte/streaming conforme
+   as rotinas originais, sem reutilizar o familiar Griupan como substituto.
 8. Isolamento completo do modo G.
 9. Progressão e painel de personagem: reproduzir a janela de status clássica,
     guardar `STR/INT/DEX/CON` e pontos livres, permitir distribuição e calcular

@@ -77,15 +77,12 @@ app.innerHTML = `
     <div class="inventory-caption">Equipamento</div>
     <div class="inventory-outfit">
       <label for="player-class-select">Classe ativa</label>
-      <span class="player-class-picker">
-        <select id="player-class-select" aria-label="Selecionar classe do personagem">
-          <option value="huntress">Huntress</option>
-        </select>
-        <button id="player-class-apply" type="button">Trocar</button>
-      </span>
+      <select id="player-class-select" aria-label="Selecionar classe do personagem">
+        <option value="huntress">Huntress</option>
+      </select>
       <small id="player-class-status">Huntress · personagem atual</small>
-      <label for="outfit-select">Traje da Huntress</label>
-      <select id="outfit-select" aria-label="Selecionar traje da Huntress"><option>Carregando…</option></select>
+      <label id="outfit-label" for="outfit-select">Traje da Huntress</label>
+      <select id="outfit-select" aria-label="Selecionar traje do personagem"><option>Carregando…</option></select>
       <small id="outfit-status">Carregando visual clássico…</small>
       <label for="mount-select">Montaria Lv. 120</label>
       <select id="mount-select" aria-label="Selecionar montaria nível 120"><option>Carregando…</option></select>

@@ -7,6 +7,10 @@ import {
   type ClassSkill,
   type ClassicClassKey,
 } from "../game/combat/ClassSkills";
+import {
+  beastMasterSummonForSkill,
+  type BeastMasterSummonDefinition,
+} from "../game/combat/BeastMasterSummons";
 import { SPECTRAL_FORCE } from "../game/combat/SpectralForce";
 import type {
   ClassicMonsterAttackEvent,
@@ -20,10 +24,9 @@ import { FIELD_WORLD_SIZE, fieldAt, toScene, toWyd, type WydPosition } from "../
 import { Minimap } from "../ui/Minimap";
 import { GameHud } from "../ui/GameHud";
 import { PlayerState } from "../game/state/PlayerState";
+import { ClassicBeastMasterSummon } from "../game/player/ClassicBeastMasterSummon";
 import {
   DEFAULT_HUNTRESS_LOOK_KEY,
-  HUNTRESS_LOOKS,
-  huntressLook,
 } from "../game/player/HuntressLooks";
 import {
   CLASSIC_PLAYER_CLASSES,
@@ -120,6 +123,8 @@ export class GameApp {
   #outfitLoadId = 0;
   #classLoadId = 0;
   #mountLoadId = 0;
+  #summonGeneration = 0;
+  readonly #beastMasterSummons = new Map<number, ClassicBeastMasterSummon>();
 
   constructor(private readonly container: HTMLElement) {
     this.#mobileGpuProfile = isAppleMobileDevice();
@@ -165,6 +170,7 @@ export class GameApp {
     this.#input.onAutoCombatToggle = () => this.toggleAutoCombat();
     this.#input.onEffectsToggle = () => this.toggleEffects();
     this.#input.onSkill = (slot) => this.requestSkill(slot);
+    this.#hud.onCatalogSkillUse = (classicIndex) => this.requestCatalogSkill(classicIndex);
     this.#hud.bindPlayer(this.#playerState);
     this.#hud.configureSkills(this.#skills.skills, (slot) => this.requestSkill(slot));
     this.#hud.addLog("Armia carregada. Explore o mundo clássico.", "system");
@@ -304,6 +310,7 @@ export class GameApp {
       }
       this.bindSpawnGameplay();
       this.updateCombat(dt, mouseForward);
+      this.updateBeastMasterSummons(dt);
       this.#cameraRig.update(this.#player.object.position, dt);
       this.activateField(this.#player.position);
       const coordinates = document.querySelector<HTMLElement>("#coordinates");
@@ -640,6 +647,10 @@ export class GameApp {
   private requestSkill(slot: number): void {
     const skill = this.#skills.skill(slot);
     if (!skill || !this.#playerState.snapshot.alive) return;
+    if (skill.kind === "summon") {
+      this.castSummonSkill(skill);
+      return;
+    }
     if (skill.target === "self") {
       this.castBuffSkill(skill);
       return;
@@ -654,6 +665,74 @@ export class GameApp {
     }
     this.#queuedSkillSlot = slot;
     if (!this.#selectedTargetId) this.acquireNearestTarget();
+  }
+
+  private requestCatalogSkill(classicIndex: number): void {
+    const skill = this.#skills.skills.find((candidate) => candidate.classicIndex === classicIndex);
+    if (!skill) return;
+    this.requestSkill(skill.slot);
+  }
+
+  private castSummonSkill(skill: ClassSkill): void {
+    if (
+      !this.#player
+      || !this.#assets
+      || this.#activeClassKey !== "beastmaster"
+      || skill.kind !== "summon"
+    ) return;
+    const definition = beastMasterSummonForSkill(skill.classicIndex);
+    if (!definition) return;
+    const started = this.#skills.start(skill.slot, this.#playerState);
+    if (!started.ok) {
+      this.#hud.addLog(started.reason === "mana"
+        ? `MP insuficiente para ${skill.name}.`
+        : `${skill.name} recarrega em ${this.#skills.remaining(skill.slot).toFixed(1)}s.`, "system");
+      return;
+    }
+
+    this.breakInvisibility();
+    this.#player.stop();
+    const timing = this.#player.playClassSkill(skill);
+    this.#attackCooldown = Math.max(
+      this.#attackCooldown,
+      Math.max(0.42, (timing?.animationDurationSeconds ?? 0.54) - 0.12),
+    );
+    const owner = this.#player.position;
+    const angle = definition.skill.instanceValue * 2.399963229728653;
+    const spawn = {
+      x: owner.x + Math.cos(angle) * 2.1,
+      y: owner.y + Math.sin(angle) * 2.1,
+    };
+    const generation = this.#summonGeneration;
+    const loadJob = ClassicBeastMasterSummon.load(definition, spawn, this.#assets);
+    const delay = timing?.effectDelaySeconds ?? 0.5;
+    this.scheduleSkillEvent(delay, () => {
+      void loadJob.then((summon) => {
+        if (!summon) {
+          this.#hud.addLog(`${definition.name} não pôde ser materializado.`, "system");
+          return;
+        }
+        if (
+          generation !== this.#summonGeneration
+          || this.#activeClassKey !== "beastmaster"
+          || !this.#player
+          || !this.#world
+        ) {
+          summon.release();
+          return;
+        }
+        this.#beastMasterSummons.get(skill.classicIndex)?.release();
+        this.#beastMasterSummons.set(skill.classicIndex, summon);
+        this.#scene.add(summon.object);
+        summon.update(0, this.#player.position, null, this.summonEnvironment(), () => undefined);
+        this.#combatEffects.burst(summon.object.position, skill.color, 1.2);
+        this.#hud.addLog(`${definition.name} foi evocado.`, "system");
+      }).catch((error: unknown) => {
+        console.warn(`Evocação ${definition.key} indisponível`, error);
+        this.#hud.addLog(`${definition.name} não pôde ser materializado.`, "system");
+      });
+    });
+    this.#hud.addLog(`${skill.name} · ${skill.mana} MP.`, "system");
   }
 
   private castSkill(skill: ClassSkill, target: ClassicMonsterSnapshot): void {
@@ -1081,15 +1160,13 @@ export class GameApp {
       return option;
     }));
     select.value = this.#activeClassKey;
-    document.querySelector<HTMLButtonElement>("#player-class-apply")
-      ?.addEventListener("click", () => this.requestPlayerClass(select.value));
+    select.addEventListener("change", () => this.requestPlayerClass(select.value));
     this.syncClassControls();
   }
 
   private requestPlayerClass(classKey: string): void {
     const definition = CLASSIC_PLAYER_CLASSES.find((candidate) => candidate.key === classKey);
     const select = document.querySelector<HTMLSelectElement>("#player-class-select");
-    const apply = document.querySelector<HTMLButtonElement>("#player-class-apply");
     const status = document.querySelector<HTMLElement>("#player-class-status");
     if (!definition || !select) {
       this.#hud.setActiveSkillClass(this.#activeClassKey);
@@ -1104,8 +1181,10 @@ export class GameApp {
 
     const previousKey = this.#activeClassKey;
     const requestId = ++this.#classLoadId;
+    this.#outfitLoadId++;
     select.disabled = true;
-    if (apply) apply.disabled = true;
+    const outfit = document.querySelector<HTMLSelectElement>("#outfit-select");
+    if (outfit) outfit.disabled = true;
     if (status) status.textContent = `Carregando ${definition.name}…`;
     void this.#player.loadClassicAvatar(
       this.#assets,
@@ -1117,6 +1196,7 @@ export class GameApp {
         select.value = previousKey;
         this.#hud.setActiveSkillClass(previousKey);
         if (status) status.textContent = `${classicPlayerClass(previousKey).name} · falha ao trocar`;
+        this.syncClassControls();
         this.#hud.addLog(`${definition.name} não pôde ser carregado.`, "system");
         return;
       }
@@ -1143,48 +1223,63 @@ export class GameApp {
     }).finally(() => {
       if (requestId === this.#classLoadId) {
         select.disabled = false;
-        if (apply) apply.disabled = false;
       }
     });
   }
 
   private syncClassControls(): void {
     const definition = classicPlayerClass(this.#activeClassKey);
-    const outfit = document.querySelector<HTMLSelectElement>("#outfit-select");
-    const outfitStatus = document.querySelector<HTMLElement>("#outfit-status");
     const identity = document.querySelector<HTMLElement>(".player-identity small");
-    if (outfit) outfit.disabled = this.#activeClassKey !== "huntress";
-    if (outfitStatus && this.#activeClassKey !== "huntress") {
-      outfitStatus.textContent = `${definition.selection.look.name} · visual clássico da classe`;
-    }
+    this.populateOutfitSelector();
     if (identity) identity.textContent = definition.defaultWeapon.name;
   }
 
   private configureOutfitSelector(): void {
     const select = document.querySelector<HTMLSelectElement>("#outfit-select");
     if (!select) return;
-    select.replaceChildren(...HUNTRESS_LOOKS.map((look) => {
+    select.addEventListener("change", this.outfitChanged);
+    this.populateOutfitSelector();
+  }
+
+  private populateOutfitSelector(): void {
+    const select = document.querySelector<HTMLSelectElement>("#outfit-select");
+    const status = document.querySelector<HTMLElement>("#outfit-status");
+    const label = document.querySelector<HTMLElement>("#outfit-label");
+    if (!select) return;
+    const definition = classicPlayerClass(this.#activeClassKey);
+    if (label) label.textContent = `Traje ${definition.name}`;
+    select.replaceChildren(...definition.looks.map((look) => {
       const option = document.createElement("option");
       option.value = look.key;
       option.textContent = look.name;
       return option;
     }));
-    select.value = DEFAULT_HUNTRESS_LOOK_KEY;
-    select.addEventListener("change", this.outfitChanged);
+    const currentLook = this.#player?.avatarClassKey === definition.key
+      ? this.#player.avatarLookKey
+      : definition.defaultLookKey;
+    select.value = definition.looks.some((look) => look.key === currentLook)
+      ? currentLook
+      : definition.defaultLookKey;
+    select.disabled = false;
+    const selected = definition.looks.find((look) => look.key === select.value);
+    if (status) status.textContent = selected?.name ?? definition.selection.look.name;
   }
 
   private readonly outfitChanged = (): void => {
     const select = document.querySelector<HTMLSelectElement>("#outfit-select");
     const status = document.querySelector<HTMLElement>("#outfit-status");
-    if (!select || !this.#assets || !this.#player || this.#activeClassKey !== "huntress") return;
+    if (!select || !this.#assets || !this.#player) return;
+    const definition = classicPlayerClass(this.#activeClassKey);
     const requestedKey = select.value;
-    const requestedLook = huntressLook(requestedKey);
+    const requestedLook = definition.looks.find((look) => look.key === requestedKey)
+      ?? definition.looks.find((look) => look.key === definition.defaultLookKey)
+      ?? definition.selection.look;
     const requestId = ++this.#outfitLoadId;
     select.disabled = true;
     if (status) status.textContent = `Vestindo ${requestedLook.name}…`;
-    void this.#player.loadClassicAvatar(this.#assets, "huntress", requestedKey).then((loaded) => {
+    void this.#player.loadClassicAvatar(this.#assets, definition.key, requestedLook.key).then((loaded) => {
       if (requestId !== this.#outfitLoadId) return;
-      select.value = this.#player?.avatarLookKey ?? DEFAULT_HUNTRESS_LOOK_KEY;
+      select.value = this.#player?.avatarLookKey ?? definition.defaultLookKey;
       if (loaded) {
         if (status) status.textContent = requestedLook.name;
         this.#hud.addLog(`${requestedLook.name} equipado.`, "system");

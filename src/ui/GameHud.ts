@@ -55,6 +55,7 @@ interface ClassicSkillCatalog {
 
 export class GameHud {
   onSkillClassSelected: ((classKey: string) => void) | null = null;
+  onCatalogSkillUse: ((classicIndex: number) => void) | null = null;
   readonly #target = requireElement<HTMLElement>("#target-status");
   readonly #targetName = requireElement<HTMLElement>("#target-name");
   readonly #targetLevel = requireElement<HTMLElement>("#target-level");
@@ -74,6 +75,7 @@ export class GameHud {
   #skillCatalog: ClassicSkillCatalog | null = null;
   #skillCatalogJob: Promise<void> | null = null;
   #activeClassKey = "huntress";
+  #runtimeSkillIndices = new Set<number>();
 
   constructor() {
     document.querySelector<HTMLElement>("[data-inventory-close]")?.addEventListener("click", () => {
@@ -126,6 +128,9 @@ export class GameHud {
   }
 
   configureSkills(skills: readonly SkillHudEntry[], onUse: (slot: number) => void): void {
+    this.#runtimeSkillIndices = new Set(skills.flatMap((skill) => (
+      skill.classicIndex === undefined ? [] : [skill.classicIndex]
+    )));
     for (let slot = 1; slot <= 9; slot++) {
       const button = document.querySelector<HTMLButtonElement>(`#skill-slot-${slot}`);
       if (!button) continue;
@@ -160,6 +165,7 @@ export class GameHud {
       }
       button.onclick = () => onUse(skill.slot);
     }
+    if (this.#skillCatalog) this.renderSkillCatalog();
   }
 
   setActiveSkillClass(classKey: string): void {
@@ -283,7 +289,14 @@ export class GameHud {
           Number(left.category === "master") - Number(right.category === "master")
           || (left.masterySlot ?? 0) - (right.masterySlot ?? 0)
         ));
-      for (const skill of entries) column.appendChild(createSkillCatalogEntry(skill));
+      for (const skill of entries) {
+        const canUse = selectedClass.key === this.#activeClassKey && this.#runtimeSkillIndices.has(skill.index);
+        column.appendChild(createSkillCatalogEntry(
+          skill,
+          false,
+          canUse ? () => this.onCatalogSkillUse?.(skill.index) : undefined,
+        ));
+      }
       return column;
     });
     const specialColumn = document.createElement("section");
@@ -292,7 +305,12 @@ export class GameHud {
     specialHeading.textContent = "Especiais / Passivas";
     specialColumn.appendChild(specialHeading);
     for (const skill of specialSkills) {
-      specialColumn.appendChild(createSkillCatalogEntry(skill, alwaysLearned.has(skill.index)));
+      const canUse = selectedClass.key === this.#activeClassKey && this.#runtimeSkillIndices.has(skill.index);
+      specialColumn.appendChild(createSkillCatalogEntry(
+        skill,
+        alwaysLearned.has(skill.index),
+        canUse ? () => this.onCatalogSkillUse?.(skill.index) : undefined,
+      ));
     }
     columns.push(specialColumn);
     this.#skillCatalogStatus.textContent = `${selectedClass.name} · ${classSkills.length + specialSkills.length} skills · dados do cliente clássico`;
@@ -345,9 +363,13 @@ export class GameHud {
   }
 }
 
-function createSkillCatalogEntry(skill: ClassicSkillCatalogEntry, learned = false): HTMLElement {
+function createSkillCatalogEntry(
+  skill: ClassicSkillCatalogEntry,
+  learned = false,
+  onUse?: () => void,
+): HTMLElement {
   const entry = document.createElement("article");
-  entry.className = `skill-catalog-entry is-${skill.kind}${skill.category === "master" ? " is-master" : ""}${learned ? " is-learned" : ""}`;
+  entry.className = `skill-catalog-entry is-${skill.kind}${skill.category === "master" ? " is-master" : ""}${learned ? " is-learned" : ""}${onUse ? " is-castable" : ""}`;
   entry.title = `#${skill.index} · ${skill.name}\nMP ${skill.manaSpent} · delay ${skill.delaySeconds}s · alcance ${skill.range}`;
   const icon = document.createElement("i");
   if (skill.iconIndex !== null) {
@@ -362,11 +384,22 @@ function createSkillCatalogEntry(skill: ClassicSkillCatalogEntry, learned = fals
   name.textContent = skill.name;
   const details = document.createElement("small");
   const kind = skill.kind === "active" ? "ATIVA" : (skill.kind === "buff" ? "BUFF" : "PASSIVA");
-  details.textContent = `${kind}${learned ? " · APRENDIDA" : ""} · MP ${skill.manaSpent} · CD ${skill.delaySeconds}s · R ${skill.range}`;
+  details.textContent = `${kind}${learned ? " · APRENDIDA" : ""} · MP ${skill.manaSpent} · CD ${skill.delaySeconds}s · R ${skill.range}${onUse ? " · USAR" : ""}`;
   copy.append(name, details);
   const index = document.createElement("b");
   index.textContent = `#${skill.index}`;
   entry.append(icon, copy, index);
+  if (onUse) {
+    entry.tabIndex = 0;
+    entry.setAttribute("role", "button");
+    entry.setAttribute("aria-label", `Usar ${skill.name}`);
+    entry.addEventListener("click", onUse);
+    entry.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      onUse();
+    });
+  }
   return entry;
 }
 

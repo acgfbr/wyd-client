@@ -4,6 +4,7 @@ import process from "node:process";
 import { HUNTRESS_LOOKS } from "../src/game/player/HuntressLooks.ts";
 import { MOUNT_LOOKS } from "../src/game/player/MountLooks.ts";
 import { CLASSIC_PLAYER_CLASSES } from "../src/game/player/PlayerClasses.ts";
+import { BEAST_MASTER_SUMMONS } from "../src/game/combat/BeastMasterSummons.ts";
 
 const projectRoot = path.resolve(import.meta.dirname, "..");
 const clientRoot = path.resolve(process.argv[2] ?? path.join(projectRoot, "../tjs/Origem"));
@@ -12,11 +13,13 @@ const outputRoot = path.join(projectRoot, "public/game-data/classic/player");
 const meshesRoot = path.join(outputRoot, "meshes");
 const texturesRoot = path.join(outputRoot, "textures");
 const mountsRoot = path.join(outputRoot, "mounts");
+const summonsRoot = path.join(outputRoot, "summons");
 const griupanRoot = path.join(outputRoot, "familiars/ag01");
 
 await mkdir(meshesRoot, { recursive: true });
 await mkdir(texturesRoot, { recursive: true });
 await mkdir(mountsRoot, { recursive: true });
+await mkdir(summonsRoot, { recursive: true });
 await mkdir(griupanRoot, { recursive: true });
 
 // LOOK_INFO equipment and SetHumanCostume cases used by the Huntress wardrobe.
@@ -127,6 +130,54 @@ for (const look of MOUNT_LOOKS) {
   }
 }
 
+// BeastMaster nature summons are not guaranteed to occur in NPCGener, so the
+// world catalog cannot be their asset owner. Keep all eight looks together in
+// a self-contained package. ValidIndex is already represented by each
+// family's explicit animationStems (Succubus notably uses 0101..0111 and
+// 0201..0211 rather than one contiguous filename range).
+const importedSummonFamilies = new Set();
+const importedSummonMeshes = new Set();
+const importedSummonTextures = new Set();
+for (const summon of BEAST_MASTER_SUMMONS) {
+  const { family } = summon;
+  const summonRoot = path.join(summonsRoot, family.base);
+  await mkdir(summonRoot, { recursive: true });
+
+  if (!importedSummonFamilies.has(family.base)) {
+    await copyFile(
+      path.join(meshRoot, `${family.skeletonStem}.bon`),
+      path.join(summonRoot, `${family.skeletonStem}.bon`),
+    );
+    for (const animationStem of family.animationStems) {
+      await copyFile(
+        path.join(meshRoot, `${animationStem}.ani`),
+        path.join(summonRoot, `${animationStem}.ani`),
+      );
+    }
+    importedSummonFamilies.add(family.base);
+  }
+
+  for (const part of summon.parts) {
+    const meshKey = `${family.base}/${part.meshStem}`;
+    if (!importedSummonMeshes.has(meshKey)) {
+      await copyFile(
+        path.join(meshRoot, `${part.meshStem}.msh`),
+        path.join(summonRoot, `${part.meshStem}.msh`),
+      );
+      importedSummonMeshes.add(meshKey);
+    }
+
+    const textureKey = `${family.base}/${part.textureStem}`;
+    if (!importedSummonTextures.has(textureKey)) {
+      await writeFile(
+        path.join(summonRoot, `${part.textureStem}.dds`),
+        decodeWys(await readFile(path.join(meshRoot, `${part.textureStem}.wys`))),
+      );
+      importedSummonTextures.add(textureKey);
+    }
+  }
+}
+
 // Equip[13] item #1726 (Griupan): TMHuman creates skin 32 with LOOK_INFO
 // Mesh0/Skin0 = 2/0. TMSkinMesh therefore resolves the single ag01 part to
 // ag010103, while the [angel] animation table uses ag010101.ani.
@@ -139,7 +190,7 @@ await writeFile(
 );
 
 console.log(
-  `${CLASSIC_PLAYER_CLASSES.length} classes (${HUNTRESS_LOOKS.length} looks da Huntress), ${importedWeapons.size} armas, ${MOUNT_LOOKS.length} montarias e Griupan importados para ${outputRoot}`,
+  `${CLASSIC_PLAYER_CLASSES.length} classes (${HUNTRESS_LOOKS.length} looks da Huntress), ${importedWeapons.size} armas, ${MOUNT_LOOKS.length} montarias, ${BEAST_MASTER_SUMMONS.length} evocacoes e Griupan importados para ${outputRoot}`,
 );
 
 function decodeWys(encoded) {

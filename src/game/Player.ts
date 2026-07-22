@@ -305,10 +305,10 @@ export class Player {
 
   playClassSkill(skill: Pick<ClassSkill, "classicIndex" | "action1" | "action2">): PlayerSkillTiming | null {
     if (this.#dead) return null;
-    const action = this.playAvatarAction(
-      classSkillActions(skill, this.#avatarClassKey, this.#mounted),
-      true,
-    );
+    const actions = this.#avatarClassKey === "huntress"
+      ? huntressSkillActions(skill.classicIndex, this.#mounted)
+      : classSkillActions(skill, this.#avatarClassKey, this.#mounted);
+    const action = this.playAvatarAction(actions, true);
     if (this.#mounted) this.#mount?.setMoving(false);
     if (action) {
       this.#actionLockRemaining = Math.max(

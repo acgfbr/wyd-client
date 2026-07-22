@@ -3,6 +3,7 @@ import {
   HUNTRESS_SKILLS,
   type HuntressSkill,
 } from "./HuntressSkills";
+import { BEAST_MASTER_SUMMONS } from "./BeastMasterSummons";
 
 export { HUNTRESS_SKILLS };
 
@@ -16,7 +17,8 @@ export type ClassSkillKind =
   | "volley"
   | "cone"
   | "shadow"
-  | "buff";
+  | "buff"
+  | "summon";
 
 export type ClassSkillTarget = "enemy" | "self";
 
@@ -377,7 +379,18 @@ export const FOEMA_SKILLS = defineLoadout("foema", [
   },
 ]);
 
-/** BeastMaster records #48/#49/#50/#53/#54. */
+const BEASTMASTER_SUMMON_ACTIONS: Readonly<Record<number, readonly [ClassicActionSequence, ClassicActionSequence]>> = {
+  56: [[9, 0, 0, 6, 0, 0, 0, 0], [8, 0, 0, 7, 0, 0, 0, 0]],
+  57: [[8, 0, 0, 6, 0, 0, 0, 0], [9, 0, 0, 7, 0, 0, 0, 0]],
+  58: [[8, 0, 0, 6, 0, 0, 0, 0], [8, 0, 0, 7, 0, 0, 0, 0]],
+  59: [[9, 0, 0, 6, 0, 0, 0, 0], [8, 0, 0, 7, 0, 0, 0, 0]],
+  60: [[8, 0, 0, 6, 0, 0, 0, 0], [9, 0, 0, 7, 0, 0, 0, 0]],
+  61: [[8, 0, 0, 6, 0, 0, 0, 0], [8, 0, 0, 7, 0, 0, 0, 0]],
+  62: [[9, 0, 0, 6, 0, 0, 0, 0], [8, 0, 0, 7, 0, 0, 0, 0]],
+  63: [[8, 0, 0, 6, 0, 0, 0, 0], [8, 0, 0, 6, 0, 0, 0, 0]],
+};
+
+/** BeastMaster records #48/#49/#50/#53/#54 and nature summons #56-#63. */
 export const BEASTMASTER_SKILLS = defineLoadout("beastmaster", [
   {
     slot: 1,
@@ -524,6 +537,38 @@ export const BEASTMASTER_SKILLS = defineLoadout("beastmaster", [
     color: 0xffeeff,
     effectKey: "beastmaster-elemental-strength",
   },
+  ...BEAST_MASTER_SUMMONS.map((summon, index): ClassSkillDefinition => {
+    const [action1, action2] = BEASTMASTER_SUMMON_ACTIONS[summon.skill.classicIndex]!;
+    return {
+      slot: 6 + index,
+      classicIndex: summon.skill.classicIndex,
+      name: `Evocar ${summon.name}`,
+      shortName: summon.name.replace(" Selvagem", "").replace(" Gigante", ""),
+      mana: summon.skill.mana,
+      cooldownSeconds: summon.skill.cooldownSeconds,
+      range: 0,
+      kind: "summon",
+      target: "self",
+      classicTargetType: summon.skill.targetType,
+      maxTargets: summon.skill.maxTarget,
+      instanceType: summon.skill.instanceType,
+      instanceValue: summon.skill.instanceValue,
+      tickType: 0,
+      tickValue: 0,
+      affectType: 0,
+      affectValue: 0,
+      affectTimeSeconds: 0,
+      runtimeDurationSeconds: 0,
+      aggressive: 0,
+      party: 0,
+      action1,
+      action2,
+      damageCoefficient: 0,
+      radius: 0,
+      color: summon.skill.classicIndex === 62 ? 0x7653ff : 0x89e4a2,
+      effectKey: `beastmaster-summon-${summon.key}`,
+    };
+  }),
 ]);
 
 const HUNTRESS_CLASSIC_RECORDS: Readonly<Record<number, ClassicRecordFields>> = Object.freeze({
