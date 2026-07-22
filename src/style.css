@@ -106,19 +106,19 @@ button, select { font: inherit; }
 .runtime-telemetry {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 2px 7px;
-  padding: 4px 6px 5px;
+  gap: 4px 10px;
+  padding: 7px 8px 8px;
   border-top: 1px solid #4b463b;
   background: linear-gradient(rgb(18 20 19 / 96%), rgb(6 8 8 / 96%));
   font-variant-numeric: tabular-nums;
   text-shadow: 1px 1px #000;
 }
 .runtime-telemetry div { display: flex; align-items: baseline; justify-content: space-between; gap: 4px; min-width: 0; }
-.runtime-telemetry div:nth-child(3) { grid-column: 1 / -1; padding-top: 1px; border-top: 1px solid rgb(91 83 67 / 42%); }
-.runtime-telemetry span { color: #837c6c; font-size: 6px; font-weight: 700; letter-spacing: .04em; white-space: nowrap; }
-.runtime-telemetry b { overflow: hidden; color: #d8cda9; font-size: 7px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.runtime-telemetry div:nth-child(3) { grid-column: 1 / -1; padding-top: 3px; border-top: 1px solid rgb(91 83 67 / 42%); }
+.runtime-telemetry span { color: #a19a89; font-size: 8px; font-weight: 700; letter-spacing: .04em; white-space: nowrap; }
+.runtime-telemetry b { overflow: hidden; color: #e4d9b7; font-size: 10px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 .runtime-telemetry div:first-child b { color: #b9d9a1; }
-.runtime-telemetry small { grid-column: 1 / -1; color: #625f57; font-size: 5px; line-height: 7px; text-align: center; }
+.runtime-telemetry small { grid-column: 1 / -1; color: #777369; font-size: 7px; line-height: 9px; text-align: center; }
 
 .map-teleport {
   position: fixed;
@@ -297,10 +297,10 @@ button, select { font: inherit; }
   box-shadow: 0 0 0 2px #090a0a, inset 0 0 7px #000;
 }
 .vital-orb::before, .vital-orb i { content: ""; position: absolute; inset: 0; background-image: inherit; }
-.vital-orb.is-hp { left: -82px; background-position: -419px -164px; }
+.vital-orb.is-hp { left: -103px; transform: scale(1.18); transform-origin: bottom right; background-position: -419px -164px; }
 .vital-orb.is-hp::before { background-position: -419px -164px; }
 .vital-orb.is-hp i { background-position: -419px -71px; clip-path: inset(var(--hp-empty, 0%) 0 0); }
-.vital-orb.is-mp { right: -82px; background-position: -325px -164px; }
+.vital-orb.is-mp { right: -103px; transform: scale(1.18); transform-origin: bottom left; background-position: -325px -164px; }
 .vital-orb.is-mp::before { background-position: -325px -164px; }
 .vital-orb.is-mp i { background-position: -325px -71px; clip-path: inset(var(--mp-empty, 0%) 0 0); }
 .vital-orb span { position: absolute; right: 0; bottom: 11px; left: 0; z-index: 2; color: #eee3be; font: 700 9px Tahoma, sans-serif; text-align: center; text-shadow: 1px 1px 2px #000; }
@@ -314,23 +314,22 @@ button, select { font: inherit; }
 }
 .player-readout {
   position: absolute;
-  bottom: 69px;
+  bottom: 6px;
   left: 103px;
-  width: 411px;
-  height: 34px;
-  padding: 3px 6px;
-  border: 1px solid #595448;
-  border-bottom: 0;
-  background: linear-gradient(90deg, rgb(12 14 14 / 96%), rgb(38 36 31 / 96%), rgb(12 14 14 / 96%));
-  box-shadow: inset 0 0 0 1px #0a0b0b;
+  width: 155px;
+  height: 47px;
+  padding: 3px 5px;
+  border: 0;
+  background: rgb(3 5 5 / 48%);
+  box-shadow: inset 0 0 6px rgb(0 0 0 / 72%);
 }
-.player-identity { position: absolute; top: -17px; left: 4px; display: flex; align-items: baseline; gap: 7px; text-shadow: 1px 1px #000; }
-.player-identity strong { color: #eee2bd; font-size: 10px; }
-.player-identity span { color: #d2b656; font-size: 9px; font-weight: 700; }
-.player-identity small { color: #8fbaa7; font-size: 8px; font-weight: 700; }
-.player-readout .hud-bar { height: 7px; margin: 1px 0; line-height: 5px; }
+.player-identity { position: absolute; top: -14px; left: 3px; display: flex; align-items: baseline; gap: 5px; max-width: 151px; text-shadow: 1px 1px #000; }
+.player-identity strong { overflow: hidden; max-width: 73px; color: #eee2bd; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.player-identity span { color: #d2b656; font-size: 8px; font-weight: 700; }
+.player-identity small { overflow: hidden; max-width: 49px; color: #8fbaa7; font-size: 7px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.player-readout .hud-bar { height: 10px; margin: 2px 0; line-height: 8px; }
 .player-readout .hud-bar b { position: absolute; z-index: 2; left: 3px; top: 0; width: 22px; color: rgb(255 255 255 / 72%); font-size: 6px; line-height: 5px; text-shadow: 1px 1px #000; }
-.player-readout .hud-bar > span { font-size: 6px; line-height: 5px; }
+.player-readout .hud-bar > span { font-size: 7px; line-height: 8px; }
 
 .classic-hotbar {
   position: absolute;
@@ -381,11 +380,31 @@ button, select { font: inherit; }
 .classic-hotbar .skill-name { position: absolute; right: 1px; bottom: 7px; left: 1px; z-index: 2; overflow: hidden; color: rgb(238 231 207 / 74%); font-size: 5px; line-height: 6px; text-align: center; text-overflow: clip; text-shadow: 1px 1px #000; white-space: nowrap; }
 .classic-hotbar .skill-cooldown { position: absolute; top: 1px; right: 2px; bottom: 8px; left: 1px; z-index: 3; border-top: 1px solid rgb(170 207 255 / 55%); background: rgb(1 6 14 / 76%); transform: scaleY(var(--cooldown, 0)); transform-origin: bottom; pointer-events: none; }
 .classic-hotbar button.is-cooling .skill-cooldown { transform: scaleY(var(--cooldown, 1)); }
-.classic-menu-labels { position: absolute; inset: auto 0 26px; display: flex; justify-content: space-between; padding: 0 27px; color: transparent; }
+.classic-menu-actions { position: absolute; inset: 0; pointer-events: none; }
+.classic-round-action {
+  position: absolute;
+  bottom: 4px;
+  width: 60px;
+  height: 60px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  outline: 0;
+  background: transparent;
+  color: transparent;
+  font-size: 1px;
+  pointer-events: auto;
+  cursor: pointer;
+}
+.classic-round-action.is-cc { left: 14px; }
+.classic-round-action.is-menu { right: 14px; }
+.classic-round-action:hover,
+.classic-round-action:focus-visible { box-shadow: inset 0 0 12px rgb(255 220 120 / 48%), 0 0 7px rgb(238 191 72 / 65%); }
+.classic-round-action.is-active { box-shadow: inset 0 0 15px rgb(104 255 74 / 43%), 0 0 8px rgb(139 222 72 / 68%); }
 
 .classic-chat-shell {
   position: fixed;
-  bottom: 4px;
+  bottom: 70px;
   left: 5px;
   z-index: 22;
   width: min(510px, calc(50vw - 312px));
@@ -403,27 +422,34 @@ button, select { font: inherit; }
   border-bottom: 0;
   background: linear-gradient(rgb(2 3 3 / 74%), rgb(5 6 6 / 42%));
 }
-.chat-tabs { position: absolute; top: 3px; left: 7px; z-index: 2; display: flex; gap: 2px; }
-.chat-tabs span { min-width: 44px; padding: 2px 6px; border: 1px solid #504c42; background: #111313; color: #77756e; font-size: 8px; text-align: center; }
-.chat-tabs span.is-active { border-color: #8c7744; color: #e2ca7e; }
+.chat-tabs { position: absolute; top: 3px; left: 7px; z-index: 2; display: flex; gap: 2px; pointer-events: auto; }
+.chat-tabs button { min-width: 48px; padding: 2px 6px; border: 1px solid #504c42; border-radius: 0; background: #111313; color: #77756e; font-size: 8px; text-align: center; cursor: pointer; }
+.chat-tabs button.is-active { border-color: #8c7744; background: #2a261c; color: #e2ca7e; }
 .combat-log { position: absolute; right: 9px; bottom: 57px; left: 9px; z-index: 2; display: flex; flex-direction: column; justify-content: flex-end; height: 92px; overflow: hidden; }
 .combat-log-line { margin: 1px 0; color: #ded9ca; font-size: 10px; line-height: 13px; }
 .combat-log-line.is-damage { color: #ff8981; }
 .combat-log-line.is-reward { color: #f0d36e; }
 .combat-log-line.is-system { color: #86c7d2; }
+.combat-log-line.is-chat strong { color: #f1e8d1; font-weight: 700; }
+.combat-log-line.is-chat-party strong { color: #8cccf0; }
+.combat-log-line.is-chat-guild strong { color: #9be081; }
+.combat-log-line.is-chat span { color: inherit; }
 .chat-frame { position: absolute; right: 0; bottom: 0; left: 0; height: 58px; background: url("/game-data/classic/ui/mainchat.png") left bottom/100% 58px no-repeat; }
-.chat-input { position: absolute; right: 52px; bottom: 17px; left: 51px; z-index: 2; display: flex; align-items: center; gap: 9px; overflow: hidden; height: 13px; font-size: 9px; white-space: nowrap; }
-.chat-input strong { color: #d7be73; }
-.chat-input span { color: #777970; }
+.chat-input { position: absolute; right: 52px; bottom: 16px; left: 51px; z-index: 3; display: grid; grid-template-columns: 48px minmax(0, 1fr); align-items: center; gap: 6px; overflow: hidden; height: 16px; font-size: 9px; white-space: nowrap; pointer-events: auto; }
+.chat-input button { overflow: hidden; height: 14px; padding: 0 3px; border: 0; border-right: 1px solid #63583f; border-radius: 0; background: transparent; color: #d7be73; font: 700 8px Tahoma, sans-serif; text-overflow: ellipsis; cursor: pointer; }
+.chat-input input { min-width: 0; height: 15px; padding: 0 2px; border: 0; outline: 0; background: transparent; color: #eee9dc; font: 9px Tahoma, sans-serif; text-shadow: 1px 1px #000; caret-color: #f2d572; }
+.chat-input input::placeholder { color: #777970; opacity: 1; }
+.classic-chat-shell.is-chatting .chat-frame { filter: brightness(1.16); }
+.classic-chat-shell.is-chatting .chat-input { box-shadow: inset 0 -1px #9a824a; }
 
 .character-panel {
   position: fixed;
-  top: 50%;
+  top: 46%;
   left: 12px;
   z-index: 36;
   width: 226px;
   height: 417px;
-  transform: translate(-120%, -50%);
+  transform: translate(-120%, -50%) scale(1.26);
   transform-origin: center left;
   background: url("/game-data/classic/ui/character.png") 0 0/256px 512px no-repeat;
   filter: drop-shadow(4px 5px 3px rgb(0 0 0 / 72%));
@@ -435,7 +461,7 @@ button, select { font: inherit; }
   transition: transform .16s ease-out, opacity .16s, visibility .16s;
   pointer-events: auto;
 }
-.character-panel.is-visible { transform: translate(0, -50%); opacity: 1; visibility: visible; }
+.character-panel.is-visible { transform: translate(0, -50%) scale(1.26); opacity: 1; visibility: visible; }
 .character-panel header {
   position: absolute;
   top: 4px;
@@ -568,94 +594,61 @@ button, select { font: inherit; }
 .character-panel footer kbd { color: #d7bd72; font: 700 8px Tahoma, sans-serif; }
 
 .inventory-preview {
-  position: fixed;
-  top: 50%;
-  right: 250px;
-  z-index: 34;
-  width: 190px;
-  height: 248px;
-  transform: translate(18px, -50%);
-  border: 2px ridge #6d6556;
-  background: transparent;
-  box-shadow: inset 0 0 0 1px #060707, 4px 5px 3px rgb(0 0 0 / 55%);
+  position: absolute;
+  top: var(--inventory-preview-top, 292px);
+  left: var(--inventory-preview-left, 30px);
+  z-index: 8;
+  width: 112px;
+  height: 112px;
+  transform: translate(-50%, -50%) scale(.38);
+  transform-origin: center;
   opacity: 0;
   visibility: hidden;
-  transition: transform .16s ease-out, opacity .16s, visibility .16s;
+  transition: transform .14s ease-out, opacity .1s, visibility .14s;
   pointer-events: none;
 }
-.inventory-preview.is-inventory-visible { transform: translate(0, -50%); opacity: 1; visibility: visible; }
-.inventory-preview header {
-  height: 21px;
-  padding: 5px 7px 0;
-  border-bottom: 1px solid #514a3e;
-  background: linear-gradient(90deg, rgb(64 51 35 / 88%), rgb(17 19 18 / 72%));
-  color: #dec785;
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: .08em;
-  text-shadow: 1px 1px #000;
-}
+.inventory-preview.is-inventory-visible.has-item { transform: translate(-50%, -50%) scale(1); opacity: 1; visibility: visible; }
 .inventory-preview-viewport {
   position: relative;
   display: grid;
   place-items: center;
-  width: 172px;
-  height: 181px;
-  margin: 7px 7px 4px;
+  width: 112px;
+  height: 112px;
+  margin: 0;
   overflow: hidden;
-  border: 1px solid rgb(124 111 84 / 72%);
   background: transparent;
-  box-shadow: inset 0 0 16px rgb(0 0 0 / 65%), 0 0 0 1px #050606;
+  filter: drop-shadow(2px 3px 2px rgb(0 0 0 / 78%));
 }
-.inventory-preview:not(.is-model) .inventory-preview-viewport { background: #070a0b; }
-.inventory-preview-viewport::after {
-  content: "";
+.inventory-preview-canvas {
   position: absolute;
   inset: 0;
-  z-index: 2;
-  background: radial-gradient(circle, transparent 48%, rgb(0 0 0 / 44%) 100%);
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 .inventory-preview-fallback {
   position: relative;
   z-index: 1;
   display: none;
   place-items: center;
-  width: 140px;
-  height: 140px;
+  width: 105px;
+  height: 105px;
+  background-repeat: no-repeat;
   color: #d9c879;
-  font: 700 28px Tahoma, sans-serif;
+  font: 700 22px Tahoma, sans-serif;
   text-shadow: 2px 2px #000;
 }
 .inventory-preview.is-fallback .inventory-preview-fallback { display: grid; }
 .inventory-preview-fallback.has-classic-icon { image-rendering: auto; }
-.inventory-preview > strong,
-.inventory-preview > small {
-  display: block;
-  overflow: hidden;
-  margin: 0 8px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  text-shadow: 1px 1px #000;
-}
-.inventory-preview > strong { color: #e4d7b6; font-size: 9px; }
-.inventory-preview > small { margin-top: 2px; color: #7f7a6f; font-size: 7px; text-transform: uppercase; }
-.inventory-preview.is-loading .inventory-preview-viewport::before {
-  content: "CARREGANDO…";
-  position: absolute;
-  z-index: 3;
-  color: #8e856f;
-  font-size: 7px;
-  letter-spacing: .08em;
-}
-
 .inventory-panel {
   position: fixed;
   top: 50%;
   right: 12px;
   z-index: 35;
-  width: 229px;
-  height: 512px;
-  transform: translate(120%, -50%);
+  width: 227px;
+  height: 421px;
+  transform: translate(120%, -50%) scale(1.26);
   transform-origin: center right;
   background: url("/game-data/classic/ui/inventory.png") 0 0/229px 512px no-repeat;
   filter: drop-shadow(4px 5px 3px rgb(0 0 0 / 70%));
@@ -664,21 +657,79 @@ button, select { font: inherit; }
   transition: transform .16s ease-out, opacity .16s, visibility .16s;
   pointer-events: auto;
 }
-.inventory-panel.is-visible { transform: translate(0, -50%); opacity: 1; visibility: visible; }
-.inventory-panel header { position: absolute; top: 8px; left: 36px; display: flex; align-items: center; justify-content: center; width: 158px; height: 19px; color: #f3dfaf; text-align: center; text-shadow: 1px 1px #000; }
-.inventory-panel header strong { font-size: 10px; letter-spacing: .08em; }
-.inventory-panel header button { position: absolute; top: -4px; right: -27px; width: 19px; height: 19px; padding: 0; border: 1px outset #716758; border-radius: 0; background: #242321; color: #d1c5ac; font-size: 13px; line-height: 15px; cursor: pointer; }
-.inventory-panel header button:hover { color: #fff1b8; }
-.inventory-caption { position: absolute; top: 33px; left: 16px; color: #887f6b; font-size: 8px; text-transform: uppercase; }
+.inventory-panel.is-visible { transform: translate(0, -50%) scale(1.26); opacity: 1; visibility: visible; }
+.inventory-panel header { position: absolute; top: 5px; left: 64px; z-index: 10; display: flex; align-items: center; justify-content: center; width: 90px; height: 16px; color: #f3dfaf; text-align: center; text-shadow: 1px 1px #000; }
+.inventory-panel header strong { font-size: 9px; font-weight: 400; }
+.inventory-panel header button { position: absolute; top: 392px; left: 135px; width: 19px; height: 17px; padding: 0; border: 0; border-radius: 0; background: url("/game-data/classic/ui/character.png") 0 -436px/256px 512px no-repeat; color: transparent; font-size: 0; cursor: pointer; }
+.inventory-panel header button:hover { background-position: -19px -436px; }
+.inventory-equipment {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+.equipment-slot {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 35px;
+  height: 35px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: #ded8c9;
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: none;
+}
+.equipment-slot:hover { border-color: rgb(210 185 95 / 70%); box-shadow: inset 0 0 5px #8a6421; }
+.equipment-slot.is-selected { border-color: #ffe58a; box-shadow: inset 0 0 7px #b47a16, 0 0 5px rgb(255 219 106 / 76%); }
+.equipment-slot[data-equipment-slot="mount"] { top: 36px; left: 13px; }
+.equipment-slot[data-equipment-slot="helmet"] { top: 37px; left: 98px; }
+.equipment-slot[data-equipment-slot="cape"] { top: 37px; left: 183px; }
+.equipment-slot[data-equipment-slot="leftHand"] { top: 60px; left: 56px; }
+.equipment-slot[data-equipment-slot="rightHand"] { top: 60px; left: 140px; }
+.equipment-slot[data-equipment-slot="costume"] { top: 80px; left: 13px; }
+.equipment-slot[data-equipment-slot="familiar"] { top: 81px; left: 183px; }
+.equipment-slot[data-equipment-slot="armor"] { top: 91px; left: 98px; }
+.equipment-slot[data-equipment-slot="gloves"] { top: 120px; left: 55px; }
+.equipment-slot[data-equipment-slot="ring"] { top: 125px; left: 13px; }
+.equipment-slot[data-equipment-slot="necklace"] { top: 124px; left: 183px; }
+.equipment-slot[data-equipment-slot="pants"] { top: 145px; left: 98px; }
+.equipment-slot[data-equipment-slot="boots"] { top: 169px; left: 140px; }
+.equipment-slot[data-equipment-slot="orb"] { top: 170px; left: 13px; }
+.equipment-slot[data-equipment-slot="cabuncle"] { top: 170px; left: 183px; }
+.inventory-visual-controls {
+  position: absolute;
+  top: 30px;
+  right: calc(100% + 5px);
+  z-index: 12;
+  color: #9f906d;
+  font-size: 8px;
+}
+.inventory-visual-controls summary {
+  min-width: 43px;
+  padding: 2px 4px;
+  border: 1px solid #615746;
+  background: #171715;
+  color: #bfa86d;
+  text-align: center;
+  text-transform: uppercase;
+  cursor: pointer;
+  list-style: none;
+}
+.inventory-visual-controls summary::-webkit-details-marker { display: none; }
+.inventory-visual-controls[open] summary { color: #ffdf84; box-shadow: inset 0 0 5px #5d4617; }
 .inventory-outfit {
   position: absolute;
-  top: 148px;
-  right: 12px;
-  left: 12px;
+  top: 22px;
+  right: 0;
   display: grid;
   grid-template-columns: 64px 1fr;
   gap: 3px 5px;
   align-items: center;
+  width: 203px;
   padding: 5px 6px;
   border: 1px solid rgb(91 82 65 / 72%);
   background: rgb(7 8 8 / 86%);
@@ -705,37 +756,36 @@ button, select { font: inherit; }
 }
 .inventory-grid {
   position: absolute;
-  top: 275px;
-  left: 11px;
+  top: 220px;
+  left: 14px;
+  z-index: 4;
   display: grid;
-  grid-template-columns: repeat(5, 38px);
-  grid-auto-rows: 34px;
-  gap: 4px;
-  width: 206px;
-  max-height: 140px;
-  overflow-y: auto;
-  scrollbar-color: #7a6842 #111;
-  scrollbar-width: thin;
+  grid-template-columns: repeat(5, 41px);
+  grid-auto-rows: 41.333px;
+  width: 205px;
+  height: 123px;
+  overflow: visible;
 }
 .inventory-slot {
   position: relative;
   display: grid;
   place-items: center;
-  width: 38px;
-  height: 34px;
+  width: 41px;
+  height: 41px;
   padding: 0;
-  border: 1px solid rgb(121 111 94 / 72%);
+  border: 1px solid transparent;
   border-radius: 0;
-  background: linear-gradient(135deg, rgb(55 55 52 / 88%), rgb(11 13 14 / 92%));
+  background: transparent;
   color: #ded8c9;
-  box-shadow: inset 1px 1px 2px #050505;
   cursor: pointer;
+  touch-action: none;
 }
 .inventory-slot:hover { border-color: #d2b95f; box-shadow: inset 0 0 5px #8a6421; }
+.inventory-slot.is-selected { border-color: #ffe58a; box-shadow: inset 0 0 7px #b47a16, 0 0 5px rgb(255 219 106 / 76%); }
 .classic-hotbar button:disabled { filter: grayscale(1); opacity: .38; cursor: default; }
 .inventory-slot.rarity-uncommon { border-color: #56885b; }
 .inventory-slot.rarity-rare { border-color: #557fb8; }
-.inventory-item-icon { position: absolute; top: -1px; left: 1px; display: block; width: 35px; height: 35px; background-repeat: no-repeat; }
+.inventory-item-icon { position: absolute; top: 0; left: 0; display: block; width: 35px; height: 35px; background-repeat: no-repeat; pointer-events: none; }
 
 .skill-panel {
   position: fixed;
@@ -864,11 +914,85 @@ button, select { font: inherit; }
 .skill-catalog-entry > b { align-self: start; color: #766f60; font-size: 7px; text-align: right; }
 .inventory-slot.rarity-epic { border-color: #8f5aa8; }
 .inventory-item-mark { color: #e7ddc2; font: 700 9px Tahoma, sans-serif; text-shadow: 1px 1px #000; }
+.inventory-item-refinement { position: absolute; bottom: 1px; left: 2px; z-index: 3; color: #f3f1e8; font: 700 8px/9px Tahoma, sans-serif; text-shadow: 1px 1px #000; pointer-events: none; }
+.inventory-item-refinement.is-high { color: #fff36f; }
 .inventory-slot small { position: absolute; right: 2px; bottom: 1px; color: #fff3aa; font-size: 8px; text-shadow: 1px 1px #000; }
-.inventory-gold { position: absolute; right: 16px; bottom: 92px; left: 16px; display: flex; justify-content: space-between; color: #b99d4e; font-size: 9px; pointer-events: none; }
-.inventory-gold b { color: #f0cf5c; font-variant-numeric: tabular-nums; }
-.inventory-panel > p { position: absolute; right: 8px; bottom: 50px; left: 8px; margin: 0; color: #6f6b63; font-size: 8px; text-align: center; }
+.inventory-bags {
+  position: absolute;
+  top: 352px;
+  left: 15px;
+  z-index: 5;
+  display: grid;
+  grid-template-columns: repeat(4, 33px);
+  gap: 8px;
+}
+.inventory-bags button {
+  position: relative;
+  width: 33px;
+  height: 33px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 0;
+  background: url("/game-data/classic/ui/inventory.png") -77px -425px/229px 512px no-repeat;
+  cursor: pointer;
+}
+.inventory-bags button:hover { background-position: -113px -425px; }
+.inventory-bags button.is-active {
+  background-position: -113px -425px;
+}
+.inventory-bags button span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+.inventory-drag-ghost {
+  position: fixed !important;
+  z-index: 200 !important;
+  width: 41px !important;
+  height: 41px !important;
+  margin: 0 !important;
+  border-color: #ffe58a !important;
+  background: rgb(20 19 16 / 82%) !important;
+  box-shadow: inset 0 0 7px #b47a16, 2px 3px 5px rgb(0 0 0 / 70%) !important;
+  opacity: .88;
+  pointer-events: none !important;
+}
+.inventory-panel.is-dragging, .inventory-panel.is-dragging * { cursor: grabbing !important; }
+.inventory-slot.is-drag-source, .equipment-slot.is-drag-source { opacity: .38; }
+.inventory-panel.is-carrying .inventory-slot.is-selected > *,
+.inventory-panel.is-carrying .equipment-slot.is-selected > * { opacity: .22; }
+.inventory-gold { position: absolute; top: 394px; left: 110px; display: flex; align-items: center; justify-content: flex-end; width: 74px; height: 18px; color: #b99d4e; font-size: 9px; pointer-events: none; }
+.inventory-gold span { display: none; }
+.inventory-gold b { overflow: hidden; color: #f0cf5c; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
+.inventory-panel > p { display: none; }
 .inventory-panel > p kbd { padding: 0 2px; }
+
+.game-menu-panel {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 41;
+  display: grid;
+  gap: 5px;
+  width: 252px;
+  padding: 7px 8px 10px;
+  transform: translate(-50%, -47%) scale(.97);
+  border: 2px ridge #756b58;
+  background: linear-gradient(145deg, rgb(45 39 31 / 98%), rgb(8 10 10 / 98%) 48%, rgb(27 25 21 / 98%));
+  box-shadow: inset 0 0 0 1px #070808, 5px 7px 8px rgb(0 0 0 / 72%);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity .14s, transform .14s, visibility .14s;
+}
+.game-menu-panel.is-visible { transform: translate(-50%, -50%) scale(1); opacity: 1; visibility: visible; }
+.game-menu-panel header { display: flex; align-items: center; justify-content: space-between; height: 24px; padding: 0 3px 5px 7px; border-bottom: 1px solid #665a43; color: #eed9a4; font-size: 10px; letter-spacing: .09em; text-shadow: 1px 1px #000; }
+.game-menu-panel header button { width: 19px; height: 19px; padding: 0; border: 1px outset #716758; border-radius: 0; background: #242321; color: #d1c5ac; line-height: 15px; cursor: pointer; }
+.game-menu-panel > button { display: flex; align-items: center; justify-content: space-between; min-height: 29px; padding: 5px 9px; border: 1px solid #514b40; border-radius: 0; background: linear-gradient(#2d2c27, #121414); color: #ded5bf; font: 9px Tahoma, sans-serif; text-align: left; text-shadow: 1px 1px #000; cursor: pointer; }
+.game-menu-panel > button:hover { border-color: #a58a4d; background: linear-gradient(#52452f, #1b1a16); color: #f6e6ba; }
+.game-menu-panel kbd { color: #ceb465; font: 700 8px Tahoma, sans-serif; }
+.game-menu-panel small { padding: 4px 5px 0; color: #777268; font-size: 7px; line-height: 10px; text-align: center; }
 
 .controls-hint {
   position: fixed;
@@ -889,23 +1013,22 @@ button, select { font: inherit; }
 
 @media (max-width: 1240px) {
   .classic-chat-shell { width: calc(50vw - 312px); min-width: 0; }
-  .chat-input span { display: none; }
 }
 
 @media (max-width: 1040px) {
-  .classic-chat-shell { display: none; }
+  .classic-chat-shell { bottom: 65px; display: block; width: min(440px, calc(100vw - 10px)); min-width: 0; height: 145px; }
+  .classic-chat-shell::before { inset: 20px 3px 53px; }
+  .combat-log { height: 64px; }
   .map-teleport { width: 270px; }
   .classic-window-title small, .map-teleport-meta span:first-child { display: none; }
   .vital-orb { display: none; }
 }
 
 @media (max-height: 680px) {
-  .character-panel { transform: translate(-120%, -50%) scale(.82); }
-  .character-panel.is-visible { transform: translate(0, -50%) scale(.82); }
-  .inventory-preview { right: 201px; transform: translate(18px, -50%) scale(.82); transform-origin: center right; }
-  .inventory-preview.is-inventory-visible { transform: translate(0, -50%) scale(.82); }
-  .inventory-panel { transform: translate(120%, -50%) scale(.82); }
-  .inventory-panel.is-visible { transform: translate(0, -50%) scale(.82); }
+  .character-panel { top: 50%; transform: translate(-120%, -50%) scale(.9); }
+  .character-panel.is-visible { transform: translate(0, -50%) scale(.9); }
+  .inventory-panel { top: 50%; transform: translate(120%, -50%) scale(.9); }
+  .inventory-panel.is-visible { transform: translate(0, -50%) scale(.9); }
   .minimap-panel canvas { width: 132px; height: 132px; }
   .minimap-panel { width: 148px; }
   .map-teleport { width: min(270px, calc(100vw - 175px)); }
@@ -923,26 +1046,29 @@ button, select { font: inherit; }
   .target-heading { right: 46px; left: 46px; }
   .hud-bar.is-target { left: 44px; width: 322px; }
   .character-panel { left: 5px; }
-  .inventory-preview { right: 239px; transform: translate(18px, -50%) scale(.78); transform-origin: center right; }
-  .inventory-preview.is-inventory-visible { transform: translate(0, -50%) scale(.78); }
   .inventory-panel { right: 5px; }
 }
 
 @media (max-width: 500px) {
   .player-status { transform: translateX(-50%) scale(.61); }
-  .map-teleport { width: calc(100vw - 120px); }
+  .map-teleport { width: calc(100vw - 148px); }
   .map-teleport label { display: none; }
   .map-teleport select { height: 21px; }
-  .minimap-panel { width: 104px; }
-  .minimap-panel canvas { width: 88px; height: 88px; }
+  .minimap-panel { width: 132px; }
+  .minimap-panel canvas { width: 116px; height: 116px; }
+  .runtime-telemetry { gap: 3px 7px; padding: 6px 7px; }
+  .runtime-telemetry span { font-size: 7px; }
+  .runtime-telemetry b { font-size: 9px; }
+  .runtime-telemetry small { display: none; }
   .location-panel strong { display: none; }
   .target-status { top: 92px; width: 340px; background-size: 340px 39px; }
   .target-heading { top: 3px; right: 38px; left: 38px; }
   .hud-bar.is-target { top: 19px; left: 36px; width: 268px; height: 9px; }
-  .character-panel { transform: translate(-120%, -50%) scale(.76); }
-  .character-panel.is-visible { transform: translate(0, -50%) scale(.76); }
-  .inventory-preview { right: 184px; transform: translate(18px, -50%) scale(.76); }
-  .inventory-preview.is-inventory-visible { transform: translate(0, -50%) scale(.76); }
-  .inventory-panel { transform: translate(120%, -50%) scale(.76); }
-  .inventory-panel.is-visible { transform: translate(0, -50%) scale(.76); }
+  .character-panel { top: 50%; transform: translate(-120%, -50%) scale(.78); }
+  .character-panel.is-visible { transform: translate(0, -50%) scale(.78); }
+  .inventory-panel { top: 50%; transform: translate(120%, -50%) scale(.78); }
+  .inventory-panel.is-visible { transform: translate(0, -50%) scale(.78); }
+  .classic-chat-shell { bottom: 52px; height: 128px; }
+  .classic-chat-shell::before { bottom: 52px; }
+  .combat-log { bottom: 56px; height: 48px; }
 }

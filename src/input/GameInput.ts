@@ -24,8 +24,8 @@ export class GameInput {
 
   constructor(private readonly element: HTMLElement) {
     window.addEventListener("keydown", (event) => {
-      this.#keys.add(event.code);
       if (isTextEntry(event.target)) return;
+      this.#keys.add(event.code);
       if (event.code === "KeyG" && !event.repeat) this.onSpeedToggle?.();
       if (event.code === "KeyI" && !event.repeat) this.onInventoryToggle?.();
       if (event.code === "KeyC" && !event.repeat) this.onCharacterToggle?.();
@@ -43,6 +43,9 @@ export class GameInput {
     window.addEventListener("mousemove", this.mouseMove);
     window.addEventListener("mouseup", this.mouseUp);
     window.addEventListener("blur", this.resetTransientState);
+    window.addEventListener("focusin", (event) => {
+      if (isTextEntry(event.target)) this.resetTransientState();
+    });
     element.addEventListener("wheel", this.wheel, { passive: false });
   }
 

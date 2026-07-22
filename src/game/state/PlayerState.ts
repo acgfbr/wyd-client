@@ -1,5 +1,26 @@
 export type ItemRarity = "common" | "uncommon" | "rare" | "epic";
 
+/** Slots lógicos do equipamento clássico, independentes da posição visual no HUD. */
+export const EQUIPMENT_SLOTS = [
+  "helmet",
+  "armor",
+  "pants",
+  "gloves",
+  "boots",
+  "leftHand",
+  "rightHand",
+  "ring",
+  "necklace",
+  "orb",
+  "cabuncle",
+  "costume",
+  "familiar",
+  "mount",
+  "cape",
+] as const;
+
+export type EquipmentSlot = typeof EQUIPMENT_SLOTS[number];
+
 export interface InventoryItem {
   readonly key: string;
   readonly name: string;
@@ -8,10 +29,17 @@ export interface InventoryItem {
   readonly maxStack: number;
   readonly value: number;
   readonly kind: "consumable" | "equipment" | "material" | "quest";
+  /** Slot aceito por este equipamento. Ausente para itens que não podem ser equipados. */
+  readonly equipSlot?: EquipmentSlot;
   /** ItemList index used to resolve the exact classic icon atlas cell. */
   readonly classicIndex?: number;
   /** MeshList type rendered by the optional shared-renderer inventory preview. */
   readonly previewModelType?: number;
+  /** Refinamento dinâmico do STRUCT_ITEM (sSanc), exibido como no grid clássico. */
+  readonly refinement?: number;
+  readonly ancient?: boolean;
+  /** Segunda textura usada pelo passe clássico MODULATE2X + ADDSMOOTH. */
+  readonly refinementTextureIndex?: number;
   readonly heal?: number;
   readonly mana?: number;
 }
@@ -20,6 +48,11 @@ export interface InventoryStack {
   readonly item: InventoryItem;
   quantity: number;
 }
+
+export type EquipmentSnapshot = Readonly<Record<
+  EquipmentSlot,
+  Readonly<InventoryStack> | null
+>>;
 
 export type PrimaryAttribute = "str" | "int" | "dex" | "con";
 
@@ -54,6 +87,7 @@ export interface PlayerSnapshot {
   readonly coins: number;
   readonly alive: boolean;
   readonly inventory: readonly (Readonly<InventoryStack> | null)[];
+  readonly equipment: EquipmentSnapshot;
 }
 
 export interface RewardSummary {
@@ -65,7 +99,9 @@ export interface RewardSummary {
   readonly attributePointsGained: number;
 }
 
-const INVENTORY_SIZE = 30;
+export const INVENTORY_BAG_COUNT = 4;
+export const INVENTORY_BAG_SIZE = 15;
+export const INVENTORY_SIZE = INVENTORY_BAG_COUNT * INVENTORY_BAG_SIZE;
 const OFFLINE_ATTACK_PER_LEVEL = 3;
 /** Explicit frontend mock; callers may override it through OfflineProgressionOptions. */
 export const DEFAULT_OFFLINE_ATTRIBUTE_POINTS_PER_LEVEL = 5;
@@ -123,6 +159,7 @@ export const CLASSIC_CUMULATIVE_EXPERIENCE = [
 export class PlayerState {
   readonly #listeners = new Set<(snapshot: PlayerSnapshot) => void>();
   readonly #inventory: (InventoryStack | null)[] = Array.from({ length: INVENTORY_SIZE }, () => null);
+  readonly #equipment = createEmptyEquipment();
   #level = 1;
   #experience = 0;
   #hp = 260;
@@ -156,7 +193,7 @@ export class PlayerState {
       previewModelType: 53,
       heal: 50,
     }, 5, false);
-    this.addItem({
+    const skytalos: InventoryItem = {
       key: "skytalos-ancient-2551-plus15",
       name: "Skytalos(Anct) +15",
       description: "Arco Ancient da Huntress · Item #2551 · refinação +15 · equipado.",
@@ -164,10 +201,14 @@ export class PlayerState {
       maxStack: 1,
       value: 280_000,
       kind: "equipment",
+      equipSlot: "leftHand",
       classicIndex: 2551,
       previewModelType: 762,
-    }, 1, false);
-    this.addItem({
+      refinement: 15,
+      ancient: true,
+      refinementTextureIndex: 165,
+    };
+    const mulherKalintz: InventoryItem = {
       key: "costume-mulher-kalintz-4156",
       name: "Mulher Kalintz",
       description: "Traje clássico feminino · Item #4156 · padrão da Huntress.",
@@ -175,9 +216,36 @@ export class PlayerState {
       maxStack: 1,
       value: 350_000,
       kind: "equipment",
+      equipSlot: "costume",
       classicIndex: 4156,
       previewModelType: 2883,
-    }, 1, false);
+    };
+    const unicornio: InventoryItem = {
+      key: "mount-unicornio-2381-level-120",
+      name: "Unicórnio Lv. 120",
+      description: "Montaria clássica da Huntress · Item #2381 · nível 120.",
+      rarity: "epic",
+      maxStack: 1,
+      value: 500_000,
+      kind: "equipment",
+      equipSlot: "mount",
+      classicIndex: 2381,
+    };
+    const griupan: InventoryItem = {
+      key: "familiar-griupan-1726",
+      name: "Griupan",
+      description: "Familiar clássico com efeito de nível 5 · Item #1726.",
+      rarity: "rare",
+      maxStack: 1,
+      value: 250_000,
+      kind: "equipment",
+      equipSlot: "familiar",
+      classicIndex: 1726,
+    };
+    this.#equipment.leftHand = { item: skytalos, quantity: 1 };
+    this.#equipment.costume = { item: mulherKalintz, quantity: 1 };
+    this.#equipment.mount = { item: unicornio, quantity: 1 };
+    this.#equipment.familiar = { item: griupan, quantity: 1 };
   }
 
   get snapshot(): PlayerSnapshot {
@@ -204,6 +272,7 @@ export class PlayerState {
       coins: this.#coins,
       alive: this.#hp > 0,
       inventory: this.#inventory.map((stack) => stack ? { item: stack.item, quantity: stack.quantity } : null),
+      equipment: snapshotEquipment(this.#equipment),
     };
   }
 
@@ -325,6 +394,78 @@ export class PlayerState {
     return added;
   }
 
+  /** Moves, merges or swaps two positions in the flattened four-bag inventory. */
+  moveInventoryItem(from: number, to: number): boolean {
+    if (!isInventorySlot(from) || !isInventorySlot(to)) return false;
+    const source = this.#inventory[from];
+    if (!source) return false;
+    if (from === to) return true;
+
+    const destination = this.#inventory[to];
+    if (!destination) {
+      this.#inventory[to] = source;
+      this.#inventory[from] = null;
+      this.emit();
+      return true;
+    }
+
+    if (destination.item.key === source.item.key) {
+      const maxStack = Math.max(1, Math.trunc(destination.item.maxStack));
+      const moved = Math.min(source.quantity, Math.max(0, maxStack - destination.quantity));
+      if (moved > 0) {
+        destination.quantity += moved;
+        source.quantity -= moved;
+        if (source.quantity <= 0) this.#inventory[from] = null;
+        this.emit();
+        return true;
+      }
+    }
+
+    this.#inventory[from] = destination;
+    this.#inventory[to] = source;
+    this.emit();
+    return true;
+  }
+
+  /** Equips an item and atomically puts the previous occupant back in its bag slot. */
+  equipInventorySlot(slot: number): boolean {
+    if (!isInventorySlot(slot)) return false;
+    const stack = this.#inventory[slot];
+    const equipmentSlot = stack?.item.equipSlot;
+    if (
+      !stack
+      || stack.item.kind !== "equipment"
+      || !isEquipmentSlot(equipmentSlot)
+    ) return false;
+
+    const previouslyEquipped = this.#equipment[equipmentSlot];
+    this.#equipment[equipmentSlot] = stack;
+    this.#inventory[slot] = previouslyEquipped;
+    this.emit();
+    return true;
+  }
+
+  /**
+   * Returns an equipped item to a preferred free position, or the first free
+   * position in any bag. A full inventory leaves both sides untouched.
+   */
+  unequipEquipmentSlot(slot: EquipmentSlot, preferredBagSlot?: number): boolean {
+    if (!isEquipmentSlot(slot)) return false;
+    if (preferredBagSlot !== undefined && !isInventorySlot(preferredBagSlot)) return false;
+    const equipped = this.#equipment[slot];
+    if (!equipped) return false;
+
+    const destination = preferredBagSlot !== undefined && !this.#inventory[preferredBagSlot]
+      ? preferredBagSlot
+      : this.#inventory.findIndex((stack) => stack === null);
+    if (destination < 0) return false;
+
+    this.#inventory[destination] = equipped;
+    this.#equipment[slot] = null;
+    this.emit();
+    return true;
+  }
+
   useInventorySlot(slot: number): boolean {
     const stack = this.#inventory[slot];
     if (!stack || stack.item.kind !== "consumable" || !this.snapshot.alive) return false;
@@ -362,6 +503,32 @@ function clampWholeNumber(value: number, minimum: number, maximum: number): numb
 
 function isPrimaryAttribute(value: string): value is PrimaryAttribute {
   return value === "str" || value === "int" || value === "dex" || value === "con";
+}
+
+function isInventorySlot(slot: number): boolean {
+  return Number.isInteger(slot) && slot >= 0 && slot < INVENTORY_SIZE;
+}
+
+function isEquipmentSlot(value: unknown): value is EquipmentSlot {
+  return typeof value === "string" && (EQUIPMENT_SLOTS as readonly string[]).includes(value);
+}
+
+function createEmptyEquipment(): Record<EquipmentSlot, InventoryStack | null> {
+  return Object.fromEntries(EQUIPMENT_SLOTS.map((slot) => [slot, null])) as Record<
+    EquipmentSlot,
+    InventoryStack | null
+  >;
+}
+
+function snapshotEquipment(
+  equipment: Readonly<Record<EquipmentSlot, InventoryStack | null>>,
+): EquipmentSnapshot {
+  const snapshot = createEmptyEquipment();
+  for (const slot of EQUIPMENT_SLOTS) {
+    const stack = equipment[slot];
+    snapshot[slot] = stack ? { item: stack.item, quantity: stack.quantity } : null;
+  }
+  return snapshot;
 }
 
 function classicCumulativeExperienceAt(levelIndex: number): number {

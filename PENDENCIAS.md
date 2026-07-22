@@ -31,12 +31,34 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
   persistem por `180 s`, com efeitos suavizados; a passiva `#101` acrescenta
   alcance e acopla o `SForce` clássico aos ataques.
 - HUD clássico, minimapa, seletor de mapas, câmera, zoom e modo G estão ligados.
+  A composição inferior passou a usar a proporção da interface 7.54: trilho em
+  toda a base, orbes nos cantos, readout compacto dentro da barra e áreas reais
+  de clique sobre `C.C` e `MENU`. O chat abre com `Enter`, envia/fecha com
+  `Enter`, cancela com `Esc`, guarda as cinco últimas mensagens e alterna entre
+  Geral/Grupo/Guild; `=` e `-` mantêm os prefixos do `SEditableText` clássico.
 - A janela `C` usa `character2.wyt`, mostra progressão/atributos e distribui os
   pontos do mock offline. A tabela acumulada de EXP possui os 403 valores
   exatos de `g_pNextLevel` do cliente.
-- Os 14 atlas `itemicon01..14`, a tabela `itemicon.bin` e o preview 3D giratório
-  do inventário estão integrados; o preview compartilha renderer e cache de
-  modelos com o mundo.
+- Os 14 atlas `itemicon01..14`, a tabela `itemicon.bin` e a seleção 3D giratória
+  do inventário estão integrados. O ícone permanece em `35×35`; um clique
+  expande o mesh e o prende ao cursor, o movimento do mouse carrega o item e o
+  próximo clique solta/move/equipa. Clicar novamente na origem cancela e hover
+  isolado não abre nada. Não existe popup, fundo ou janela extra.
+  A cena usa um canvas transparente pequeno e compartilha o cache de modelos
+  com o mundo. Itens refinados exibem `+N` no grid. O Skytalos Ancient
+  +15 também reproduz no preview o emissivo de `TMMesh::RenderForUI` e a segunda
+  textura `165` com UV de 4 s e composição `MODULATE2X + ADDSMOOTH`.
+- O inventário 7.54 agora usa o recorte real `227×421` do atlas, quatro bolsas
+  sobrepostas de `5×3` (offsets `0/15/30/45`) e as quatro abas originais. Os 15
+  slots ativos de equipamento seguem IDs, coordenadas e máscaras de
+  `FieldScene2.bin`; não há mais grid de 60 células rolável nem o restante do
+  atlas aparecendo como fundo. Pointer Events permitem mover, combinar e trocar
+  itens com mouse ou touch; o fluxo clássico clique–cursor–clique também move
+  entre bolsas sem manter botão pressionado. É possível equipar por drop/duplo
+  clique e desequipar para um espaço vazio. Skytalos, Mulher Kalintz, Unicórnio
+  Lv. 120 e Griupan começam
+  nos slots correspondentes; arma, traje, montaria e familiar também atualizam
+  o modelo do personagem ao equipar/retirar.
 - Abaixo do minimapa, a telemetria agrega FPS, heap JS quando disponível e o
   tempo/ocupação da callback principal como proxy explicitamente não-CPU.
 - Build TypeScript/Vite verde em 22/07/2026.
@@ -162,15 +184,27 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
    não inventar essas regras no cliente antes da camada de servidor/áudio.
 10. NPCs, diálogo, lojas, portais, equipamento, inventário e loot — **parcial**.
     O inventário atual usa os sprites reais resolvidos por `itemicon.bin`; os
-    14 atlas foram importados e itens com malha exibem preview 3D giratório,
-    com sprite clássico ampliado como fallback. Poção, Skytalos e Mulher
-    Kalintz já apontam para seus modelos reais. NPCs amistosos antes congelados
+    14 atlas foram importados e itens com malha expandem em 3D sobre o próprio
+    slot somente após clique, acompanha o cursor até o próximo clique e não usa
+    painel separado; o sprite clássico ampliado é o fallback. As quatro bolsas,
+    os 15 slots por página, os 15 slots reais
+    de equipamento, drag/drop, merge/swap e equipar/desequipar estão funcionais
+    no estado offline. Poção, Skytalos, Mulher Kalintz, Unicórnio e Griupan
+    apontam para seus dados clássicos. NPCs amistosos antes congelados
     alternam pausa/passeio em rota curta validada pela navegação e recebem um
     limite rígido após a separação, sem afetar hostis nem `RouteType 0`.
-    Permanecem abertos diálogo, lojas, portais, equipamento real e expansão do
-    loot/inventário. O Griupan solicitado já está equipado e homologado como
-    familiar padrão.
-11. HUD, áudio, efeitos e revisão manual dos mapas — **parcial**. A causa da
+    Permanecem abertos diálogo, lojas, portais, dimensões multicélula de itens,
+    expansão do catálogo/loot e persistência/autorização do futuro servidor.
+    O Griupan solicitado já está equipado e homologado como familiar padrão.
+11. HUD, áudio, efeitos e revisão manual dos mapas — **parcial**. A HUD recebeu
+    o primeiro passe de escala/composição baseado na captura 7.54 fornecida:
+    painéis de personagem/inventário ampliados, trilho inferior contínuo,
+    orbes laterais, readout integrado, botões redondos clicáveis e telemetria
+    legível. O chat local segue `SEditableText::OnCharEvent` e
+    `TMFieldScene::OnKeyReturn`; rede continua deliberadamente fora do escopo.
+    Ainda é necessária homologação visual em 1024×768, desktop widescreen e
+    iPhone; o detalhamento dos slots equipados já foi reconstruído a partir do
+    `FieldScene2.bin`. A causa da
     grama deslocada em `2104,2088` e `2129,2102` foi rastreada no cliente:
     `TMLeaf/TMTree/TMShip` usam `TMSkinMesh` sem owner/type 1 e não recebem o
     mirror Z reservado a personagens. O runtime agora segue essa transformação;
@@ -202,6 +236,16 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
     soluções rejeitadas, riscos, débitos, procedimentos de importação/build e
     um histórico cronológico das mudanças relevantes. Manter o documento vivo
     a partir daí, sem transformar `PENDENCIAS.md` em diário de implementação.
+15. Menu do jogo e configuração `C.C`. O botão `MENU` já abre o primeiro painel
+    local de acesso a Personagem/Inventário/Skills; completar as opções do menu
+    a partir do painel de sistema do cliente. Transformar `C.C` em configuração
+    explícita do macro, com `desligado`, `dano físico` e `mago`. A origem usa
+    `B_CCATTACK` e `g_GameAuto` (`0..3`): modo `1` chama `MAutoAttack`, modo `2`
+    chama `AutoSkillUse` e o painel expõe até dez skills. Na versão web, os dois
+    perfis devem consumir apenas skills ofensivas colocadas na barra, na ordem
+    configurada, respeitando alvo, alcance, mana e cooldown; a troca de perfil
+    não pode inventar skills fora da barra. `F` e o clique em `C.C` precisam
+    refletir o mesmo estado, e o futuro servidor será autoritativo sobre dano.
 
 ## Convenções do projeto
 

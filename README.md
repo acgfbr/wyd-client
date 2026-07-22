@@ -20,7 +20,8 @@ reutilizado.
 - NPCs e monstros com animação, autonomia, separação, combate, morte e respawn.
 - Movimento por WASD/clique, câmera clássica, zoom amplo e modo G.
 - Macro de combate, arco, dano/crítico, skills e buffs da Huntress.
-- HUD clássico, inventário provisório, catálogo de skills e seletor de mapas.
+- HUD clássico e inventário 7.54 com quatro bolsas, drag/drop, equipamento e
+  preview 3D por clique, além do catálogo de skills e seletor de mapas.
 
 ## Capturas do build atual
 
@@ -181,6 +182,10 @@ bun run import:ui -- "/caminho/para/Origem"
 | `F` | Ligar/desligar o macro de combate |
 | `1`–`9` | Usar skills da barra |
 | `I` | Abrir/fechar inventário, trajes e montarias |
+| Clique em um item | Prender o preview 3D ao cursor; outro clique solta/move/equipa |
+| Arrastar um item | Mover/trocar na bolsa ou equipar/desequipar |
+| Duplo clique em um item | Usar consumível ou equipar/desequipar |
+| Abas de bolsa | Alternar entre as quatro páginas de 15 espaços |
 | `K` | Abrir/fechar catálogo de skills |
 | `V` | Ligar/desligar todos os efeitos visuais |
 

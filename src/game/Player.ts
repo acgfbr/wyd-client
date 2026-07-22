@@ -57,6 +57,7 @@ export class Player {
   #mountLoadGeneration = 0;
   #familiarLoadGeneration = 0;
   #effectsEnabled = true;
+  #weaponVisible = true;
   #invisible = false;
   #avatarAction: string | null = null;
   #avatarClassKey: ClassicPlayerClassKey = "huntress";
@@ -73,6 +74,8 @@ export class Player {
   get speed(): number { return this.#speedBoost ? 64 : (this.#mounted ? 13 : 8); }
   get speedBoost(): boolean { return this.#speedBoost; }
   get hasClassicAvatar(): boolean { return this.#avatar !== null; }
+  get hasClassicMount(): boolean { return this.#mount !== null; }
+  get hasClassicFamiliar(): boolean { return this.#familiar !== null; }
   get mounted(): boolean { return this.#mounted; }
   get avatarClassKey(): ClassicPlayerClassKey { return this.#avatar?.playerClass.key ?? this.#avatarClassKey; }
   get avatarClassName(): string { return this.#avatar?.playerClass.name ?? "Huntress"; }
@@ -128,6 +131,7 @@ export class Player {
       this.#avatarClassKey = avatar.playerClass.key;
       this.#avatarLookKey = avatar.look.key;
       avatar.setEffectsEnabled(this.#effectsEnabled);
+      avatar.setWeaponVisible(this.#weaponVisible);
       this.#fallback.visible = false;
       avatar.setYaw(this.currentClassicYaw());
       this.syncMountedVisuals();
@@ -206,6 +210,11 @@ export class Player {
     this.#familiar?.setEffectsEnabled(enabled);
   }
 
+  setWeaponVisible(visible: boolean): void {
+    this.#weaponVisible = visible;
+    this.#avatar?.setWeaponVisible(visible);
+  }
+
   /** The local player remains visible as a translucent shadow, like m_cShadow. */
   setInvisible(active: boolean): void {
     if (this.#invisible === active) return;
@@ -240,6 +249,19 @@ export class Player {
     this.#visualRoot.remove(this.#familiar.object);
     this.#familiar.release();
     this.#familiar = null;
+  }
+
+  /** Invalidates an in-flight load before removing the equipped mount. */
+  removeClassicMount(): void {
+    this.#mountLoadGeneration++;
+    this.#mountDesired = false;
+    this.unloadClassicMount();
+  }
+
+  /** Invalidates an in-flight load before removing the equipped familiar. */
+  removeClassicFamiliar(): void {
+    this.#familiarLoadGeneration++;
+    this.unloadClassicFamiliar();
   }
 
   playAttack(): PlayerAttackTiming | null {

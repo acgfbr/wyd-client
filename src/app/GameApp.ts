@@ -24,7 +24,7 @@ import { FIELD_WORLD_SIZE, fieldAt, toScene, toWyd, type WydPosition } from "../
 import { Minimap } from "../ui/Minimap";
 import { GameHud } from "../ui/GameHud";
 import { RuntimeTelemetry } from "../ui/RuntimeTelemetry";
-import { PlayerState } from "../game/state/PlayerState";
+import { PlayerState, type PlayerSnapshot } from "../game/state/PlayerState";
 import { ClassicBeastMasterSummon } from "../game/player/ClassicBeastMasterSummon";
 import {
   DEFAULT_HUNTRESS_LOOK_KEY,
@@ -130,6 +130,7 @@ export class GameApp {
   #outfitLoadId = 0;
   #classLoadId = 0;
   #mountLoadId = 0;
+  #equipmentVisualSignature = "";
   #summonGeneration = 0;
   readonly #beastMasterSummons = new Map<number, ClassicBeastMasterSummon[]>();
 
@@ -179,8 +180,15 @@ export class GameApp {
     this.#input.onAutoCombatToggle = () => this.toggleAutoCombat();
     this.#input.onEffectsToggle = () => this.toggleEffects();
     this.#input.onSkill = (slot) => this.requestSkill(slot);
+    this.#hud.onAutoCombatToggle = () => this.toggleAutoCombat();
+    this.#hud.onChatSubmit = (message, channel) => {
+      // A camada de rede continua fora do escopo: o fluxo e a apresentação
+      // seguem o cliente, mas a mensagem é ecoada apenas no frontend local.
+      this.#hud.addChatMessage(this.#playerState.snapshot.name, message, channel);
+    };
     this.#hud.onCatalogSkillUse = (classicIndex) => this.requestCatalogSkill(classicIndex);
     this.#hud.bindPlayer(this.#playerState);
+    this.#playerState.subscribe(this.playerEquipmentChanged);
     this.#hud.configureSkills(this.#skills.skills, (slot) => this.requestSkill(slot));
     this.#hud.addLog("Armia carregada. Explore o mundo clássico.", "system");
     if (reducedGpuProfile) {
@@ -223,9 +231,11 @@ export class GameApp {
       this.#inventoryPreview = new ClassicInventoryPreview(
         this.#renderer,
         world.models,
+        assets,
         previewRoot,
         previewViewport,
       );
+      this.#inventoryPreview.setEffectsEnabled(this.#effectsEnabled);
       this.#hud.onInventoryPreview = (item) => this.#inventoryPreview?.setItem(item);
       window.addEventListener("pagehide", (event) => {
         // Safari/iOS fires pagehide before placing the live document in the
@@ -653,6 +663,7 @@ export class GameApp {
     this.#skillEffects.setEnabled(this.#effectsEnabled);
     this.#etherealExplosionEffects.setEnabled(this.#effectsEnabled);
     this.#levelUpEffects.setEnabled(this.#effectsEnabled);
+    this.#inventoryPreview?.setEffectsEnabled(this.#effectsEnabled);
     const status = document.querySelector<HTMLElement>("#effects-status");
     status?.classList.toggle("is-active", this.#effectsEnabled);
     const label = status?.querySelector("span");
@@ -1364,6 +1375,8 @@ export class GameApp {
       select.value = definition.key;
       if (status) status.textContent = `${definition.name} · ${definition.defaultWeapon.name}`;
       this.syncClassControls();
+      this.#equipmentVisualSignature = "";
+      this.playerEquipmentChanged(this.#playerState.snapshot);
       this.#hud.addLog(`${definition.name} equipado com ${definition.defaultWeapon.name}.`, "system");
     }).finally(() => {
       if (requestId === this.#classLoadId) {
@@ -1378,6 +1391,84 @@ export class GameApp {
     this.populateOutfitSelector();
     if (identity) identity.textContent = definition.defaultWeapon.name;
   }
+
+  private readonly playerEquipmentChanged = (snapshot: PlayerSnapshot): void => {
+    if (!this.#player || !this.#assets) return;
+    const leftHand = snapshot.equipment.leftHand?.item ?? null;
+    const rightHand = snapshot.equipment.rightHand?.item ?? null;
+    const costume = snapshot.equipment.costume?.item ?? null;
+    const mount = snapshot.equipment.mount?.item ?? null;
+    const familiar = snapshot.equipment.familiar?.item ?? null;
+    const signature = [
+      leftHand?.key ?? "-",
+      rightHand?.key ?? "-",
+      costume?.key ?? "-",
+      mount?.key ?? "-",
+      familiar?.key ?? "-",
+    ].join("|");
+    if (signature === this.#equipmentVisualSignature) return;
+    this.#equipmentVisualSignature = signature;
+
+    const weaponVisible = leftHand !== null || rightHand !== null;
+    this.#player.setWeaponVisible(weaponVisible);
+    const desiredMount = MOUNT_LOOKS.find((look) => look.itemIndex === mount?.classicIndex) ?? null;
+    if (!desiredMount) {
+      this.#mountLoadId++;
+      this.#player.removeClassicMount();
+      this.#hud.setMounted(false);
+      const status = document.querySelector<HTMLElement>("#mount-select-status");
+      if (status) status.textContent = mount ? "Montaria incompatível" : "Nenhuma montaria equipada";
+    } else if (!this.#player.hasClassicMount || this.#player.mountLookKey !== desiredMount.key) {
+      const requestId = ++this.#mountLoadId;
+      const status = document.querySelector<HTMLElement>("#mount-select-status");
+      if (status) status.textContent = `Selando ${desiredMount.name}…`;
+      void this.#player.loadClassicMount(this.#assets, desiredMount.key).then((loaded) => {
+        if (requestId !== this.#mountLoadId) return;
+        const select = document.querySelector<HTMLSelectElement>("#mount-select");
+        if (select) select.value = this.#player?.mountLookKey ?? desiredMount.key;
+        if (status) status.textContent = loaded
+          ? this.#player?.mountName ?? `${desiredMount.name} Lv. ${desiredMount.level}`
+          : "Falha ao equipar montaria";
+      });
+    }
+
+    const wantsGriupan = familiar?.classicIndex === 1726;
+    if (!wantsGriupan) {
+      this.#player.removeClassicFamiliar();
+    } else if (!this.#player.hasClassicFamiliar) {
+      void this.#player.loadClassicFamiliar(this.#assets);
+    }
+    if (this.#activeClassKey !== "huntress") return;
+
+    const definition = classicPlayerClass("huntress");
+    const desiredLookKey = costume
+      ? definition.looks.find((look) => look.itemIndex === costume.classicIndex)?.key
+        ?? definition.defaultLookKey
+      : definition.looks.find((look) => look.key === "huntress-base")?.key
+        ?? definition.defaultLookKey;
+    if (this.#player.avatarLookKey === desiredLookKey) return;
+
+    const requestId = ++this.#outfitLoadId;
+    const select = document.querySelector<HTMLSelectElement>("#outfit-select");
+    const status = document.querySelector<HTMLElement>("#outfit-status");
+    if (select) select.disabled = true;
+    if (status) status.textContent = costume ? `Vestindo ${costume.name}…` : "Retirando traje…";
+    void this.#player.loadClassicAvatar(this.#assets, "huntress", desiredLookKey).then((loaded) => {
+      if (requestId !== this.#outfitLoadId) return;
+      const current = this.#playerState.snapshot;
+      this.#player?.setWeaponVisible(
+        current.equipment.leftHand !== null || current.equipment.rightHand !== null,
+      );
+      if (!loaded) {
+        if (status) status.textContent = "Falha ao atualizar equipamento";
+        return;
+      }
+      if (select) select.value = this.#player?.avatarLookKey ?? desiredLookKey;
+      if (status) status.textContent = this.#player?.avatarLookName ?? "Visual equipado";
+    }).finally(() => {
+      if (requestId === this.#outfitLoadId && select) select.disabled = false;
+    });
+  };
 
   private configureOutfitSelector(): void {
     const select = document.querySelector<HTMLSelectElement>("#outfit-select");

@@ -59,6 +59,7 @@ export class ClassicPlayerAvatar {
   readonly look: ClassicPlayerLookDefinition;
   readonly #lease: ClassicSkinnedInstanceLease;
   readonly #weapon: ClassicWeaponVisual | null;
+  #weaponVisible = true;
   #mounted = false;
   #released = false;
 
@@ -151,9 +152,14 @@ export class ClassicPlayerAvatar {
     this.#weapon.spectralForce?.setEnabled(enabled);
   }
 
+  setWeaponVisible(visible: boolean): void {
+    this.#weaponVisible = visible;
+    if (this.#weapon) this.#weapon.object.visible = visible;
+  }
+
   /** DoubleCritical bit 3 starts SForce type 2 for the equipped WTYPE 101. */
   triggerSpectralForce(): void {
-    if (!this.#released) this.#weapon?.spectralForce?.trigger();
+    if (!this.#released && this.#weaponVisible) this.#weapon?.spectralForce?.trigger();
   }
 
   play(actions: readonly string[], restart = false): ClassicAvatarAction | null {
