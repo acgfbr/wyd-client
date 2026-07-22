@@ -35,6 +35,10 @@ const DENSE_FIELD_RESELECT_DISTANCE = 24;
 const ADJACENT_FIELD_PRELOAD_DISTANCE = 56;
 const ADJACENT_FIELD_RELEASE_DISTANCE = 64;
 const TARGET_ID_USER_DATA_KEY = "classicMonsterTargetId";
+const FRIENDLY_IDLE_MIN_RADIUS = 1;
+const FRIENDLY_IDLE_MAX_RADIUS = 1.75;
+const FRIENDLY_IDLE_HARD_RADIUS = 2.25;
+const FRIENDLY_IDLE_NAVIGATION_STEP = 0.25;
 
 export interface ClassicSpawnEnvironment {
   readonly origin: WydPosition;
@@ -106,6 +110,7 @@ interface SpawnedActor {
   readonly animationPhaseSeconds: number;
   readonly collisionRadius: number;
   readonly separationSeed: number;
+  readonly idleWanderRadius: number | null;
   readonly label: THREE.Sprite;
   readonly labelTexture: THREE.CanvasTexture;
   readonly labelMaterial: THREE.SpriteMaterial;
@@ -270,6 +275,7 @@ export class ClassicSpawnManager {
       ? (position: WydPosition) => this.environment.isWalkable?.(position) ?? true
       : undefined;
     resolveActorSeparation(this.#actors, deltaSeconds, isWalkable);
+    constrainFriendlyIdleActors(this.#actors, this.environment);
     for (let actorIndex = 0; actorIndex < this.#actors.length; actorIndex++) {
       const actor = this.#actors[actorIndex]!;
       const previous = previousPositions[actorIndex]!;
@@ -319,7 +325,9 @@ export class ClassicSpawnManager {
 
     actor.actionLockRemaining = Math.max(0, actor.actionLockRemaining - delta);
     if (!actor.hostile) {
-      if (actor.actionLockRemaining <= 0) advanceActor(actor, delta);
+      if (actor.actionLockRemaining <= 0) {
+        advanceActor(actor, delta, actor.idleWanderRadius === null ? undefined : this.environment);
+      }
       return;
     }
     if (!canEngagePlayer) {
@@ -582,8 +590,15 @@ export class ClassicSpawnManager {
       const hostile = (template.merchant ?? 0) === 0 && experienceReward > 0;
       const scale = classicMobScale(template);
       const movementTemplate = this.catalog.template(spec.generator.leaderTemplate) ?? template;
-      const route = routeForSpawn(spec);
-      const routeMode = routeModeFor(spec.generator, route);
+      const authoredRoute = routeForSpawn(spec);
+      const authoredRouteMode = routeModeFor(spec.generator, authoredRoute);
+      const enablesFriendlyIdle = !hostile
+        && spec.generator.routeType !== 0
+        && authoredRouteMode === "stationary";
+      const route = enablesFriendlyIdle
+        ? friendlyIdleRouteForSpawn(spec, authoredRoute, this.environment)
+        : authoredRoute;
+      const routeMode = routeModeFor(spec.generator, route, enablesFriendlyIdle);
       const animationPhaseSeconds = classicAnimationPhase(spec);
       const initialYaw = spawnYaw(spec);
       lease.model.setClassicTransform({
@@ -639,6 +654,9 @@ export class ClassicSpawnManager {
         animationPhaseSeconds,
         collisionRadius,
         separationSeed: spawnHash(spec.generator, spec.ordinal + 401),
+        idleWanderRadius: enablesFriendlyIdle && routeMode !== "stationary"
+          ? FRIENDLY_IDLE_HARD_RADIUS
+          : null,
         label: label.sprite,
         labelTexture: label.texture,
         labelMaterial: label.material,
@@ -979,7 +997,87 @@ function routeForSpawn(spec: SpawnSpec): readonly RouteWaypoint[] {
   return route;
 }
 
-function routeModeFor(generator: MonsterGenerator, route: readonly RouteWaypoint[]): RouteMode {
+/**
+ * The classic client only consumes movement selected by the server. Until the
+ * network layer exists, this is a deliberately small, deterministic offline
+ * presentation policy for friendly NPCs whose NPCGener route was being
+ * collapsed to stationary; it is not client-side retail AI.
+ */
+function friendlyIdleRouteForSpawn(
+  spec: SpawnSpec,
+  authoredRoute: readonly RouteWaypoint[],
+  environment: ClassicSpawnEnvironment,
+): readonly RouteWaypoint[] {
+  const home = authoredRoute[0];
+  if (!home) return authoredRoute;
+
+  const authoredTarget = authoredRoute[1];
+  if (authoredTarget) {
+    const boundedTarget = boundWaypointToHome(authoredTarget, home, FRIENDLY_IDLE_MAX_RADIUS);
+    if (
+      distanceBetween(home, boundedTarget) >= 0.05
+      && isLoadedRouteSegmentNavigable(home, boundedTarget, environment)
+    ) {
+      return [home, boundedTarget];
+    }
+  }
+
+  const candidates: RouteWaypoint[] = [];
+  for (let slot = 0; slot < 2; slot++) {
+    const candidate = friendlyIdleCandidate(spec, home, slot, candidates, environment);
+    if (candidate) candidates.push(candidate);
+  }
+  if (candidates.length === 0) return [home];
+  if (candidates.length === 1) return [home, candidates[0]!];
+  return [home, candidates[0]!, { ...home }, candidates[1]!];
+}
+
+function friendlyIdleCandidate(
+  spec: SpawnSpec,
+  home: RouteWaypoint,
+  slot: number,
+  existing: readonly RouteWaypoint[],
+  environment: ClassicSpawnEnvironment,
+): RouteWaypoint | null {
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const salt = spec.ordinal * 37 + slot * 101 + attempt + 1_701;
+    const angleSeed = spawnHash(spec.generator, salt);
+    const radiusSeed = spawnHash(spec.generator, salt + 53);
+    const angle = stableUnit(angleSeed) * Math.PI * 2;
+    const radius = FRIENDLY_IDLE_MIN_RADIUS
+      + stableUnit(radiusSeed) * (FRIENDLY_IDLE_MAX_RADIUS - FRIENDLY_IDLE_MIN_RADIUS);
+    const candidate: RouteWaypoint = {
+      x: home.x + Math.cos(angle) * radius,
+      y: home.y + Math.sin(angle) * radius,
+      waitSeconds: friendlyIdleWait(spec.generator.start.wait, spec.generator, salt),
+    };
+    if (existing.some((point) => distanceBetween(point, candidate) < 0.65)) continue;
+    if (isLoadedRouteSegmentNavigable(home, candidate, environment)) return candidate;
+  }
+  return null;
+}
+
+function boundWaypointToHome(
+  waypoint: RouteWaypoint,
+  home: WydPosition,
+  maximumDistance: number,
+): RouteWaypoint {
+  const dx = waypoint.x - home.x;
+  const dy = waypoint.y - home.y;
+  const distance = Math.hypot(dx, dy);
+  if (distance <= maximumDistance || distance <= 1e-5) return waypoint;
+  return {
+    x: home.x + (dx / distance) * maximumDistance,
+    y: home.y + (dy / distance) * maximumDistance,
+    waitSeconds: waypoint.waitSeconds,
+  };
+}
+
+function routeModeFor(
+  generator: MonsterGenerator,
+  route: readonly RouteWaypoint[],
+  allowFriendlyIdle = false,
+): RouteMode {
   if (generator.routeType === 0 || route.length < 2) return "stationary";
   const directDistance = Math.hypot(
     (generator.destination.x ?? generator.start.x ?? 0) - (generator.start.x ?? 0),
@@ -987,18 +1085,35 @@ function routeModeFor(generator: MonsterGenerator, route: readonly RouteWaypoint
   );
   // Em NPCGener, uma linha curta sem segmentos costuma apenas codificar a
   // orientacao do lojista/guarda, nao uma patrulha visivel.
-  if (generator.segments.length === 0 && generator.start.range < 3 && directDistance <= 2.5) return "stationary";
+  if (
+    !allowFriendlyIdle
+    && generator.segments.length === 0
+    && generator.start.range < 3
+    && directDistance <= 2.5
+  ) return "stationary";
   if (generator.routeType === 1) return "reset";
   if (generator.routeType === 2) return "loop";
   return "ping-pong";
 }
 
-function advanceActor(actor: SpawnedActor, deltaSeconds: number): void {
+function advanceActor(
+  actor: SpawnedActor,
+  deltaSeconds: number,
+  routeEnvironment?: ClassicSpawnEnvironment,
+): void {
   if (!Number.isFinite(deltaSeconds) || deltaSeconds <= 0 || actor.routeMode === "stationary" || actor.route.length < 2) {
     setActorMoving(actor, false);
     return;
   }
-  advanceActorState(actor, Math.min(deltaSeconds, 0.1), 8);
+  if (
+    routeEnvironment
+    && !isLoadedRoutePositionNavigable(actor.position, routeEnvironment)
+  ) {
+    if (isLoadedRoutePositionNavigable(actor.homePosition, routeEnvironment)) resetActorRoute(actor);
+    else setActorMoving(actor, false);
+    return;
+  }
+  advanceActorState(actor, Math.min(deltaSeconds, 0.1), 8, routeEnvironment);
 }
 
 type MoveTowardResult = "moving" | "arrived" | "blocked";
@@ -1047,7 +1162,12 @@ function distanceBetween(left: WydPosition, right: WydPosition): number {
   return Math.hypot(left.x - right.x, left.y - right.y);
 }
 
-function advanceActorState(actor: SpawnedActor, seconds: number, maximumSteps: number): void {
+function advanceActorState(
+  actor: SpawnedActor,
+  seconds: number,
+  maximumSteps: number,
+  routeEnvironment?: ClassicSpawnEnvironment,
+): void {
   let remaining = seconds;
   for (let step = 0; step < maximumSteps && remaining > 1e-5; step++) {
     if (actor.resetAfterWait && actor.waitRemaining <= 1e-5) {
@@ -1093,20 +1213,52 @@ function advanceActorState(actor: SpawnedActor, seconds: number, maximumSteps: n
     }
 
     setActorMoving(actor, true);
-    const travel = actor.speed * remaining;
+    const travel = Math.min(distance, actor.speed * remaining);
+    const candidate = {
+      x: actor.position.x + (dx / distance) * travel,
+      y: actor.position.y + (dy / distance) * travel,
+    };
+    if (
+      routeEnvironment
+      && !isLoadedRouteSegmentNavigable(actor.position, candidate, routeEnvironment)
+    ) {
+      handleFriendlyIdleBlocked(actor, target);
+      return;
+    }
+    actor.position.x = candidate.x;
+    actor.position.y = candidate.y;
     if (travel < distance) {
-      actor.position.x += (dx / distance) * travel;
-      actor.position.y += (dy / distance) * travel;
       remaining = 0;
     } else {
-      actor.position.x = target.x;
-      actor.position.y = target.y;
       remaining -= distance / actor.speed;
       actor.waitRemaining = target.waitSeconds;
       advanceWaypoint(actor);
       if (actor.waitRemaining > 0) setActorMoving(actor, false);
     }
   }
+}
+
+function handleFriendlyIdleBlocked(actor: SpawnedActor, blockedTarget: RouteWaypoint): void {
+  setActorMoving(actor, false);
+  const targetIsHome = distanceBetween(blockedTarget, actor.homePosition) < 0.05;
+  if (targetIsHome) {
+    actor.waitRemaining = actor.route[0]?.waitSeconds ?? 0;
+    advanceWaypoint(actor);
+    return;
+  }
+
+  actor.waypointIndex = nextHomeWaypointIndex(actor);
+  actor.waitRemaining = 0;
+  actor.resetAfterWait = false;
+}
+
+function nextHomeWaypointIndex(actor: SpawnedActor): number {
+  for (let offset = 1; offset <= actor.route.length; offset++) {
+    const index = (actor.waypointIndex + offset) % actor.route.length;
+    const waypoint = actor.route[index];
+    if (waypoint && distanceBetween(waypoint, actor.homePosition) < 0.05) return index;
+  }
+  return 0;
 }
 
 function seekActorRoute(actor: SpawnedActor, worldAgeSeconds: number): void {
@@ -1266,6 +1418,15 @@ function variedRouteWait(wait: number, generator: MonsterGenerator, waypoint: nu
   return base * (0.72 + ((seed & 0xff) / 255) * 0.56);
 }
 
+function friendlyIdleWait(wait: number, generator: MonsterGenerator, waypoint: number): number {
+  const authored = variedRouteWait(wait, generator, waypoint);
+  if (authored > 0) return authored;
+  // A single legacy merchant has no authored wait at all. Keep the offline
+  // stroll visibly idle/walk instead of turning that exceptional row into a
+  // perpetual pacing loop.
+  return 0.7 + stableUnit(spawnHash(generator, waypoint + 257)) * 0.7;
+}
+
 function waypointRangeOffset(generator: MonsterGenerator, waypoint: number, range: number): WydPosition {
   if (!Number.isFinite(range) || range <= 0) return { x: 0, y: 0 };
   const seed = spawnHash(generator, waypoint + 307);
@@ -1352,6 +1513,63 @@ function resolveActorSeparation(
     actor.position.x = candidate.x;
     actor.position.y = candidate.y;
   }
+}
+
+function constrainFriendlyIdleActors(
+  actors: readonly SpawnedActor[],
+  environment: ClassicSpawnEnvironment,
+): void {
+  for (const actor of actors) {
+    const maximumDistance = actor.idleWanderRadius;
+    if (!isActorAlive(actor) || maximumDistance === null) continue;
+    const dx = actor.position.x - actor.homePosition.x;
+    const dy = actor.position.y - actor.homePosition.y;
+    const distance = Math.hypot(dx, dy);
+    if (distance <= maximumDistance || distance <= 1e-5) continue;
+
+    const clamped = {
+      x: actor.homePosition.x + (dx / distance) * maximumDistance,
+      y: actor.homePosition.y + (dy / distance) * maximumDistance,
+    };
+    const fallback = isLoadedRoutePositionNavigable(clamped, environment)
+      ? clamped
+      : actor.homePosition;
+    actor.position.x = fallback.x;
+    actor.position.y = fallback.y;
+    actor.waypointIndex = nextHomeWaypointIndex(actor);
+    actor.waitRemaining = 0;
+    actor.resetAfterWait = false;
+    setActorMoving(actor, false);
+  }
+}
+
+function isLoadedRouteSegmentNavigable(
+  from: WydPosition,
+  to: WydPosition,
+  environment: ClassicSpawnEnvironment,
+): boolean {
+  const distance = distanceBetween(from, to);
+  const steps = Math.max(1, Math.ceil(distance / FRIENDLY_IDLE_NAVIGATION_STEP));
+  for (let step = 1; step <= steps; step++) {
+    const amount = step / steps;
+    if (!isLoadedRoutePositionNavigable({
+      x: from.x + (to.x - from.x) * amount,
+      y: from.y + (to.y - from.y) * amount,
+    }, environment)) return false;
+  }
+  return true;
+}
+
+function isLoadedRoutePositionNavigable(
+  position: WydPosition,
+  environment: ClassicSpawnEnvironment,
+): boolean {
+  const field = fieldAt(position);
+  // Neighbour actors are intentionally materialized before their TRN. An
+  // unloaded sample is unknown, not a wall; it is checked once the Field is
+  // resident instead of freezing all preloaded NPCs at their spawn point.
+  if (!environment.isFieldLoaded(field.column, field.row)) return true;
+  return environment.isWalkable?.(position) ?? true;
 }
 
 function classicWaitSeconds(wait: number): number {

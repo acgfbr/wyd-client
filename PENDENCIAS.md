@@ -10,7 +10,9 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
 - `AttributeMap.dat` e `object.bin` compõem a máscara de colisão na ordem do
   cliente; pontes e plataformas também fornecem altura caminhável.
 - NPCs/monstros têm streaming por Field, animação, autonomia, separação,
-  combate, morte, respawn, EXP e drops offline.
+  combate, morte, respawn, EXP e drops offline. NPCs amistosos de rota curta
+  fazem um passeio offline determinístico de 1–1,75 unidade, sempre contido em
+  2,25 unidades da origem; guardas `RouteType 0` permanecem fixos.
 - Clique para mover usa rota com desempate estável, remoção segura dos centros
   intermediários visíveis e interpolação linear, sem o zigue-zague do A* cru.
 - O marcador de clique agora é um pulso transitório de 0,72 s, em vez de ficar
@@ -29,12 +31,20 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
   persistem por `180 s`, com efeitos suavizados; a passiva `#101` acrescenta
   alcance e acopla o `SForce` clássico aos ataques.
 - HUD clássico, minimapa, seletor de mapas, câmera, zoom e modo G estão ligados.
+- A janela `C` usa `character2.wyt`, mostra progressão/atributos e distribui os
+  pontos do mock offline. A tabela acumulada de EXP possui os 403 valores
+  exatos de `g_pNextLevel` do cliente.
+- Os 14 atlas `itemicon01..14`, a tabela `itemicon.bin` e o preview 3D giratório
+  do inventário estão integrados; o preview compartilha renderer e cache de
+  modelos com o mundo.
+- Abaixo do minimapa, a telemetria agrega FPS, heap JS quando disponível e o
+  tempo/ocupação da callback principal como proxy explicitamente não-CPU.
 - Build TypeScript/Vite verde em 22/07/2026.
 
 ## Implementado, mas ainda não homologado visualmente
 
-- Saídas de Armia e altura das pontes após a máscara autoritativa.
-- Pré-carregamento de monstros a 32 unidades da borda, com retenção até 45.
+- Terreno usa margem base 28, antecipação direcional de até 60 e retenção 42;
+  criaturas entram a 56 unidades da borda e permanecem até 64.
 - Unicórnio item `2381`/visual `336`, `hs01` variante `07` completa em três
   partes e ações do bloco `[horse] 31`. A sela agora segue o bone `4` e a
   transformação `SetVecMantua(2, 31)`; aguarda homologação visual.
@@ -49,12 +59,18 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
   BON/MSH/DDS, variantes LOOK_INFO e ações AniSound/ValidIndex são reais; no
   mock offline, cada cast cria a formação de 10 solicitada, que segue o dono,
   procura hostis e ataca. Grande Tigre ocupa o atalho `9`; as oito continuam
-  utilizáveis pelo catálogo `K`.
+  utilizáveis pelo catálogo `K`. Cada uma das 10 entidades nasce em sua própria
+  posição com o conjunto clássico `TMEffectStart(type 1)` +
+  `TMEffectLevelUp(type 0)`, incluindo malha `703` e texturas `2/7/52/54/55`.
 - Controle contínuo implementado: manter o esquerdo atualiza o destino a cada
   `200 ms`; manter esquerdo+direito avança na direção da câmera e permite
   esterçar com o direito. A célula isolada em `2164,2102` agora recebe um
   microdesvio manual restrito, sem remover a colisão clássica nem liberar
-  paredes/corrimãos. O conjunto aguarda homologação manual no navegador.
+  paredes/corrimãos.
+- A grama `TMLeaf` dos tipos `315/316` em `2104,2088` e `2129,2102` deixou de
+  receber o espelhamento Z exclusivo das malhas de personagem. DAT/MSH/WYS
+  foram conferidos contra a origem e o footprint voltou aos limites do
+  canteiro; falta homologar visualmente os dois pontos.
 
 ## Provisório — não considerar fiel ainda
 
@@ -67,16 +83,19 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
 
 ## Fila obrigatória
 
-1. Locomoção, saídas e pontes. O controle contínuo já está implementado:
+1. Locomoção, saídas e pontes — **concluído e homologado**. O controle contínuo
+   está implementado:
    esquerdo mantido retargeta o chão, esquerdo+direito avança e esterça pela
    câmera, e ambos funcionam independentemente da ordem em que são
    pressionados. O gargalo relatado em `2163,2102` foi isolado no bloqueio
    `type 444` da célula vizinha `2164,2102`; o movimento manual agora contorna
    somente obstáculos unitários com rota curta e máscara autoritativa, nos dois
-   sentidos. O clique continua usando A*. Falta homologar esses controles no
-   navegador e permanece proibido reabrir a revisão global das pontes já
-   homologadas.
-2. Streaming antecipado de mundo e criaturas.
+   sentidos. O clique continua usando A*. A ponte foi testada e aprovada; fica
+   proibido reabrir sua revisão global sem uma regressão nova e reproduzível.
+2. Streaming antecipado de mundo e criaturas — **implementação concluída**.
+   Terreno antecipa somente na direção do movimento (até 60 unidades), mantém
+   histerese em 42 e descarrega Fields fora da janela. Criaturas entram a 56 e
+   saem a 64, inclusive antes de o jogador cruzar para o terreno vizinho.
 3. `LOOK_INFO` da Huntress e guarda-roupa real. Implementado a partir de
    `SetPacketMOBItem`, `SetHumanCostume` e `SetCostume`: rosto/cabeça base,
    Rake, Loki, Waha e fantasias clássicas, incluindo a Mulher Kalintz do item
@@ -99,13 +118,12 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
    de `50 ms` por unidade do ataque `151`. O dano usa o atlas original
    `Yellow_Number`; críticos usam `Orange_Number`, curva `TMFont3` de `2,1 s`
    e impacto clássico `531/118/229/230/231`. Para o gameplay offline atual, a
-   chance de crítico foi definida em `35%` por ataque. A montaria permanece em
-   locomoção/idle durante o ataque da Huntress. Regressão pendente relatada no
-   macro: durante algumas aproximações automáticas com a Huntress montada, o
-   personagem se desloca mas a montaria permanece visualmente em idle. Auditar
-   a transição entre `MSTND/MRUN/MWALK`, o action lock do disparo e o novo
-   `moveTo` do alvo, sincronizando a animação com deslocamento real sem fazer a
-   montaria saltar durante o ataque.
+   chance de crítico foi definida em `35%` por ataque. A correção da aproximação
+   montada também está implementada: deslocamento real interrompe o action lock,
+   seleciona `MRUN/MWALK` no cavaleiro e `RUN` na montaria no mesmo frame; ao
+   parar para disparar, a rota termina antes de `MATT` e a montaria permanece em
+   `STAND01`, sem disparar a curva de elevação. Falta apenas homologar novamente
+   essa sequência rara no navegador.
 7. Skills e buffs completos por classe. Implementar a matriz de habilidades de
    TransKnight, Foema, BeastMaster e Huntress a partir de `SkillData.bin` e das
    rotinas do cliente clássico. Cada skill deve usar sua textura, animação de
@@ -125,43 +143,49 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
    Esse recorte da Huntress está homologado; o épico só fecha depois da matriz
    completa das quatro classes. As oito evocações reais do BeastMaster já têm
    criação, skin/LOOK_INFO, animação `LEVELUP`, seguimento, escolha de alvo,
-   ataque e descarte local, sem reutilizar o Griupan. A auditoria confirmou que
-   tempo de vida, IA, morte e remoção chegam do servidor como entidades
-   `TMHuman`, não são regras do cliente; enquanto rede está fora do escopo, a
-   formação de 10 e sua IA são uma política explícita do frontend. Ainda faltam
-   portar fielmente `TMEffectStart`/`TMEffectLevelUp` e, no futuro, substituir a
-   simulação local pelos packets autoritativos do servidor.
-8. Isolamento completo do modo G.
-9. Progressão e painel de personagem: reproduzir a janela de status clássica,
-    guardar `STR/INT/DEX/CON` e pontos livres, permitir distribuição e calcular
-    atributos derivados pelas fórmulas originais. A animação, partículas e som
-    de `LEVELUP` devem ocorrer no instante em que os pontos forem concedidos.
-10. NPCs, diálogo, lojas, portais, equipamento, inventário e loot. O
-    inventário precisa trocar as siglas provisórias pelos sprites clássicos e
-    exibir, no hover, o modelo 3D real girando; itens sem malha usam o sprite
-    clássico ampliado. NPCs devem fazer pequenas caminhadas aleatórias dentro
-    de um raio curto do ponto original, alternando pausa/passeio e sempre
-    retornando à sua área de origem, sem a autonomia ampla dos monstros.
-    O Griupan solicitado neste pacote já está equipado e homologado como
+   ataque e descarte local, sem reutilizar o Griupan. O nascimento agora porta
+   `TMEffectStart(type 1)` e `TMEffectLevelUp(type 0)` por entidade, com pool
+   limitado a 40 efeitos. A auditoria confirmou que tempo de vida, IA, morte e
+   remoção chegam do servidor como entidades `TMHuman`, não são regras do
+   cliente; enquanto rede está fora do escopo, a formação de 10 e sua IA são
+   uma política explícita do frontend. No futuro, a simulação local deverá ser
+   substituída pelos packets autoritativos do servidor.
+8. Isolamento completo do modo G — **concluído no frontend**. `G` usa velocidade
+   64, ignora a navegação/colisão, bloqueia dano recebido, revive ao ativar e
+   continua alimentando o streaming preditivo sem alterar o modo normal.
+9. Progressão e painel de personagem — **frontend implementado, fidelidade
+   parcial**. A janela `C` usa o atlas clássico, guarda e distribui
+   `STR/INT/DEX/CON`, mostra pontos livres/EXP total e aplica a tabela exata
+   `g_pNextLevel[403]`. Cada nível concede os `+5` pontos e `+3 ATQ` configurados
+   no mock, toca `LEVELUP/MLVLUP` e dispara o efeito visual clássico. Ainda
+   faltam as fórmulas autoritativas de atributos derivados e o som original;
+   não inventar essas regras no cliente antes da camada de servidor/áudio.
+10. NPCs, diálogo, lojas, portais, equipamento, inventário e loot — **parcial**.
+    O inventário atual usa os sprites reais resolvidos por `itemicon.bin`; os
+    14 atlas foram importados e itens com malha exibem preview 3D giratório,
+    com sprite clássico ampliado como fallback. Poção, Skytalos e Mulher
+    Kalintz já apontam para seus modelos reais. NPCs amistosos antes congelados
+    alternam pausa/passeio em rota curta validada pela navegação e recebem um
+    limite rígido após a separação, sem afetar hostis nem `RouteType 0`.
+    Permanecem abertos diálogo, lojas, portais, equipamento real e expansão do
+    loot/inventário. O Griupan solicitado já está equipado e homologado como
     familiar padrão.
-11. HUD, áudio, efeitos e revisão manual dos mapas. Auditar especificamente os
-    lotes de grama deslocados em `2104,2088` e `2129,2102`, comparando os
-    registros DAT, pivô/rotação e a montagem original de `TMGrass/TMLeaf`.
-    Abaixo do minimapa, adicionar telemetria compacta de FPS, memória usada e
-    carga da thread principal (proxy de CPU, pois navegadores não expõem o uso
-    real de CPU do processo de forma portável), com baixo custo de atualização.
-12. Distribuição web: desenhar um build de produção com minificação agressiva,
-    nomes/sourcemaps protegidos e ofuscação seletiva. Documentar que isso apenas
-    eleva o custo de engenharia reversa; regras e segredos reais não podem
-    depender de código entregue ao navegador. Criar também no `README.md` um
-    tutorial completo para quem clonou o repositório do zero: requisitos,
-    instalação e execução exclusivamente com Bun, localização/preparo dos
-    assets necessários, comandos de desenvolvimento e produção e resolução dos
-    erros comuns de ambiente. Organizar capturas reais do jogo em uma pasta
-    dedicada e montar no README uma galeria representativa de tudo que foi
-    entregue — mapas/objetos, personagem e equipamentos, montarias, criaturas,
-    combate/skills/buffs, efeitos, HUD e streaming — sem usar imagens que não
-    correspondam ao estado atual do projeto.
+11. HUD, áudio, efeitos e revisão manual dos mapas — **parcial**. A causa da
+    grama deslocada em `2104,2088` e `2129,2102` foi rastreada no cliente:
+    `TMLeaf/TMTree/TMShip` usam `TMSkinMesh` sem owner/type 1 e não recebem o
+    mirror Z reservado a personagens. O runtime agora segue essa transformação;
+    os DAT/MSH importados são idênticos à origem e os footprints `315/316`
+    voltaram aos canteiros, aguardando inspeção visual. A telemetria abaixo do
+    minimapa também está concluída: agrega uma vez por segundo FPS, heap JS
+    (`performance.memory`, ou `—` no Safari/iPhone) e duração/ocupação da
+    callback principal como `THREAD*`, sem alegar CPU real. Permanece aberta a
+    camada de áudio e a revisão visual final dos mapas.
+12. Distribuição web — **concluído para o escopo atual**. O build de produção
+    não publica sourcemaps, remove comentários legais/`debugger`/`console.debug`,
+    minifica identificadores/sintaxe/espaços e usa nomes de assets por hash. O
+    README documenta o limite dessa proteção, instalação e comandos somente com
+    Bun, preparo dos assets, erros comuns, iPhone/Vercel e a galeria de capturas
+    reais, incluindo as quatro classes, evocações e os 111 mapas.
 13. Auditoria técnica final e cobertura do cliente clássico. Revisar o runtime
     contra as melhores práticas atuais do Three.js — ciclo de vida/dispose,
     cache e compartilhamento de GPU, draw calls/instancing, streaming, LOD,

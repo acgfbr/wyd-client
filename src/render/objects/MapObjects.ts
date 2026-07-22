@@ -32,8 +32,9 @@ export class MapObjects {
     assets: ClassicAssetSource,
     private readonly origin: WydPosition,
     heightAt: (position: WydPosition) => number,
+    models?: ModelLibrary,
   ) {
-    this.#models = new ModelLibrary(assets);
+    this.#models = models ?? new ModelLibrary(assets);
     this.#effects = new MapEffects(assets, origin, this.#models, heightAt);
     this.#environment = new ClassicEnvironmentObjects(assets, origin);
     this.#water = new MapWater(assets, origin, this.#models);

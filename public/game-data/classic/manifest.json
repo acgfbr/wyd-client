@@ -3826,6 +3826,12 @@
         null
       ]
     },
+    "53": {
+      "file": "models/53.msa",
+      "textures": [
+        "models/textures/mesh-potion1.dds"
+      ]
+    },
     "101": {
       "file": "models/101.msa",
       "textures": [
@@ -6420,6 +6426,18 @@
       "file": "models/700.msa",
       "textures": [
         "models/textures/mesh-beach1.dds"
+      ]
+    },
+    "703": {
+      "file": "models/703.msa",
+      "textures": [
+        "models/textures/effect-blight.dds"
+      ]
+    },
+    "762": {
+      "file": "models/762.msa",
+      "textures": [
+        "models/textures/mesh-bow16.dds"
       ]
     },
     "863": {
@@ -9971,6 +9989,12 @@
       "file": "models/2839.msa",
       "textures": [
         "models/textures/effect-unsole.dds"
+      ]
+    },
+    "2883": {
+      "file": "models/2883.msa",
+      "textures": [
+        "models/textures/mesh-ch020337.dds"
       ]
     }
   },

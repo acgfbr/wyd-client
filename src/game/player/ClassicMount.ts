@@ -145,6 +145,11 @@ export class ClassicMount {
     this.play(["DIE", "DEAD"], true);
   }
 
+  playLevelUp(): void {
+    this.#moving = false;
+    this.play(["LEVELUP", "STAND01"], true);
+  }
+
   setEffectsEnabled(enabled: boolean): void {
     if (this.#levelEffect) this.#levelEffect.enabled.value = enabled ? 1 : 0;
   }

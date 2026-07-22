@@ -22,6 +22,12 @@ app.innerHTML = `
     <div class="location-panel"><span id="location-name">Armia</span><strong id="coordinates">2100, 2100</strong></div>
     <div class="minimap-bezel"><canvas id="minimap" width="168" height="168"></canvas></div>
     <span id="minimap-field">Armia · Field 16 · 16</span>
+    <section id="runtime-telemetry" class="runtime-telemetry" aria-label="Telemetria local de desempenho" title="THREAD* é um proxy do tempo síncrono da thread principal, não o uso real de CPU.">
+      <div><span>FPS</span><b id="telemetry-fps">—</b></div>
+      <div><span>RAM JS</span><b id="telemetry-memory">—</b></div>
+      <div><span>THREAD*</span><b id="telemetry-thread">—</b></div>
+      <small>* proxy da thread principal · não é CPU real</small>
+    </section>
   </aside>
 
   <aside id="map-teleport" class="map-teleport">
@@ -72,6 +78,46 @@ app.innerHTML = `
     <div class="chat-input"><strong>Todos</strong><span>Pressione Enter para conversar</span></div>
   </section>
 
+  <section id="character-panel" class="character-panel" aria-label="Dados do personagem" aria-hidden="true">
+    <header><strong>PERSONAGEM</strong><button type="button" aria-label="Fechar dados do personagem" data-character-close>×</button></header>
+    <div class="character-summary">
+      <div class="is-name"><span>Nome</span><b id="character-name">Huntress</b></div>
+      <div class="is-level"><span>Lv.</span><b id="character-level">1</b></div>
+      <div class="is-wide"><span>EXP total</span><b id="character-exp-total">0</b></div>
+      <div class="is-wide"><span>Próximo nível</span><b id="character-exp-next">500</b></div>
+      <div class="is-points"><span>Pontos</span><b id="character-points">0</b></div>
+    </div>
+    <section class="character-primary" aria-label="Atributos primários">
+      <h2>Atributos</h2>
+      <div><span>FOR</span><b id="character-str">8</b><button type="button" data-character-attribute="str" aria-label="Adicionar um ponto em Força">+</button></div>
+      <div><span>INT</span><b id="character-int">8</b><button type="button" data-character-attribute="int" aria-label="Adicionar um ponto em Inteligência">+</button></div>
+      <div><span>DES</span><b id="character-dex">12</b><button type="button" data-character-attribute="dex" aria-label="Adicionar um ponto em Destreza">+</button></div>
+      <div><span>CON</span><b id="character-con">8</b><button type="button" data-character-attribute="con" aria-label="Adicionar um ponto em Constituição">+</button></div>
+    </section>
+    <section class="character-derived" aria-label="Dados de combate offline">
+      <h2>Combate <small>offline</small></h2>
+      <div><span>HP</span><b id="character-hp">260 / 260</b></div>
+      <div><span>MP</span><b id="character-mp">280 / 280</b></div>
+      <div><span>Ataque</span><b id="character-attack">52</b></div>
+      <div><span>Defesa</span><b id="character-defense">14</b></div>
+    </section>
+    <section class="character-progress" aria-label="Progresso do personagem">
+      <div><span>EXP do nível</span><b id="character-exp-current">0 / 500</b></div>
+      <div><span>Gold</span><b id="character-coins">0</b></div>
+      <p id="character-offline-note">Frontend offline: +5 pontos e +3 ATQ por nível</p>
+    </section>
+    <footer><kbd>C</kbd><span>abre/fecha · valores derivados são mock do frontend</span></footer>
+  </section>
+
+  <aside id="inventory-preview" class="inventory-preview" aria-label="Preview do item">
+    <header>ITEM 3D</header>
+    <div id="inventory-preview-viewport" class="inventory-preview-viewport" aria-hidden="true">
+      <span id="inventory-preview-fallback" class="inventory-preview-fallback"></span>
+    </div>
+    <strong id="inventory-preview-name">Passe sobre um item</strong>
+    <small id="inventory-preview-kind">Preview clássico 3D</small>
+  </aside>
+
   <section id="inventory-panel" class="inventory-panel">
     <header><strong>INVENTÁRIO</strong><button type="button" aria-label="Fechar inventário" data-inventory-close>×</button></header>
     <div class="inventory-caption">Equipamento</div>
@@ -106,7 +152,7 @@ app.innerHTML = `
     <div id="skill-catalog-grid" class="skill-catalog-grid"></div>
   </section>
 
-  <div class="controls-hint"><span>WASD</span> mover · <span>Q/E</span> câmera · <span>RODA</span> zoom · <span>I</span> inventário · <span>K</span> skills · <span>G</span> GM · <span>R</span> montaria · <span>F</span> auto-combate · <span>V</span> efeitos</div>
+  <div class="controls-hint"><span>WASD</span> mover · <span>Q/E</span> câmera · <span>RODA</span> zoom · <span>C</span> personagem · <span>I</span> inventário · <span>K</span> skills · <span>G</span> GM · <span>R</span> montaria · <span>F</span> auto-combate · <span>V</span> efeitos</div>
 `;
 
 function showBootError(error: unknown): void {

@@ -281,7 +281,11 @@ export class ClassicEnvironmentObjects {
     });
     if (!lease) return null;
     try {
-      lease.model.setClassicTransform({ yaw: 0, scale: 1, mirrorModelZ: true });
+      // TMLeaf/TMTree/TMShip create TMSkinMesh with no owner and mesh type 0.
+      // TMSkinMesh::Render only applies its extra Z mirror to an owned mesh of
+      // type 1 (the character branch). Mirroring these world objects displaced
+      // their deliberately off-centre footprints by roughly one tile.
+      lease.model.setClassicTransform({ yaw: 0, scale: 1, mirrorModelZ: false });
       const geometry = bakeFirstPose(lease);
       const sourceMaterial = lease.model.meshes[0]?.material;
       if (!sourceMaterial || Array.isArray(sourceMaterial) || !(sourceMaterial instanceof THREE.MeshLambertMaterial)) {

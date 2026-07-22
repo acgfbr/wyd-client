@@ -23,6 +23,7 @@ import { ClassicWorld } from "../world/ClassicWorld";
 import { FIELD_WORLD_SIZE, fieldAt, toScene, toWyd, type WydPosition } from "../world/coordinates";
 import { Minimap } from "../ui/Minimap";
 import { GameHud } from "../ui/GameHud";
+import { RuntimeTelemetry } from "../ui/RuntimeTelemetry";
 import { PlayerState } from "../game/state/PlayerState";
 import { ClassicBeastMasterSummon } from "../game/player/ClassicBeastMasterSummon";
 import {
@@ -41,6 +42,8 @@ import { HuntressCombatEffects } from "../render/effects/HuntressCombatEffects";
 import { ClassicDamageNumbers } from "../render/effects/ClassicDamageNumbers";
 import { ClassicHuntressSkillEffects } from "../render/effects/ClassicHuntressSkillEffects";
 import { ClassicEtherealExplosionEffect } from "../render/effects/ClassicEtherealExplosionEffect";
+import { ClassicLevelUpEffects } from "../render/effects/ClassicLevelUpEffects";
+import { ClassicInventoryPreview } from "../render/inventory/ClassicInventoryPreview";
 import { configureClassicDdsTextureSupport } from "../render/textures/ClassicDdsTextureLoader";
 import {
   connectedFieldRegions,
@@ -87,13 +90,16 @@ export class GameApp {
   readonly #heldGroundPointer = new THREE.Vector2();
   readonly #input: GameInput;
   readonly #hud = new GameHud();
+  readonly #telemetry = new RuntimeTelemetry();
   readonly #playerState = new PlayerState("Huntress");
   #skills = new ClassSkillSystem("huntress");
   #activeClassKey: ClassicClassKey = "huntress";
   readonly #combatEffects = new HuntressCombatEffects();
   readonly #skillEffects: ClassicHuntressSkillEffects;
   readonly #etherealExplosionEffects: ClassicEtherealExplosionEffect;
+  readonly #levelUpEffects: ClassicLevelUpEffects;
   readonly #damageNumbers: ClassicDamageNumbers;
+  #inventoryPreview: ClassicInventoryPreview | null = null;
   #assets?: ClassicAssetSource;
   #player?: Player;
   #world?: ClassicWorld;
@@ -146,6 +152,7 @@ export class GameApp {
     this.container.appendChild(this.#renderer.domElement);
     this.#skillEffects = new ClassicHuntressSkillEffects(this.#scene);
     this.#etherealExplosionEffects = new ClassicEtherealExplosionEffect(this.#scene);
+    this.#levelUpEffects = new ClassicLevelUpEffects(this.#scene);
     this.#damageNumbers = new ClassicDamageNumbers(this.container);
     this.#input = new GameInput(this.#renderer.domElement);
     this.#input.onGroundClick = this.groundClick;
@@ -166,6 +173,7 @@ export class GameApp {
       }
     };
     this.#input.onInventoryToggle = () => this.#hud.toggleInventory();
+    this.#input.onCharacterToggle = () => this.#hud.toggleCharacter();
     this.#input.onSkillMenuToggle = () => this.#hud.toggleSkills();
     this.#input.onMountToggle = () => this.toggleMount();
     this.#input.onAutoCombatToggle = () => this.toggleAutoCombat();
@@ -196,6 +204,7 @@ export class GameApp {
     void this.#combatEffects.prepareClassic(assets);
     void this.#skillEffects.prepareClassic(assets);
     void this.#etherealExplosionEffects.prepareClassic(assets);
+    void this.#levelUpEffects.prepareClassic(assets);
     this.configureMapSelector(assets);
     this.configureClassSelector();
     this.configureOutfitSelector();
@@ -208,6 +217,23 @@ export class GameApp {
     // bloquear a primeira imagem.
     await world.ensureCurrent(spawn, true);
     this.#world = world;
+    const previewRoot = document.querySelector<HTMLElement>("#inventory-preview");
+    const previewViewport = document.querySelector<HTMLElement>("#inventory-preview-viewport");
+    if (previewRoot && previewViewport) {
+      this.#inventoryPreview = new ClassicInventoryPreview(
+        this.#renderer,
+        world.models,
+        previewRoot,
+        previewViewport,
+      );
+      this.#hud.onInventoryPreview = (item) => this.#inventoryPreview?.setItem(item);
+      window.addEventListener("pagehide", (event) => {
+        // Safari/iOS fires pagehide before placing the live document in the
+        // back-forward cache. Keep its shared renderer resources alive so the
+        // preview still works after pageshow; dispose only on a real unload.
+        if (!event.persisted) this.#inventoryPreview?.dispose();
+      });
+    }
     world.setEffectsEnabled(this.#effectsEnabled);
     this.#scene.add(world.object);
     this.#player = new Player(world, spawn);
@@ -272,12 +298,14 @@ export class GameApp {
   }
 
   private readonly frame = (): void => {
+    this.#telemetry.begin();
     const dt = Math.min(this.#clock.getDelta(), 0.05);
     this.updateClickMarker(dt);
     const wasInvisible = this.#skills.hasBuff(95);
     this.#skills.update(dt);
     this.#combatEffects.update(dt);
     this.#etherealExplosionEffects.update(dt);
+    this.#levelUpEffects.update(dt);
     this.#damageNumbers.update(dt);
     this.updatePendingSkillEvents(dt);
     if (wasInvisible && !this.#skills.hasBuff(95)) this.#player?.setInvisible(false);
@@ -320,7 +348,10 @@ export class GameApp {
     }
     this.updatePersistentBuffEffects(dt);
     this.#skillEffects.update(dt);
+    this.#inventoryPreview?.update(dt);
     this.#renderer.render(this.#scene, this.#camera);
+    this.#inventoryPreview?.render();
+    this.#telemetry.end();
   };
 
   private readonly groundClick = (pointer: THREE.Vector2): void => {
@@ -621,6 +652,7 @@ export class GameApp {
     this.#combatEffects.setEnabled(this.#effectsEnabled);
     this.#skillEffects.setEnabled(this.#effectsEnabled);
     this.#etherealExplosionEffects.setEnabled(this.#effectsEnabled);
+    this.#levelUpEffects.setEnabled(this.#effectsEnabled);
     const status = document.querySelector<HTMLElement>("#effects-status");
     status?.classList.toggle("is-active", this.#effectsEnabled);
     const label = status?.querySelector("span");
@@ -717,8 +749,12 @@ export class GameApp {
         ClassicBeastMasterSummon.load(definition, spawn, assets)
       ))).then((loaded) => {
         const summons = loaded.filter((summon): summon is ClassicBeastMasterSummon => summon !== null);
-        if (summons.length === 0) {
-          this.#hud.addLog(`${definition.name} não pôde ser materializado.`, "system");
+        if (summons.length !== BEAST_MASTER_SUMMON_PACK_SIZE) {
+          for (const summon of summons) summon.release();
+          this.#hud.addLog(
+            `${definition.name} não pôde formar o grupo completo de ${BEAST_MASTER_SUMMON_PACK_SIZE}.`,
+            "system",
+          );
           return;
         }
         if (
@@ -736,12 +772,9 @@ export class GameApp {
         for (const summon of summons) {
           this.#scene.add(summon.object);
           summon.update(0, this.#player.position, null, environment, () => undefined);
+          this.#levelUpEffects.playSummonSpawn(summon.object.position);
         }
-        this.#combatEffects.burst(this.#player.object.position, skill.color, 1.5);
         this.#hud.addLog(`${summons.length}× ${definition.name} evocados.`, "system");
-        if (summons.length !== BEAST_MASTER_SUMMON_PACK_SIZE) {
-          this.#hud.addLog(`Evocação parcial: ${summons.length}/${BEAST_MASTER_SUMMON_PACK_SIZE}.`, "system");
-        }
       }).catch((error: unknown) => {
         console.warn(`Evocação ${definition.key} indisponível`, error);
         this.#hud.addLog(`${definition.name} não pôde ser materializado.`, "system");
@@ -1156,8 +1189,10 @@ export class GameApp {
     this.#hud.addLog(parts.join(" · "), "reward");
     if (rewards.levelsGained > 0) {
       const snapshot = this.#playerState.snapshot;
+      this.#player?.playLevelUp();
+      if (this.#player) this.#levelUpEffects.playLevelUp(this.#player.object.position);
       this.#hud.addLog(
-        `LEVEL UP · nível ${snapshot.level} · ATQ +${rewards.attackGained} (total ${snapshot.attack})!`,
+        `LEVEL UP · nível ${snapshot.level} · ${rewards.attributePointsGained} pontos · ATQ +${rewards.attackGained} (total ${snapshot.attack})!`,
         "reward",
       );
     }
@@ -1166,12 +1201,14 @@ export class GameApp {
       const added = this.#playerState.addItem({
         key: "pocao-cura-pequena",
         name: "Poção de Cura",
-        description: "Recupera 60 pontos de HP.",
+        description: "Recupera 50 pontos de HP.",
         rarity: "common",
         maxStack: 50,
         value: 35,
         kind: "consumable",
-        heal: 60,
+        classicIndex: 400,
+        previewModelType: 53,
+        heal: 50,
       });
       if (added > 0) this.#hud.addLog("Drop: Poção de Cura.", "reward");
     }

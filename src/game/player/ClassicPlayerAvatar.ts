@@ -23,9 +23,10 @@ import {
 const PLAYER_ACTIONS = [
   "STAND01", "STAND02", "WALK", "RUN", "ATTACK1", "ATTACK2", "ATTACK3",
   "SKILL01", "SKILL02", "SKILL03", "STRIKE", "DIE", "DEAD", "MERCHL", "HOLY",
+  "LEVELUP",
   "MSTND01", "MWALK", "MRUN", "MATT1", "MATT2", "MATT3",
   "MSKIL01", "MSKIL02", "MSKIL03", "MSTRIKE", "MDIE", "MDEAD",
-  "MMERCHL", "MHOLY",
+  "MMERCHL", "MHOLY", "MLVLUP",
 ] as const;
 
 const MOUNTED_PLAYER_ACTIONS = PLAYER_ACTIONS.filter((action) => action.startsWith("M"));

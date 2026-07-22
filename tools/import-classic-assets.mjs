@@ -228,6 +228,14 @@ usedObjectTypes.add(2839); // Effect/unsole.msa
 usedObjectTypes.add(10);
 usedObjectTypes.add(19);
 usedObjectTypes.add(20);
+// Dependências do preview 3D do inventário: poção, Skytalos e traje Valkyrie.
+// São itens equipáveis/consumíveis e por isso não aparecem nos DAT dos mapas.
+usedObjectTypes.add(53); // mesh/hpotion1.msa
+usedObjectTypes.add(762); // mesh/bow16.msa
+usedObjectTypes.add(2883); // mesh/valkyrie.msa
+// TMEffectStart (used by Beast Master summon materialization) resolves this
+// common mesh directly and replaces its first texture with effect slot 52.
+usedObjectTypes.add(703); // Effect/start.msa
 for (const [ownerType, waterType] of houseWaterCompanions) {
   if (usedObjectTypes.has(ownerType)) usedObjectTypes.add(waterType);
 }

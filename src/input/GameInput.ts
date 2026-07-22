@@ -15,6 +15,7 @@ export class GameInput {
   onZoom?: (delta: number) => void;
   onSpeedToggle?: () => void;
   onInventoryToggle?: () => void;
+  onCharacterToggle?: () => void;
   onSkillMenuToggle?: () => void;
   onMountToggle?: () => void;
   onAutoCombatToggle?: () => void;
@@ -27,6 +28,7 @@ export class GameInput {
       if (isTextEntry(event.target)) return;
       if (event.code === "KeyG" && !event.repeat) this.onSpeedToggle?.();
       if (event.code === "KeyI" && !event.repeat) this.onInventoryToggle?.();
+      if (event.code === "KeyC" && !event.repeat) this.onCharacterToggle?.();
       if (event.code === "KeyK" && !event.repeat) this.onSkillMenuToggle?.();
       if (event.code === "KeyR" && !event.repeat) this.onMountToggle?.();
       if (event.code === "KeyF" && !event.repeat) this.onAutoCombatToggle?.();

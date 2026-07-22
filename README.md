@@ -104,6 +104,19 @@ bun run preview
 O build é escrito em `dist/`; o preview normalmente abre em
 [http://localhost:4173](http://localhost:4173).
 
+### Proteção do build web
+
+O build de produção não publica source maps, remove comentários legais,
+`debugger` e chamadas a `console.debug`, e aplica a minificação completa do
+esbuild a identificadores, sintaxe e espaços. Os bundles gerados usam somente
+hashes nos nomes; `console.warn` e `console.error` permanecem disponíveis para
+diagnóstico de falhas reais em dispositivos e assets.
+
+Isso dificulta leitura casual e engenharia reversa, mas não transforma código
+executado no navegador em segredo: o usuário sempre recebe o JavaScript e as
+regras necessárias para rodar o jogo. Chaves privadas, validações autoritativas,
+economia, drops e decisões anticheat precisam permanecer no servidor.
+
 ## Recriando os assets a partir do cliente clássico
 
 Esta etapa é opcional quando `public/game-data/classic` já veio no clone. Use-a

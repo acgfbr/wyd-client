@@ -6,6 +6,7 @@ import { TRN_SIDE } from "../formats/classic/Trn";
 import { createTerrainBlockMesh } from "../render/terrain/TerrainBlockMesh";
 import { TerrainMaterialLibrary } from "../render/terrain/TerrainMaterialLibrary";
 import { MapObjects } from "../render/objects/MapObjects";
+import { ModelLibrary } from "../render/objects/ModelLibrary";
 import { ClassicSpawnManager } from "../game/npcs/ClassicSpawnManager";
 import {
   FIELD_WORLD_SIZE,
@@ -53,6 +54,8 @@ interface ObjectRetryState extends RetryState {
 export class ClassicWorld {
   readonly object = new THREE.Group();
   readonly navigation: ClassicNavigation;
+  /** Shared static-mesh cache used by map objects and auxiliary previews. */
+  readonly models: ModelLibrary;
   readonly #blocks = new Map<string, TrnBlock>();
   readonly #collisionMasks = new Map<string, ClassicCollisionMask>();
   readonly #terrainMeshes = new Map<string, THREE.Group>();
@@ -87,14 +90,18 @@ export class ClassicWorld {
     readonly origin: WydPosition,
   ) {
     this.#lastStreamingPosition = { ...origin };
+    this.models = new ModelLibrary(assets);
     this.navigation = new ClassicNavigation({
       terrainAt: (column, row) => this.#blocks.get(fieldKey(column, row)),
       collisionMaskAt: (column, row) =>
         this.#collisionMasks.get(fieldKey(column, row)),
     });
     this.#materials = new TerrainMaterialLibrary(assets);
-    this.#mapObjects = new MapObjects(assets, origin, (position) =>
-      this.heightAt(position),
+    this.#mapObjects = new MapObjects(
+      assets,
+      origin,
+      (position) => this.heightAt(position),
+      this.models,
     );
     for (const field of assets.manifest.fields) {
       this.#availableFields.set(fieldKey(field.column, field.row), field);

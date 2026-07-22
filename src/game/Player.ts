@@ -336,6 +336,20 @@ export class Player {
     return true;
   }
 
+  /** Mirrors TMHuman::SetAnimation(ECMOTION_LEVELUP, 0) for the local actor. */
+  playLevelUp(): boolean {
+    if (this.#dead) return false;
+    this.#velocity.set(0, 0);
+    const action = this.playAvatarAction(
+      this.#mounted ? ["MLVLUP", "LEVELUP"] : ["LEVELUP"],
+      true,
+    );
+    if (!action) return false;
+    if (this.#mounted) this.#mount?.playLevelUp();
+    this.#actionLockRemaining = Math.max(0.3, action.durationSeconds);
+    return true;
+  }
+
   playDeath(): boolean {
     this.#dead = true;
     this.#path = [];
@@ -802,7 +816,12 @@ export class Player {
     }
     avatar.update(deltaSeconds);
     if (this.#mounted) {
-      if (!this.#dead) this.#mount?.setMoving(moving && this.#actionLockRemaining <= 0);
+      // Preserve non-looping mount actions (notably LEVELUP/STRIKE) while the
+      // matching rider action is locked. Real movement clears the lock in the
+      // branch above and still switches both actors to locomotion immediately.
+      if (!this.#dead && (moving || this.#actionLockRemaining <= 0)) {
+        this.#mount?.setMoving(moving);
+      }
       this.#mount?.update(deltaSeconds);
     }
   }

@@ -1,4 +1,9 @@
-import type { PlayerSnapshot, PlayerState } from "../game/state/PlayerState";
+import type {
+  InventoryItem,
+  PlayerSnapshot,
+  PlayerState,
+  PrimaryAttribute,
+} from "../game/state/PlayerState";
 
 export interface TargetHudSnapshot {
   readonly name: string;
@@ -53,15 +58,27 @@ interface ClassicSkillCatalog {
   readonly skills: readonly ClassicSkillCatalogEntry[];
 }
 
+interface ClassicItemIconCatalog {
+  readonly version: number;
+  readonly cellSize: number;
+  readonly columns: number;
+  readonly iconsPerAtlas: number;
+  readonly atlases: readonly string[];
+  readonly itemToIcon: readonly number[];
+}
+
 export class GameHud {
   onSkillClassSelected: ((classKey: string) => void) | null = null;
   onCatalogSkillUse: ((classicIndex: number) => void) | null = null;
+  onInventoryPreview: ((item: InventoryItem | null) => void) | null = null;
   readonly #target = requireElement<HTMLElement>("#target-status");
   readonly #targetName = requireElement<HTMLElement>("#target-name");
   readonly #targetLevel = requireElement<HTMLElement>("#target-level");
   readonly #targetHp = requireElement<HTMLElement>("#target-hp-fill");
   readonly #inventory = requireElement<HTMLElement>("#inventory-panel");
   readonly #inventoryGrid = requireElement<HTMLElement>("#inventory-grid");
+  readonly #inventoryPreview = requireElement<HTMLElement>("#inventory-preview");
+  readonly #characterPanel = requireElement<HTMLElement>("#character-panel");
   readonly #combatLog = requireElement<HTMLElement>("#combat-log");
   readonly #buffStatus = requireElement<HTMLElement>("#buff-status");
   readonly #skillPanel = requireElement<HTMLElement>("#skill-panel");
@@ -74,6 +91,8 @@ export class GameHud {
   #buffSignature = "";
   #skillCatalog: ClassicSkillCatalog | null = null;
   #skillCatalogJob: Promise<void> | null = null;
+  #itemIconCatalog: ClassicItemIconCatalog | null = null;
+  #itemIconCatalogJob: Promise<ClassicItemIconCatalog | null> | null = null;
   #activeClassKey = "huntress";
   #runtimeSkillIndices = new Set<number>();
 
@@ -81,6 +100,13 @@ export class GameHud {
     document.querySelector<HTMLElement>("[data-inventory-close]")?.addEventListener("click", () => {
       this.toggleInventory(false);
     });
+    document.querySelector<HTMLElement>("[data-character-close]")?.addEventListener("click", () => {
+      this.toggleCharacter(false);
+    });
+    for (const attribute of PRIMARY_ATTRIBUTES) {
+      document.querySelector<HTMLButtonElement>(`[data-character-attribute="${attribute}"]`)
+        ?.addEventListener("click", () => this.#state?.allocatePrimaryAttribute(attribute));
+    }
     document.querySelector<HTMLElement>("[data-skills-close]")?.addEventListener("click", () => {
       this.toggleSkills(false);
     });
@@ -94,6 +120,7 @@ export class GameHud {
     this.#unsubscribe?.();
     this.#state = state;
     this.#unsubscribe = state.subscribe((snapshot) => this.renderPlayer(snapshot));
+    void this.ensureItemIconCatalog();
   }
 
   setTarget(target: TargetHudSnapshot | null): void {
@@ -109,6 +136,15 @@ export class GameHud {
   toggleInventory(force?: boolean): boolean {
     const visible = force ?? !this.#inventory.classList.contains("is-visible");
     this.#inventory.classList.toggle("is-visible", visible);
+    this.#inventoryPreview.classList.toggle("is-inventory-visible", visible);
+    if (!visible) this.setInventoryPreview(null);
+    return visible;
+  }
+
+  toggleCharacter(force?: boolean): boolean {
+    const visible = force ?? !this.#characterPanel.classList.contains("is-visible");
+    this.#characterPanel.classList.toggle("is-visible", visible);
+    this.#characterPanel.setAttribute("aria-hidden", String(!visible));
     return visible;
   }
 
@@ -333,7 +369,77 @@ export class GameHud {
     playerPanel?.style.setProperty("--mp-empty", `${(1 - ratio(snapshot.mp, snapshot.maxMp)) * 100}%`);
     const firstConsumable = snapshot.inventory.find((stack) => stack?.item.kind === "consumable");
     setText("#quickslot-1-count", firstConsumable ? String(firstConsumable.quantity) : "");
+    this.renderCharacter(snapshot);
     this.renderInventory(snapshot);
+  }
+
+  private renderCharacter(snapshot: PlayerSnapshot): void {
+    setText("#character-name", snapshot.name);
+    setText("#character-level", String(snapshot.level));
+    setText("#character-points", String(snapshot.freeAttributePoints));
+    setText("#character-exp-total", formatNumber(snapshot.totalExperience));
+    setText("#character-exp-next", formatNumber(snapshot.nextLevelTotalExperience));
+    setText("#character-exp-current", `${formatNumber(snapshot.experience)} / ${formatNumber(snapshot.nextLevelExperience)}`);
+    setText("#character-hp", `${snapshot.hp} / ${snapshot.maxHp}`);
+    setText("#character-mp", `${snapshot.mp} / ${snapshot.maxMp}`);
+    setText("#character-attack", String(snapshot.attack));
+    setText("#character-defense", String(snapshot.defense));
+    setText("#character-coins", formatNumber(snapshot.coins));
+    setText("#character-offline-note", `Frontend offline: +${snapshot.offlineAttributePointsPerLevel} pontos e +3 ATQ por nível`);
+    for (const attribute of PRIMARY_ATTRIBUTES) {
+      setText(`#character-${attribute}`, String(snapshot.primaryAttributes[attribute]));
+      const button = document.querySelector<HTMLButtonElement>(`[data-character-attribute="${attribute}"]`);
+      if (button) button.disabled = !snapshot.alive || snapshot.freeAttributePoints <= 0;
+    }
+    this.#characterPanel.classList.toggle("has-free-points", snapshot.freeAttributePoints > 0);
+  }
+
+  private ensureItemIconCatalog(): Promise<ClassicItemIconCatalog | null> {
+    if (this.#itemIconCatalogJob) return this.#itemIconCatalogJob;
+    this.#itemIconCatalogJob = fetch("/game-data/classic/ui/item-icons.json")
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const catalog = await response.json() as ClassicItemIconCatalog;
+        if (
+          catalog.cellSize !== 35
+          || catalog.columns <= 0
+          || catalog.iconsPerAtlas <= 0
+          || !Array.isArray(catalog.atlases)
+          || !Array.isArray(catalog.itemToIcon)
+        ) {
+          throw new Error("catálogo incompatível");
+        }
+        this.#itemIconCatalog = catalog;
+        if (this.#lastSnapshot) this.renderInventory(this.#lastSnapshot);
+        return catalog;
+      })
+      .catch((error: unknown) => {
+        console.warn("Ícones clássicos do inventário indisponíveis", error);
+        return null;
+      });
+    return this.#itemIconCatalogJob;
+  }
+
+  private setInventoryPreview(item: InventoryItem | null): void {
+    this.#inventoryPreview.classList.toggle("has-item", item !== null);
+    setText("#inventory-preview-name", item?.name ?? "Passe sobre um item");
+    setText("#inventory-preview-kind", item
+      ? `${inventoryKindLabel(item.kind)} · ${item.previewModelType ? `mesh ${item.previewModelType}` : "sem modelo"}`
+      : "Preview clássico 3D");
+    const fallback = document.querySelector<HTMLElement>("#inventory-preview-fallback");
+    if (fallback) {
+      const icon = item ? this.resolveInventoryIcon(item) : null;
+      fallback.style.backgroundImage = icon ? `url("/game-data/classic/ui/${icon.atlas}")` : "";
+      fallback.style.backgroundPosition = icon
+        ? `${-icon.column * icon.cellSize * 4}px ${-icon.row * icon.cellSize * 4}px`
+        : "";
+      fallback.style.backgroundSize = icon
+        ? `${icon.columns * icon.cellSize * 4}px auto`
+        : "";
+      fallback.classList.toggle("has-classic-icon", icon !== null);
+      fallback.textContent = icon || !item ? "" : item.name.slice(0, 2).toUpperCase();
+    }
+    this.onInventoryPreview?.(item);
   }
 
   private renderInventory(snapshot: PlayerSnapshot): void {
@@ -344,22 +450,67 @@ export class GameHud {
       button.dataset.slot = String(index);
       if (!stack) {
         button.setAttribute("aria-label", `Espaço vazio ${index + 1}`);
+        button.addEventListener("pointerenter", () => this.setInventoryPreview(null));
         return button;
       }
-      const initial = document.createElement("span");
-      initial.className = "inventory-item-mark";
-      initial.textContent = stack.item.name.slice(0, 2).toUpperCase();
+      const icon = this.createInventoryIcon(stack.item);
       const quantity = document.createElement("small");
       quantity.textContent = stack.quantity > 1 ? String(stack.quantity) : "";
       button.title = `${stack.item.name}\n${stack.item.description}`;
       button.setAttribute("aria-label", `${stack.item.name}, quantidade ${stack.quantity}`);
-      button.append(initial, quantity);
+      button.append(icon, quantity);
+      button.addEventListener("pointerenter", () => this.setInventoryPreview(stack.item));
+      button.addEventListener("pointerleave", () => {
+        if (document.activeElement !== button) this.setInventoryPreview(null);
+      });
+      button.addEventListener("focus", () => this.setInventoryPreview(stack.item));
+      button.addEventListener("blur", () => {
+        if (!button.matches(":hover")) this.setInventoryPreview(null);
+      });
       button.addEventListener("dblclick", () => {
         if (this.#state?.useInventorySlot(index)) this.addLog(`${stack.item.name} utilizado.`, "system");
       });
       return button;
     });
     this.#inventoryGrid.replaceChildren(...cells);
+  }
+
+  private createInventoryIcon(item: InventoryItem): HTMLElement {
+    const fallback = document.createElement("span");
+    fallback.className = "inventory-item-mark";
+    fallback.textContent = item.name.slice(0, 2).toUpperCase();
+    const resolved = this.resolveInventoryIcon(item);
+    if (!resolved) return fallback;
+    const icon = document.createElement("span");
+    icon.className = "inventory-item-icon";
+    icon.style.backgroundImage = `url("/game-data/classic/ui/${resolved.atlas}")`;
+    icon.style.backgroundPosition = `${-resolved.column * resolved.cellSize}px ${-resolved.row * resolved.cellSize}px`;
+    icon.setAttribute("aria-hidden", "true");
+    return icon;
+  }
+
+  private resolveInventoryIcon(item: InventoryItem): {
+    readonly atlas: string;
+    readonly column: number;
+    readonly row: number;
+    readonly cellSize: number;
+    readonly columns: number;
+  } | null {
+    const catalog = this.#itemIconCatalog;
+    if (!catalog || item.classicIndex === undefined) return null;
+    const globalIndex = catalog.itemToIcon[item.classicIndex] ?? -1;
+    if (globalIndex < 0) return null;
+    const atlasIndex = Math.floor(globalIndex / catalog.iconsPerAtlas);
+    const atlas = catalog.atlases[atlasIndex];
+    if (!atlas) return null;
+    const localIndex = globalIndex % catalog.iconsPerAtlas;
+    return {
+      atlas,
+      column: localIndex % catalog.columns,
+      row: Math.floor(localIndex / catalog.columns),
+      cellSize: catalog.cellSize,
+      columns: catalog.columns,
+    };
   }
 }
 
@@ -421,4 +572,19 @@ function setWidth(selector: string, value: number): void {
 
 function ratio(value: number, maximum: number): number {
   return maximum <= 0 ? 0 : Math.max(0, Math.min(1, value / maximum));
+}
+
+const PRIMARY_ATTRIBUTES = ["str", "int", "dex", "con"] as const satisfies readonly PrimaryAttribute[];
+
+function formatNumber(value: number): string {
+  return Math.max(0, Math.trunc(value)).toLocaleString("pt-BR");
+}
+
+function inventoryKindLabel(kind: InventoryItem["kind"]): string {
+  switch (kind) {
+    case "consumable": return "Consumível";
+    case "equipment": return "Equipamento";
+    case "material": return "Material";
+    case "quest": return "Missão";
+  }
 }
