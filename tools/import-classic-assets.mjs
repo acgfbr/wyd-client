@@ -236,6 +236,18 @@ usedObjectTypes.add(2883); // mesh/valkyrie.msa
 // TMEffectStart (used by Beast Master summon materialization) resolves this
 // common mesh directly and replaces its first texture with effect slot 52.
 usedObjectTypes.add(703); // Effect/start.msa
+// Class skill renderers resolve these effect meshes directly rather than from
+// a Field DAT. Keep the dependency set beside the other indirect VFX so a
+// clean clone receives the same runtime assets from `bun run import:classic`.
+usedObjectTypes.add(701); // Effect/arrow.msa — Foema Flecha Mágica
+usedObjectTypes.add(702); // Effect/FireBall.msa — Golpe Duplo / Fênix
+usedObjectTypes.add(704); // Effect/energy01.msa — Escudo Mágico
+usedObjectTypes.add(705); // Effect/energy02.msa — Escudo Mágico
+usedObjectTypes.add(706); // Effect/icefreeze1.msa — Lâmina Congelada
+usedObjectTypes.add(707); // Effect/icefreeze2.msa — Tempestade de Gelo
+usedObjectTypes.add(708); // Effect/icespear.msa — Lança de Gelo / Nevasca
+usedObjectTypes.add(2838); // Effect/crarmor.msa — Armadura Crítica
+usedObjectTypes.add(2840); // Effect/destiny.msa — Destino
 for (const [ownerType, waterType] of houseWaterCompanions) {
   if (usedObjectTypes.has(ownerType)) usedObjectTypes.add(waterType);
 }

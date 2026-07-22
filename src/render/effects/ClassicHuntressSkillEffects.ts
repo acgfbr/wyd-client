@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import type { ClassicAssetSource } from "../../assets/ClassicAssetSource";
 import { parseMsa } from "../../formats/classic/Msa";
+import type { ClassicSkinnedAfterimage } from "../characters/ClassicSkinnedAfterimage";
 import { ClassicDdsTextureLoader } from "../textures/ClassicDdsTextureLoader";
 
 export type ClassicHuntressAttackBurstIndex = 72 | 80;
@@ -40,6 +41,15 @@ const SOUL_PARTICLE_MAX_OPACITY = 0.24;
 const SOUL_PARTICLE_LIFETIME_SECONDS = 0.8;
 const SOUL_PARTICLE_INTERVAL_SECONDS = 1 / 60;
 const SOUL_PARTICLE_POOL_LIMIT = 96;
+// TMHuman.cpp:9308-9352 / TMEffectSkinMesh::FrameMove motion type 6.
+const SHADOW_BLADE_LIFETIMES_SECONDS = [0.1, 0.3, 0.5, 0.7, 0.9] as const;
+const SHADOW_BLADE_PARTICLE_COLOR = 0xaa8877;
+const SHADOW_BLADE_PARTICLE_LIFETIME_SECONDS = 1.5;
+const SHADOW_BLADE_PARTICLE_INTERVAL_SECONDS = 1 / 60;
+// The retail client allocates one billboard per clone per rendered frame. A
+// bounded pool preserves that density without allowing repeated casts to grow
+// GPU memory, which matters on iOS/WebGL.
+const SHADOW_BLADE_PARTICLE_POOL_LIMIT = 160;
 
 interface AttackDefinition {
   readonly textureIndex: 56 | 60;
@@ -143,8 +153,26 @@ interface EnchantIceVisual {
   serial: number;
 }
 
+interface ShadowBladeVisual {
+  readonly afterimage: ClassicSkinnedAfterimage;
+  readonly start: THREE.Vector3;
+  readonly target: THREE.Vector3;
+  readonly lifetime: number;
+  elapsed: number;
+  particleAccumulator: number;
+}
+
+interface ShadowBladeParticleVisual {
+  readonly sprite: THREE.Sprite;
+  active: boolean;
+  elapsed: number;
+  serial: number;
+  baseScaleX: number;
+  baseScaleY: number;
+}
+
 /**
- * Exact local presentation for Huntress skills 72/75/76/80/81.
+ * Exact local presentation for Huntress skills 72/75/76/80/81/88.
  *
  * `worldPosition` is the actor/target base position. The original client adds
  * +1.0 to attack billboards. Persistent buffs are anchored to the actor every
@@ -161,6 +189,8 @@ export class ClassicHuntressSkillEffects {
   readonly #immunityVisual: ImmunityVisual;
   readonly #soulLinkVisual: SoulLinkVisual;
   readonly #soulParticlePool: SoulParticleVisual[] = [];
+  readonly #shadowBladeVisuals: ShadowBladeVisual[] = [];
+  readonly #shadowBladeParticlePool: ShadowBladeParticleVisual[] = [];
   readonly #planeGeometry = new THREE.PlaneGeometry(1, 1);
   readonly #fallbackImmunityGeometry = new THREE.IcosahedronGeometry(1, 2);
   readonly #fallbackSoulLinkGeometry = new THREE.TorusGeometry(0.32, 0.055, 6, 24, Math.PI * 1.45);
@@ -170,6 +200,7 @@ export class ClassicHuntressSkillEffects {
   #preload: Promise<void> | null = null;
   #serial = 0;
   #particleSerial = 0;
+  #shadowBladeParticleSerial = 0;
   #enabled = true;
   #disposed = false;
 
@@ -201,9 +232,10 @@ export class ClassicHuntressSkillEffects {
         this.applyImmunityAssets(this.#immunityVisual);
         this.applySoulLinkAssets(this.#soulLinkVisual);
         for (const particle of this.#soulParticlePool) this.applySoulParticleAsset(particle);
+        for (const particle of this.#shadowBladeParticlePool) this.applyShadowBladeParticleAsset(particle);
       })
       .catch((error: unknown) => {
-        console.warn("Efeitos clássicos 72/75/76/80/81 indisponíveis; usando fallback.", error);
+        console.warn("Efeitos clássicos 72/75/76/80/81/88 indisponíveis; usando fallback.", error);
       })
       .finally(() => {
         this.#preload = null;
@@ -253,6 +285,8 @@ export class ClassicHuntressSkillEffects {
       this.updateSoulLinkVisual(this.#soulLinkVisual, delta);
     }
     this.updateSoulParticles(delta);
+    this.updateShadowBladeVisuals(delta);
+    this.updateShadowBladeParticles(delta);
   }
 
   playAttackBurst(classicIndex: ClassicHuntressAttackBurstIndex, worldPosition: THREE.Vector3): void {
@@ -359,6 +393,56 @@ export class ClassicHuntressSkillEffects {
     this.updateEnchantIceVisual(visual);
   }
 
+  /**
+   * Huntress #88, Lâmina das Sombras. TMHuman creates five complete actor
+   * copies with lifetimes 100/300/500/700/900 ms and motion type 6. Their
+   * current cast pose travels linearly from caster to target while fading by
+   * cos(progress * PI/2); mounted casts pass only the mount visual here.
+   */
+  playShadowBlade(
+    afterimages: readonly ClassicSkinnedAfterimage[],
+    targetWorld: THREE.Vector3,
+  ): void {
+    if (
+      this.#disposed
+      || !this.#enabled
+      || !isFiniteVector(targetWorld)
+    ) {
+      for (const afterimage of afterimages) afterimage.dispose();
+      return;
+    }
+
+    this.clearShadowBladeVisuals();
+    const total = Math.min(afterimages.length, SHADOW_BLADE_LIFETIMES_SECONDS.length);
+    for (let index = 0; index < total; index++) {
+      const afterimage = afterimages[index]!;
+      const start = afterimage.object.position.clone();
+      // InitPosition receives m_fHeight + 0.1f in TMHuman.
+      start.y += 0.1;
+      afterimage.object.position.copy(start);
+      afterimage.update(0);
+      const headingX = targetWorld.x - start.x;
+      const headingZ = targetWorld.z - start.z;
+      if (headingX * headingX + headingZ * headingZ > 1e-8) {
+        // Three scene Z is the inverse of logical WYD Y.
+        afterimage.setClassicYaw(-(Math.atan2(headingX, -headingZ) + Math.PI / 2));
+      }
+      afterimage.setIntensity(1);
+      this.object.add(afterimage.object);
+      this.#shadowBladeVisuals.push({
+        afterimage,
+        start,
+        target: targetWorld.clone(),
+        lifetime: SHADOW_BLADE_LIFETIMES_SECONDS[index]!,
+        elapsed: 0,
+        particleAccumulator: 0,
+      });
+    }
+    // Never leak extra copies if a caller supplied more than the five retail
+    // instances.
+    for (let index = total; index < afterimages.length; index++) afterimages[index]!.dispose();
+  }
+
   clear(): void {
     for (const visual of this.#attackPool) deactivateAttack(visual);
     for (const visual of this.#enchantIcePool) deactivateEnchantIce(visual);
@@ -367,6 +451,8 @@ export class ClassicHuntressSkillEffects {
     deactivateImmunity(this.#immunityVisual);
     deactivateSoulLink(this.#soulLinkVisual);
     this.clearSoulParticles();
+    this.clearShadowBladeVisuals();
+    this.clearShadowBladeParticles();
   }
 
   /** Optional terminal cleanup for scene replacement. `clear()` keeps the pool reusable. */
@@ -395,11 +481,13 @@ export class ClassicHuntressSkillEffects {
       orbit.glow.material.dispose();
     }
     for (const particle of this.#soulParticlePool) particle.sprite.material.dispose();
+    for (const particle of this.#shadowBladeParticlePool) particle.sprite.material.dispose();
     this.#attackPool.length = 0;
     this.#enchantIcePool.length = 0;
     this.#immunityCastPool.length = 0;
     this.#soulLinkCastPool.length = 0;
     this.#soulParticlePool.length = 0;
+    this.#shadowBladeParticlePool.length = 0;
     this.#planeGeometry.dispose();
     this.#fallbackImmunityGeometry.dispose();
     this.#fallbackSoulLinkGeometry.dispose();
@@ -825,6 +913,113 @@ export class ClassicHuntressSkillEffects {
     for (const particle of this.#soulParticlePool) deactivateSoulParticle(particle);
   }
 
+  private updateShadowBladeVisuals(deltaSeconds: number): void {
+    for (let index = this.#shadowBladeVisuals.length - 1; index >= 0; index--) {
+      const visual = this.#shadowBladeVisuals[index]!;
+      visual.elapsed += deltaSeconds;
+      if (visual.elapsed >= visual.lifetime) {
+        visual.afterimage.dispose();
+        this.#shadowBladeVisuals.splice(index, 1);
+        continue;
+      }
+
+      const progress = THREE.MathUtils.clamp(visual.elapsed / visual.lifetime, 0, 1);
+      visual.afterimage.object.position.lerpVectors(visual.start, visual.target, progress);
+      visual.afterimage.setIntensity(Math.max(0, Math.cos(progress * Math.PI / 2)));
+      // TMEffectSkinMesh owns a new TMSkinMesh: same animation/FPS as the
+      // caster, but a clock started at the effect event rather than live bones.
+      visual.afterimage.update(deltaSeconds);
+
+      visual.particleAccumulator += deltaSeconds;
+      while (visual.particleAccumulator >= SHADOW_BLADE_PARTICLE_INTERVAL_SECONDS) {
+        visual.particleAccumulator -= SHADOW_BLADE_PARTICLE_INTERVAL_SECONDS;
+        this.spawnShadowBladeParticle(visual.afterimage.object.position);
+      }
+    }
+  }
+
+  private spawnShadowBladeParticle(worldPosition: THREE.Vector3): void {
+    const particle = this.acquireShadowBladeParticle();
+    const serial = ++this.#shadowBladeParticleSerial;
+    const scaleStep = classicRandomStep(serial, 0, 5);
+    const offsetX = classicRandomStep(serial, 1, 10) - 5;
+    const offsetZ = classicRandomStep(serial, 2, 10) - 5;
+    particle.active = true;
+    particle.elapsed = 0;
+    particle.serial = serial;
+    particle.baseScaleX = scaleStep * 0.05 + 0.02;
+    particle.baseScaleY = scaleStep * 0.1 + 0.02;
+    particle.sprite.position.set(
+      worldPosition.x + offsetX * 0.02,
+      worldPosition.y,
+      worldPosition.z + offsetZ * 0.02,
+    );
+    particle.sprite.scale.set(particle.baseScaleX, particle.baseScaleY, 1);
+    particle.sprite.material.opacity = 0;
+    particle.sprite.visible = true;
+    this.applyShadowBladeParticleAsset(particle);
+  }
+
+  private acquireShadowBladeParticle(): ShadowBladeParticleVisual {
+    const free = this.#shadowBladeParticlePool.find((particle) => !particle.active);
+    if (free) return free;
+    if (this.#shadowBladeParticlePool.length < SHADOW_BLADE_PARTICLE_POOL_LIMIT) {
+      const sprite = createBrightSprite(
+        this.#fallbackGlow,
+        SHADOW_BLADE_PARTICLE_COLOR,
+        `classic-shadow-blade-particle-${this.#shadowBladeParticlePool.length}`,
+      );
+      const particle: ShadowBladeParticleVisual = {
+        sprite,
+        active: false,
+        elapsed: 0,
+        serial: 0,
+        baseScaleX: 0.02,
+        baseScaleY: 0.02,
+      };
+      this.#shadowBladeParticlePool.push(particle);
+      this.object.add(sprite);
+      return particle;
+    }
+    return oldestVisual(this.#shadowBladeParticlePool);
+  }
+
+  private applyShadowBladeParticleAsset(particle: ShadowBladeParticleVisual): void {
+    setMaterialMap(particle.sprite.material, this.#resources?.particleTexture ?? this.#fallbackGlow);
+    particle.sprite.material.color.setHex(SHADOW_BLADE_PARTICLE_COLOR);
+  }
+
+  private updateShadowBladeParticles(deltaSeconds: number): void {
+    for (const particle of this.#shadowBladeParticlePool) {
+      if (!particle.active) continue;
+      particle.elapsed += deltaSeconds;
+      if (particle.elapsed >= SHADOW_BLADE_PARTICLE_LIFETIME_SECONDS) {
+        deactivateShadowBladeParticle(particle);
+        continue;
+      }
+      const progress = particle.elapsed / SHADOW_BLADE_PARTICLE_LIFETIME_SECONDS;
+      // TMEffectBillBoard defaults: m_nFade=1, particle type 1, V=1.0 and
+      // scale velocity .0005 per millisecond.
+      const growth = particle.elapsed * 0.5;
+      particle.sprite.position.y += deltaSeconds / SHADOW_BLADE_PARTICLE_LIFETIME_SECONDS;
+      particle.sprite.scale.set(
+        particle.baseScaleX + growth,
+        particle.baseScaleY + growth,
+        1,
+      );
+      particle.sprite.material.opacity = Math.max(0, Math.sin(progress * Math.PI));
+    }
+  }
+
+  private clearShadowBladeVisuals(): void {
+    for (const visual of this.#shadowBladeVisuals) visual.afterimage.dispose();
+    this.#shadowBladeVisuals.length = 0;
+  }
+
+  private clearShadowBladeParticles(): void {
+    for (const particle of this.#shadowBladeParticlePool) deactivateShadowBladeParticle(particle);
+  }
+
   private async loadClassicResources(assets: ClassicAssetSource): Promise<ClassicResources> {
     const textureIndices = [7, 56, 60, 0] as const;
     const textureResults = await Promise.allSettled(
@@ -1028,12 +1223,25 @@ function deactivateSoulParticle(particle: SoulParticleVisual): void {
   particle.sprite.material.opacity = 0;
 }
 
+function deactivateShadowBladeParticle(particle: ShadowBladeParticleVisual): void {
+  particle.active = false;
+  particle.elapsed = 0;
+  particle.sprite.visible = false;
+  particle.sprite.material.opacity = 0;
+}
+
 function oldestVisual<T extends { serial: number }>(visuals: readonly T[]): T {
   let oldest = visuals[0]!;
   for (const visual of visuals) {
     if (visual.serial < oldest.serial) oldest = visual;
   }
   return oldest;
+}
+
+/** Deterministic stand-in for the client's sequential rand() calls. */
+function classicRandomStep(serial: number, lane: number, modulus: number): number {
+  const seed = Math.imul(serial + lane * 0x9e37, 1_103_515_245) + 12_345;
+  return (seed >>> 16) % modulus;
 }
 
 function configureClassicBillboardUvs(texture: THREE.Texture): void {

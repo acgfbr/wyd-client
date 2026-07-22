@@ -6428,10 +6428,52 @@
         "models/textures/mesh-beach1.dds"
       ]
     },
+    "701": {
+      "file": "models/701.msa",
+      "textures": [
+        null
+      ]
+    },
+    "702": {
+      "file": "models/702.msa",
+      "textures": [
+        null
+      ]
+    },
     "703": {
       "file": "models/703.msa",
       "textures": [
         "models/textures/effect-blight.dds"
+      ]
+    },
+    "704": {
+      "file": "models/704.msa",
+      "textures": [
+        "models/textures/effect-energy.dds"
+      ]
+    },
+    "705": {
+      "file": "models/705.msa",
+      "textures": [
+        "models/textures/effect-energy.dds"
+      ]
+    },
+    "706": {
+      "file": "models/706.msa",
+      "textures": [
+        "models/textures/effect-m001.dds"
+      ]
+    },
+    "707": {
+      "file": "models/707.msa",
+      "textures": [
+        "models/textures/effect-m001.dds"
+      ]
+    },
+    "708": {
+      "file": "models/708.msa",
+      "textures": [
+        "models/textures/effect-m001.dds"
       ]
     },
     "762": {
@@ -9985,10 +10027,22 @@
         "models/textures/mesh-telept.dds"
       ]
     },
+    "2838": {
+      "file": "models/2838.msa",
+      "textures": [
+        "models/textures/effect-crarmor.dds"
+      ]
+    },
     "2839": {
       "file": "models/2839.msa",
       "textures": [
         "models/textures/effect-unsole.dds"
+      ]
+    },
+    "2840": {
+      "file": "models/2840.msa",
+      "textures": [
+        "models/textures/effect-destiny.dds"
       ]
     },
     "2883": {

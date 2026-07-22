@@ -22,6 +22,21 @@ export interface ClassicSkinnedPart {
   readonly material: THREE.Material;
 }
 
+/** Immutable CPU-side clip reference safe to reuse in a short-lived clone. */
+export interface ClassicSkinnedAnimationSnapshot {
+  readonly name: string;
+  readonly animation: AniAnimation;
+  readonly quarterStepMs: number;
+  readonly loop: boolean;
+}
+
+export interface ClassicSkinnedCloneAnimationController {
+  /** Advances a private clock; it never reads the live actor pose again. */
+  update(deltaSeconds: number): void;
+  /** Applies the original TMSkinMesh yaw transform to the cloned basis. */
+  setClassicYaw(yaw: number): void;
+}
+
 export interface ClassicSkinnedModelOptions {
   readonly skeleton: BonSkeleton;
   readonly parts: readonly ClassicSkinnedPart[];
@@ -108,11 +123,8 @@ export class ClassicSkinnedModel {
 
   readonly #basis = new THREE.Group();
   readonly #rig = new THREE.Group();
-  readonly #clips = new Map<string, Required<Pick<ClassicMatrixClip, "name" | "animation">> & {
-    quarterStepMs: number;
-    loop: boolean;
-  }>();
-  #currentClip: ReturnType<ClassicSkinnedModel["normaliseClip"]> | null = null;
+  readonly #clips = new Map<string, ClassicSkinnedAnimationSnapshot>();
+  #currentClip: ClassicSkinnedAnimationSnapshot | null = null;
   #elapsedMilliseconds = 0;
   #axisMode: "standard" | "late";
   #mirrorModelZ: boolean;
@@ -200,6 +212,91 @@ export class ClassicSkinnedModel {
     return this.#currentClip?.name ?? null;
   }
 
+  /**
+   * TMEffectSkinMesh receives the actor's SetAnimation pointer and FPS, then
+   * starts its own clock at zero. Returning the parsed clip reference (not the
+   * live elapsed time) reproduces that ownership without duplicating CPU data.
+   */
+  currentAnimationSnapshot(): ClassicSkinnedAnimationSnapshot | null {
+    return this.#currentClip;
+  }
+
+  /** Returns an immutable clip owned by this exact rig instance. */
+  animationSnapshot(name: string): ClassicSkinnedAnimationSnapshot | null {
+    return this.#clips.get(name) ?? null;
+  }
+
+  /**
+   * Binds an independent classic ANI sampler to an exact SkeletonUtils clone
+   * of this model. A snapshot from another model is rejected: classic ANI
+   * matrices are rig-specific and cannot safely be transferred by bone slot.
+   * `quarterStepMsOverride` mirrors the few client paths that copy only FPS.
+   */
+  createCloneAnimationController(
+    cloneRoot: THREE.Object3D,
+    animation: ClassicSkinnedAnimationSnapshot | null = this.#currentClip,
+    quarterStepMsOverride?: number,
+  ): ClassicSkinnedCloneAnimationController | null {
+    if (!animation || this.#clips.get(animation.name) !== animation) return null;
+    if (
+      quarterStepMsOverride !== undefined
+      && (!Number.isFinite(quarterStepMsOverride) || quarterStepMsOverride <= 0)
+    ) return null;
+    const playback = quarterStepMsOverride === undefined
+      ? animation
+      : { ...animation, quarterStepMs: quarterStepMsOverride };
+    const sourceNodes: THREE.Object3D[] = [];
+    const cloneNodes: THREE.Object3D[] = [];
+    this.object.traverse((node) => sourceNodes.push(node));
+    cloneRoot.traverse((node) => cloneNodes.push(node));
+    if (sourceNodes.length !== cloneNodes.length) return null;
+
+    const clones = new Map<THREE.Object3D, THREE.Object3D>();
+    for (let index = 0; index < sourceNodes.length; index++) {
+      clones.set(sourceNodes[index]!, cloneNodes[index]!);
+    }
+    const animationBones = this.animationBones.map((bone) => {
+      const clone = clones.get(bone);
+      return clone instanceof THREE.Bone ? clone : null;
+    });
+    if (animationBones.some((bone) => bone === null)) return null;
+    const basis = clones.get(this.#basis);
+    if (!basis) return null;
+
+    let elapsedMilliseconds = 0;
+    const scale = this.#scale.clone();
+    const pitch = this.#pitch;
+    const roll = this.#roll;
+    const mirrorModelZ = this.#mirrorModelZ;
+    const axisMode = this.#axisMode;
+    const applyYaw = (yaw: number): void => {
+      setClassicBasisMatrix(
+        basis.matrix,
+        yaw,
+        pitch,
+        roll,
+        scale,
+        mirrorModelZ,
+        axisMode,
+      );
+      basis.matrixAutoUpdate = false;
+      basis.matrixWorldNeedsUpdate = true;
+    };
+    applyClassicAnimationAt(animationBones, playback, 0);
+    applyYaw(this.#yaw);
+
+    return {
+      update: (deltaSeconds: number) => {
+        if (!Number.isFinite(deltaSeconds) || deltaSeconds <= 0) return;
+        elapsedMilliseconds += deltaSeconds * 1_000;
+        applyClassicAnimationAt(animationBones, playback, elapsedMilliseconds);
+      },
+      setClassicYaw: (yaw: number) => {
+        if (Number.isFinite(yaw)) applyYaw(yaw);
+      },
+    };
+  }
+
   play(name: string, restart = false): boolean {
     const clip = this.#clips.get(name);
     if (!clip) return false;
@@ -215,17 +312,7 @@ export class ClassicSkinnedModel {
     const clip = this.#currentClip;
     if (!clip || !Number.isFinite(deltaSeconds) || deltaSeconds <= 0) return;
     this.#elapsedMilliseconds += deltaSeconds * 1_000;
-
-    const animation = clip.animation;
-    const totalSubsteps = animation.tickCount * 4;
-    let substep = Math.floor(this.#elapsedMilliseconds / clip.quarterStepMs);
-    if (clip.loop) substep %= totalSubsteps;
-    else substep = Math.min(substep, totalSubsteps - 1);
-
-    const tick = Math.floor(substep / 4);
-    const fraction = (substep & 3) * 0.25;
-    const nextTick = tick + 1 < animation.tickCount ? tick + 1 : (clip.loop ? 0 : tick);
-    this.applyPose(clip, tick, nextTick, fraction);
+    applyClassicAnimationAt(this.animationBones, clip, this.#elapsedMilliseconds);
   }
 
   /**
@@ -244,15 +331,15 @@ export class ClassicSkinnedModel {
     if (typeof scale === "number") this.#scale.setScalar(scale);
     else if (scale) this.#scale.copy(scale);
 
-    const yaw = this.#yaw + (this.#axisMode === "standard" ? -Math.PI / 2 : Math.PI / 2);
-    const pitch = this.#pitch + (this.#axisMode === "standard" ? -Math.PI / 2 : 0);
-    const rotation = d3dYawPitchRoll(yaw, pitch, this.#roll);
-    const scaleMatrix = rowScale(
-      this.#scale.x,
-      this.#scale.y,
-      this.#scale.z * (this.#mirrorModelZ ? -1 : 1),
+    setClassicBasisMatrix(
+      this.#basis.matrix,
+      this.#yaw,
+      this.#pitch,
+      this.#roll,
+      this.#scale,
+      this.#mirrorModelZ,
+      this.#axisMode,
     );
-    setConvertedD3DMatrix(this.#basis.matrix, rowMultiply(rotation, scaleMatrix));
     this.#basis.matrixWorldNeedsUpdate = true;
   }
 
@@ -274,52 +361,94 @@ export class ClassicSkinnedModel {
     this.#basis.matrixWorldNeedsUpdate = true;
   }
 
-  normaliseClip(source: ClassicMatrixClip): {
-    name: string;
-    animation: AniAnimation;
-    quarterStepMs: number;
-    loop: boolean;
-  } {
+  normaliseClip(source: ClassicMatrixClip): ClassicSkinnedAnimationSnapshot {
     const quarterStepMs = source.quarterStepMs ?? 20;
     if (!source.name || !Number.isFinite(quarterStepMs) || quarterStepMs <= 0) {
       throw new Error(`Clip classico invalido: ${source.name}`);
     }
-    return {
+    return Object.freeze({
       name: source.name,
       animation: source.animation,
       quarterStepMs,
       loop: source.loop ?? true,
-    };
+    });
   }
 
   private applyPose(
-    clip: ReturnType<ClassicSkinnedModel["normaliseClip"]>,
+    clip: ClassicSkinnedAnimationSnapshot,
     tick: number,
     nextTick: number,
     fraction: number,
   ): void {
-    const animation = clip.animation;
-    for (let boneSlot = 0; boneSlot < this.animationBones.length; boneSlot++) {
-      const bone = this.animationBones[boneSlot];
-      if (!bone) continue;
-      if (boneSlot >= animation.boneSlotCount) {
-        bone.matrix.identity();
-        bone.matrixWorldNeedsUpdate = true;
-        continue;
-      }
-
-      const first = (tick * animation.boneSlotCount + boneSlot) * 16;
-      const second = (nextTick * animation.boneSlotCount + boneSlot) * 16;
-      const elements = bone.matrix.elements;
-      for (let component = 0; component < 16; component++) {
-        const a = animation.matrices[first + component] ?? 0;
-        const b = animation.matrices[second + component] ?? a;
-        const value = a + (b - a) * fraction;
-        elements[component] = D3D_TO_THREE_NEGATIVE_COMPONENTS.has(component) ? -value : value;
-      }
-      bone.matrixWorldNeedsUpdate = true;
-    }
+    applyClassicPose(this.animationBones, clip, tick, nextTick, fraction);
   }
+}
+
+function applyClassicAnimationAt(
+  bones: readonly (THREE.Bone | null)[],
+  clip: ClassicSkinnedAnimationSnapshot,
+  elapsedMilliseconds: number,
+): void {
+  const animation = clip.animation;
+  const totalSubsteps = Math.max(1, animation.tickCount * 4);
+  let substep = Math.max(0, Math.floor(elapsedMilliseconds / clip.quarterStepMs));
+  if (clip.loop) substep %= totalSubsteps;
+  else substep = Math.min(substep, totalSubsteps - 1);
+
+  const tick = Math.floor(substep / 4);
+  const fraction = (substep & 3) * 0.25;
+  const nextTick = tick + 1 < animation.tickCount ? tick + 1 : (clip.loop ? 0 : tick);
+  applyClassicPose(bones, clip, tick, nextTick, fraction);
+}
+
+function applyClassicPose(
+  bones: readonly (THREE.Bone | null)[],
+  clip: ClassicSkinnedAnimationSnapshot,
+  tick: number,
+  nextTick: number,
+  fraction: number,
+): void {
+  const animation = clip.animation;
+  for (let boneSlot = 0; boneSlot < bones.length; boneSlot++) {
+    const bone = bones[boneSlot];
+    if (!bone) continue;
+    if (boneSlot >= animation.boneSlotCount) {
+      bone.matrix.identity();
+      bone.matrixWorldNeedsUpdate = true;
+      continue;
+    }
+
+    const first = (tick * animation.boneSlotCount + boneSlot) * 16;
+    const second = (nextTick * animation.boneSlotCount + boneSlot) * 16;
+    const elements = bone.matrix.elements;
+    for (let component = 0; component < 16; component++) {
+      const a = animation.matrices[first + component] ?? 0;
+      const b = animation.matrices[second + component] ?? a;
+      const value = a + (b - a) * fraction;
+      elements[component] = D3D_TO_THREE_NEGATIVE_COMPONENTS.has(component) ? -value : value;
+    }
+    bone.matrixWorldNeedsUpdate = true;
+  }
+}
+
+function setClassicBasisMatrix(
+  target: THREE.Matrix4,
+  classicYaw: number,
+  classicPitch: number,
+  classicRoll: number,
+  scale: Readonly<THREE.Vector3>,
+  mirrorModelZ: boolean,
+  axisMode: "standard" | "late",
+): void {
+  const yaw = classicYaw + (axisMode === "standard" ? -Math.PI / 2 : Math.PI / 2);
+  const pitch = classicPitch + (axisMode === "standard" ? -Math.PI / 2 : 0);
+  const rotation = d3dYawPitchRoll(yaw, pitch, classicRoll);
+  const scaleMatrix = rowScale(
+    scale.x,
+    scale.y,
+    scale.z * (mirrorModelZ ? -1 : 1),
+  );
+  setConvertedD3DMatrix(target, rowMultiply(rotation, scaleMatrix));
 }
 
 /** Builds RH Three.js geometry while preserving the MSH's four skin lanes. */

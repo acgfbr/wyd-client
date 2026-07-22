@@ -46,6 +46,8 @@ import {
 import { HuntressCombatEffects } from "../render/effects/HuntressCombatEffects";
 import { ClassicDamageNumbers } from "../render/effects/ClassicDamageNumbers";
 import { ClassicHuntressSkillEffects } from "../render/effects/ClassicHuntressSkillEffects";
+import { ClassicFoemaSkillEffects } from "../render/effects/ClassicFoemaSkillEffects";
+import { ClassicTransKnightSkillEffects } from "../render/effects/ClassicTransKnightSkillEffects";
 import { ClassicEtherealExplosionEffect } from "../render/effects/ClassicEtherealExplosionEffect";
 import { ClassicLevelUpEffects } from "../render/effects/ClassicLevelUpEffects";
 import { ClassicInventoryPreview } from "../render/inventory/ClassicInventoryPreview";
@@ -101,6 +103,8 @@ export class GameApp {
   #activeClassKey: ClassicClassKey = "huntress";
   readonly #combatEffects = new HuntressCombatEffects();
   readonly #skillEffects: ClassicHuntressSkillEffects;
+  readonly #foemaSkillEffects: ClassicFoemaSkillEffects;
+  readonly #transKnightSkillEffects: ClassicTransKnightSkillEffects;
   readonly #etherealExplosionEffects: ClassicEtherealExplosionEffect;
   readonly #levelUpEffects: ClassicLevelUpEffects;
   readonly #damageNumbers: ClassicDamageNumbers;
@@ -172,6 +176,8 @@ export class GameApp {
     this.#renderer.domElement.addEventListener("webglcontextrestored", this.webglContextRestored);
     this.container.appendChild(this.#renderer.domElement);
     this.#skillEffects = new ClassicHuntressSkillEffects(this.#scene);
+    this.#foemaSkillEffects = new ClassicFoemaSkillEffects(this.#scene);
+    this.#transKnightSkillEffects = new ClassicTransKnightSkillEffects(this.#scene);
     this.#etherealExplosionEffects = new ClassicEtherealExplosionEffect(this.#scene);
     this.#levelUpEffects = new ClassicLevelUpEffects(this.#scene);
     this.#damageNumbers = new ClassicDamageNumbers(this.container);
@@ -246,6 +252,8 @@ export class GameApp {
     // procedural fallback until the classic critical resources are ready.
     void this.#combatEffects.prepareClassic(assets);
     void this.#skillEffects.prepareClassic(assets);
+    void this.#foemaSkillEffects.prepareClassic(assets);
+    void this.#transKnightSkillEffects.prepareClassic(assets);
     void this.#etherealExplosionEffects.prepareClassic(assets);
     void this.#levelUpEffects.prepareClassic(assets);
     this.configureMapSelector(assets);
@@ -282,6 +290,7 @@ export class GameApp {
     world.setEffectsEnabled(this.#effectsEnabled);
     this.#scene.add(world.object);
     this.#player = new Player(world, spawn);
+    this.#player.setBeforeClassicVisualRelease(() => this.#skillEffects.clear());
     this.#player.setEffectsEnabled(this.#effectsEnabled);
     this.#scene.add(this.#player.object);
     void this.#player.loadClassicAvatar(assets, "huntress", DEFAULT_HUNTRESS_LOOK_KEY).then((loaded) => {
@@ -393,6 +402,8 @@ export class GameApp {
     }
     this.updatePersistentBuffEffects(dt);
     this.#skillEffects.update(dt);
+    this.#foemaSkillEffects.update(dt);
+    this.#transKnightSkillEffects.update(dt);
     this.#inventoryPreview?.update(dt);
     this.#renderer.render(this.#scene, this.#camera);
     this.#inventoryPreview?.render();
@@ -760,6 +771,8 @@ export class GameApp {
     this.#player?.setEffectsEnabled(this.#effectsEnabled);
     this.#combatEffects.setEnabled(this.#effectsEnabled);
     this.#skillEffects.setEnabled(this.#effectsEnabled);
+    this.#foemaSkillEffects.setEnabled(this.#effectsEnabled);
+    this.#transKnightSkillEffects.setEnabled(this.#effectsEnabled);
     this.#etherealExplosionEffects.setEnabled(this.#effectsEnabled);
     this.#levelUpEffects.setEnabled(this.#effectsEnabled);
     this.#inventoryPreview?.setEffectsEnabled(this.#effectsEnabled);
@@ -986,7 +999,8 @@ export class GameApp {
       return;
     }
     if (skill.target === "self") {
-      this.castBuffSkill(skill);
+      if (skill.kind === "buff") this.castBuffSkill(skill);
+      else this.castSelfAreaSkill(skill);
       return;
     }
     if (this.#skills.remaining(slot) > 0) {
@@ -1181,7 +1195,55 @@ export class GameApp {
     this.#autoCombatSummonRefreshAt.clear();
   }
 
+  private castSelfAreaSkill(skill: ClassSkill): void {
+    if (
+      !this.#player
+      || !this.#boundSpawns
+      || skill.target !== "self"
+      || skill.kind !== "area"
+    ) return;
+    const started = this.#skills.start(skill.slot, this.#playerState);
+    if (!started.ok) {
+      this.#hud.addLog(started.reason === "mana"
+        ? `MP insuficiente para ${skill.name}.`
+        : `${skill.name} ainda está recarregando.`, "system");
+      return;
+    }
+    this.breakInvisibility();
+    this.#player.stop();
+    const timing = this.#player.playClassSkill(skill);
+    this.#attackCooldown = Math.max(
+      this.#attackCooldown,
+      Math.max(0.42, (timing?.animationDurationSeconds ?? 0.54) - 0.12),
+    );
+    const spawns = this.#boundSpawns;
+    const delay = timing?.effectDelaySeconds ?? 0.5;
+    this.scheduleSkillEvent(delay, () => {
+      if (
+        spawns !== this.#boundSpawns
+        || !this.#player
+        || !this.#playerState.snapshot.alive
+      ) return;
+      const casterBase = this.#player.object.position.clone();
+      const handled = skill.classKey === "transknight"
+        && this.#transKnightSkillEffects.playAttack(skill.classicIndex, casterBase, casterBase);
+      if (!handled) {
+        this.#combatEffects.burst(
+          casterBase,
+          skill.color,
+          Math.max(0.9, Math.min(2.5, skill.radius || 0.9)),
+        );
+      }
+      this.applySelfAreaSkillImpact(skill);
+    });
+    this.#hud.addLog(`${skill.name} · ${skill.mana} MP.`, "system");
+  }
+
   private castSkill(skill: ClassSkill, target: ClassicMonsterSnapshot): void {
+    if (skill.target === "self") {
+      this.castSelfAreaSkill(skill);
+      return;
+    }
     if (!this.#player || !this.#boundSpawns || skill.target !== "enemy") return;
     const started = this.#skills.start(skill.slot, this.#playerState);
     if (!started.ok) {
@@ -1203,6 +1265,7 @@ export class GameApp {
     );
     const spawns = this.#boundSpawns;
     const targetId = target.id;
+    const casterBase = this.combatPoint(this.#player.position, 0);
     const from = this.combatPoint(this.#player.position, 1.25);
     const delay = timing?.effectDelaySeconds ?? 0.5;
 
@@ -1220,9 +1283,43 @@ export class GameApp {
       }
 
       if (skill.classKey === "huntress" && skill.kind === "shadow") {
-        // #88 has no arrow in the original; its five skinned clones are the
-        // next isolated VFX port, so keep gameplay at the correct 500 ms.
-        this.applySkillImpact(skill, targetId, targetBase, true);
+        // TMHuman.cpp:9308-9352: no arrow or generic impact. Five copies of
+        // the current actor (only the animal while mounted) cross the exact
+        // caster-to-target segment with motion type 6.
+        // Capture the clip before impact: a synchronous level-up may replace
+        // MATT3 with LEVELUP, while the heavy SkeletonUtils clones stay after
+        // the authoritative gameplay operation.
+        const afterimageSelection = this.#effectsEnabled
+          ? this.#player?.captureShadowBladeAfterimageSelection() ?? null
+          : null;
+        this.applySkillImpact(skill, targetId, targetBase, false);
+        if (this.#effectsEnabled && afterimageSelection) {
+          try {
+            this.#skillEffects.playShadowBlade(
+              this.#player?.createShadowBladeAfterimages(afterimageSelection, 5) ?? [],
+              targetBase,
+            );
+          } catch {
+            // Presentation failure cannot delay or cancel the 500 ms hit.
+          }
+        }
+        return;
+      }
+
+      if (
+        skill.classKey === "foema"
+        && (skill.classicIndex === 32 || skill.classicIndex === 33 || skill.classicIndex === 40)
+      ) {
+        this.#foemaSkillEffects.playCast(skill.classicIndex, targetBase);
+        this.applySkillImpact(skill, targetId, targetBase, false);
+        return;
+      }
+
+      if (
+        skill.classKey === "transknight"
+        && this.#transKnightSkillEffects.playAttack(skill.classicIndex, casterBase, targetBase)
+      ) {
+        this.applySkillImpact(skill, targetId, targetBase, false);
         return;
       }
 
@@ -1239,13 +1336,12 @@ export class GameApp {
         });
         return;
       }
-      if (skill.kind === "area" || skill.classKey === "transknight") {
+      if (skill.kind === "area") {
         this.#combatEffects.burst(
           targetBase,
           skill.color,
           Math.max(0.9, Math.min(2.5, skill.radius || 0.9)),
         );
-        if (skill.classicIndex === 23 && this.#effectsEnabled) this.#cameraRig.quake(1);
         this.applySkillImpact(skill, targetId, targetBase, false);
         return;
       }
@@ -1284,9 +1380,21 @@ export class GameApp {
       if (!active) return;
       if (skill.classicIndex === 76) this.#skillEffects.playImmunityCast(this.#player.object.position);
       if (skill.classicIndex === 81) this.#skillEffects.playSoulLinkCast(this.#player.object.position);
+      if (skill.classKey === "foema" && skill.classicIndex === 37) {
+        this.#foemaSkillEffects.playThunderCast(
+          this.#player.object.position,
+          this.#player.mounted,
+        );
+      }
+      const handledFoemaEffect = skill.classKey === "foema" && (
+        skill.classicIndex === 37
+        || this.#foemaSkillEffects.playCast(skill.classicIndex, this.#player.object.position)
+      );
+      const handledTransKnightEffect = skill.classKey === "transknight"
+        && this.#transKnightSkillEffects.playBuff(skill.classicIndex, this.#player.object.position);
       this.#buffVisualPulseRemaining.set(skill.classicIndex, 0);
       if (skill.classicIndex === 95) this.#player.setInvisible(true);
-      if (skill.classKey !== "huntress") {
+      if (skill.classKey !== "huntress" && !handledFoemaEffect && !handledTransKnightEffect) {
         this.#combatEffects.burst(this.#player.object.position, skill.color, 1.15);
       }
       this.#hud.addLog(`${skill.name} ativo por ${active.durationSeconds}s.`, "system");
@@ -1303,6 +1411,33 @@ export class GameApp {
     if (!this.#boundSpawns || !this.#player) return;
     const primary = this.#boundSpawns.snapshot(primaryTargetId);
     const targets = primary ? this.selectSkillTargets(skill, primary) : [];
+    this.applySkillDamageToTargets(skill, targets);
+    if (showFallbackEffect) {
+      this.#combatEffects.burst(position, skill.color, Math.max(0.8, Math.min(3, skill.radius || 0.8)));
+    }
+  }
+
+  private applySelfAreaSkillImpact(skill: ClassSkill): void {
+    if (!this.#boundSpawns || !this.#player) return;
+    const origin = this.#player.position;
+    const targets = this.#boundSpawns.snapshots()
+      .filter((candidate) => candidate.alive && candidate.hostile && (
+        Math.hypot(candidate.position.x - origin.x, candidate.position.y - origin.y) <= skill.radius
+      ))
+      .sort((left, right) => {
+        const leftDistance = Math.hypot(left.position.x - origin.x, left.position.y - origin.y);
+        const rightDistance = Math.hypot(right.position.x - origin.x, right.position.y - origin.y);
+        return leftDistance - rightDistance || left.id.localeCompare(right.id);
+      })
+      .slice(0, skill.maxTargets);
+    this.applySkillDamageToTargets(skill, targets);
+  }
+
+  private applySkillDamageToTargets(
+    skill: ClassSkill,
+    targets: readonly ClassicMonsterSnapshot[],
+  ): void {
+    if (!this.#boundSpawns) return;
     let totalDamage = 0;
     for (const target of targets) {
       const variance = 0.92 + ((Math.imul(++this.#attackSequence, 1_664_525) >>> 25) / 127) * 0.16;
@@ -1319,9 +1454,6 @@ export class GameApp {
           false,
         );
       }
-    }
-    if (showFallbackEffect) {
-      this.#combatEffects.burst(position, skill.color, Math.max(0.8, Math.min(3, skill.radius || 0.8)));
     }
     if (totalDamage > 0) this.#hud.addLog(`${skill.name}: ${totalDamage} de dano${targets.length > 1 ? ` em ${targets.length} alvos` : ""}.`, "damage");
   }
@@ -1394,6 +1526,10 @@ export class GameApp {
         mounted: false,
         ownerYaw: 0,
       });
+      this.#foemaSkillEffects.syncPersistentBuffs(null, {
+        thunder: false,
+        mounted: false,
+      });
       return;
     }
     const active = this.#skills.activeBuffs();
@@ -1408,10 +1544,20 @@ export class GameApp {
       mounted: player.mounted,
       ownerYaw: player.object.rotation.y,
     });
+    this.#foemaSkillEffects.syncPersistentBuffs(player.object.position, {
+      thunder: this.#activeClassKey === "foema" && activeIndices.has(37),
+      mounted: player.mounted,
+    });
 
     const playerBase = player.object.position;
     for (const buff of active) {
-      const interval = buff.classicIndex === 75
+      const hasDedicatedFoemaVisual = buff.classKey === "foema"
+        && (buff.classicIndex === 37 || buff.classicIndex === 41);
+      const hasDedicatedTransKnightVisual = buff.classKey === "transknight"
+        && (buff.classicIndex === 3 || buff.classicIndex === 5);
+      const interval = hasDedicatedFoemaVisual || hasDedicatedTransKnightVisual
+        ? 0
+        : buff.classicIndex === 75
         ? 1
         : (buff.classKey === "huntress" ? 0 : 2.4);
       if (interval === 0) continue;
@@ -1487,6 +1633,8 @@ export class GameApp {
     this.clearBeastMasterSummons();
     this.#buffVisualPulseRemaining.clear();
     this.#skillEffects.clear();
+    this.#foemaSkillEffects.clear();
+    this.#transKnightSkillEffects.clear();
     this.#etherealExplosionEffects.clear();
     this.#player?.setInvisible(false);
     this.#respawnRemaining = 4.5;
@@ -1572,6 +1720,8 @@ export class GameApp {
     this.#skills.clearBuffs();
     this.#buffVisualPulseRemaining.clear();
     this.#skillEffects.clear();
+    this.#foemaSkillEffects.clear();
+    this.#transKnightSkillEffects.clear();
     this.#player.setInvisible(false);
     this.#damageNumbers.clear();
     this.#player.teleport(ARMIA_SPAWN);
@@ -1700,6 +1850,8 @@ export class GameApp {
       this.#autoCombatSupportCooldown = 0;
       this.#buffVisualPulseRemaining.clear();
       this.#skillEffects.clear();
+      this.#foemaSkillEffects.clear();
+      this.#transKnightSkillEffects.clear();
       this.#etherealExplosionEffects.clear();
       this.#player?.setInvisible(false);
       this.#playerState.setName(definition.name);
@@ -1934,6 +2086,8 @@ export class GameApp {
     this.#queuedSkillOrigin = null;
     this.selectTarget(null);
     this.#skillEffects.clear();
+    this.#foemaSkillEffects.clear();
+    this.#transKnightSkillEffects.clear();
     this.#etherealExplosionEffects.clear();
     this.#damageNumbers.clear();
 
@@ -2065,7 +2219,7 @@ const AUTO_COMBAT_BUFF_CLASSIC_INDICES: ReadonlySet<number> = new Set([
 function isOffensiveBarSkill(skill: ClassSkill): boolean {
   return skill.slot >= 1
     && skill.slot <= 9
-    && skill.target === "enemy"
+    && (skill.target === "enemy" || skill.kind === "area")
     && skill.aggressive === 1
     && skill.damageCoefficient > 0;
 }

@@ -2,9 +2,16 @@ import * as THREE from "three";
 import type { ClassicAssetSource } from "../assets/ClassicAssetSource";
 import type { ClassicWorld } from "../world/ClassicWorld";
 import { toScene, type WydPosition } from "../world/coordinates";
+import {
+  createClassicSkinnedAfterimage,
+  type ClassicSkinnedAfterimage,
+} from "../render/characters/ClassicSkinnedAfterimage";
 import type { ClassSkill } from "./combat/ClassSkills";
 import { ClassicPlayerAvatar } from "./player/ClassicPlayerAvatar";
-import { ClassicMount } from "./player/ClassicMount";
+import {
+  ClassicMount,
+  type ClassicMountAfterimageAnimationSnapshot,
+} from "./player/ClassicMount";
 import { ClassicFamiliar } from "./player/ClassicFamiliar";
 import { DEFAULT_HUNTRESS_LOOK_KEY } from "./player/HuntressLooks";
 import { DEFAULT_MOUNT_LOOK_KEY } from "./player/MountLooks";
@@ -34,6 +41,20 @@ export interface PlayerSkillTiming {
   readonly effectDelaySeconds: number;
   readonly animationDurationSeconds: number;
 }
+
+/** Immutable visual/animation selection captured before #88 applies damage. */
+export type PlayerShadowBladeAfterimageSelection = Readonly<
+  | {
+    readonly kind: "on-foot";
+    readonly avatar: ClassicPlayerAvatar;
+    readonly animation: NonNullable<ReturnType<ClassicPlayerAvatar["currentAnimationSnapshot"]>>;
+  }
+  | {
+    readonly kind: "mounted";
+    readonly mount: ClassicMount;
+    readonly animation: ClassicMountAfterimageAnimationSnapshot;
+  }
+>;
 
 export class Player {
   readonly object = new THREE.Group();
@@ -70,6 +91,7 @@ export class Player {
   #deathAnimationSeconds = 0;
   #dead = false;
   #disposed = false;
+  #beforeClassicVisualRelease: (() => void) | null = null;
 
   get speed(): number { return this.#speedBoost ? 64 : (this.#mounted ? 13 : 8); }
   get speedBoost(): boolean { return this.#speedBoost; }
@@ -215,6 +237,11 @@ export class Player {
     this.#avatar?.setWeaponVisible(visible);
   }
 
+  /** Afterimages share source GPU assets and must end before a visual lease. */
+  setBeforeClassicVisualRelease(callback: (() => void) | null): void {
+    this.#beforeClassicVisualRelease = callback;
+  }
+
   /** The local player remains visible as a translucent shadow, like m_cShadow. */
   setInvisible(active: boolean): void {
     if (this.#invisible === active) return;
@@ -227,6 +254,7 @@ export class Player {
       if (!this.#disposed) this.#fallback.visible = true;
       return;
     }
+    this.#beforeClassicVisualRelease?.();
     this.#visualRoot.remove(this.#avatar.object);
     this.#avatar.release();
     this.#avatar = null;
@@ -236,6 +264,7 @@ export class Player {
 
   unloadClassicMount(): void {
     if (!this.#mount) return;
+    this.#beforeClassicVisualRelease?.();
     this.#avatar?.attachOnFoot(this.#visualRoot, this.currentClassicYaw());
     this.#visualRoot.remove(this.#mount.object);
     this.#mount.release();
@@ -347,6 +376,72 @@ export class Player {
 
   triggerSpectralForce(): void {
     if (!this.#dead) this.#avatar?.triggerSpectralForce();
+  }
+
+  /**
+   * Skill #88 copies the current actor visual five times. Mounted casts copy
+   * only the animal, matching TMHuman's m_stMountLook branch.
+   */
+  captureShadowBladeAfterimageSelection(): PlayerShadowBladeAfterimageSelection | null {
+    if (this.#dead || this.#disposed) return null;
+    const avatar = this.#avatar;
+    const riderAnimation = avatar?.currentAnimationSnapshot() ?? null;
+    if (!avatar || !riderAnimation) return null;
+    if (!this.#mounted) {
+      return Object.freeze({
+        kind: "on-foot",
+        avatar,
+        animation: riderAnimation,
+      });
+    }
+    const mount = this.#mount;
+    const animation = mount?.captureShadowBladeAnimation(riderAnimation) ?? null;
+    return mount && animation
+      ? Object.freeze({ kind: "mounted", mount, animation })
+      : null;
+  }
+
+  /** Builds the selected clones after gameplay impact has already resolved. */
+  createShadowBladeAfterimages(
+    selection: PlayerShadowBladeAfterimageSelection | null,
+    count = 5,
+  ): ClassicSkinnedAfterimage[] {
+    if (this.#dead || this.#disposed || !selection) return [];
+    if (
+      (selection.kind === "mounted" && (!this.#mounted || selection.mount !== this.#mount))
+      || (selection.kind === "on-foot" && (this.#mounted || selection.avatar !== this.#avatar))
+    ) return [];
+    const source = selection.kind === "mounted"
+      ? selection.mount.object
+      : selection.avatar.object;
+    const excluded = new Set<string>();
+    if (selection.kind === "on-foot") excluded.add("classic-spectral-force-sforce-type-2");
+    const riderAnchor = selection.kind === "mounted" ? selection.mount.riderAnchor : null;
+    const riderParent = riderAnchor?.parent ?? null;
+    // Avoid constructing and then pruning five complete rider rigs. No frame
+    // can render during this synchronous detach/clone/reattach section.
+    if (riderAnchor && riderParent) riderParent.remove(riderAnchor);
+
+    const result: ClassicSkinnedAfterimage[] = [];
+    const total = Math.max(0, Math.min(5, Math.trunc(count)));
+    try {
+      for (let index = 0; index < total; index++) {
+        const afterimage = createClassicSkinnedAfterimage(source, {
+          excludedObjectNames: excluded,
+          animationControllerFactory: (cloneRoot) => selection.kind === "mounted"
+            ? selection.mount.createAfterimageAnimationController(cloneRoot, selection.animation)
+            : selection.avatar.createAfterimageAnimationController(cloneRoot, selection.animation),
+        });
+        if (afterimage) result.push(afterimage);
+      }
+    } catch {
+      // Presentation failure must never cancel the authoritative hit path.
+      for (const afterimage of result) afterimage.dispose();
+      result.length = 0;
+    } finally {
+      if (riderAnchor && riderParent) riderParent.add(riderAnchor);
+    }
+    return result;
   }
 
   playHit(): boolean {

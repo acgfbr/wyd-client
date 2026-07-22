@@ -4,6 +4,8 @@ import { parseMsa } from "../../formats/classic/Msa";
 import {
   createClassicD3DLocalMatrix,
   type ClassicBaseAttachmentTransform,
+  type ClassicSkinnedAnimationSnapshot,
+  type ClassicSkinnedCloneAnimationController,
 } from "../../render/characters/ClassicSkinnedModel";
 import { ClassicSpectralForceWeaponEffect } from "../../render/effects/ClassicSpectralForceWeaponEffect";
 import { ClassicDdsTextureLoader } from "../../render/textures/ClassicDdsTextureLoader";
@@ -160,6 +162,19 @@ export class ClassicPlayerAvatar {
   /** DoubleCritical bit 3 starts SForce type 2 for the equipped WTYPE 101. */
   triggerSpectralForce(): void {
     if (!this.#released && this.#weaponVisible) this.#weapon?.spectralForce?.trigger();
+  }
+
+  currentAnimationSnapshot(): ClassicSkinnedAnimationSnapshot | null {
+    return this.#released ? null : this.#lease.model.currentAnimationSnapshot();
+  }
+
+  createAfterimageAnimationController(
+    cloneRoot: THREE.Object3D,
+    animation: ClassicSkinnedAnimationSnapshot | null,
+  ): ClassicSkinnedCloneAnimationController | null {
+    return this.#released
+      ? null
+      : this.#lease.model.createCloneAnimationController(cloneRoot, animation);
   }
 
   play(actions: readonly string[], restart = false): ClassicAvatarAction | null {

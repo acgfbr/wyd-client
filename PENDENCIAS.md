@@ -27,7 +27,8 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
   montaria, usando `32/ag01`, malha `ag010103`, animação, seguimento flutuante
   tipo `5` e partículas clássicas.
 - O recorte da Huntress formado por Imunidade `#76`, Ligação Espectral `#81`,
-  Explosão Etérea `#86` e Força Espectral `#101` está homologado. Os buffs
+  Explosão Etérea `#86`, Lâmina das Sombras `#88` e Força Espectral `#101`
+  está implementado. Os buffs
   persistem por `180 s`, com efeitos suavizados; a passiva `#101` acrescenta
   alcance e acopla o `SForce` clássico aos ataques.
 - HUD clássico, minimapa, seletor de mapas, câmera, zoom e modo G estão ligados.
@@ -163,12 +164,30 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
    offline duram `180 s`. A Imunidade `#76` deve manter as duas esferas
    `sphere2` persistentes, e a Ligação Espectral `#81` deve ocupar o slot `9`
    com os dois arcos `unsole` orbitando enquanto o estado estiver ativo. A
-   Explosão Etérea `#86` já usa as lâminas e a trajetória clássicas. A passiva
-   Força Espectral `#101` também já está sempre aprendida, acrescenta uma
+   Explosão Etérea `#86` já usa as lâminas e a trajetória clássicas. A Lâmina
+   das Sombras `#88` também deixou de usar o projétil genérico: cria as cinco
+   cópias skinned de `100/300/500/700/900 ms`, interpola pelo motion type `6`,
+   aplica o fade cosseno e as partículas `texture 0`; montada, duplica somente
+   o animal como no branch `m_stMountLook`, com pool e descarte limitados. O
+   fallback montado também segue o `SetAnimation` clássico: como o índice `99`
+   da `MATT3` da Huntress não cabe nas dez animações de `hs01`, o clone conserva
+   o `STAND01` do próprio rig da montaria e herda apenas o FPS de `15 ms` do
+   cavaleiro; matrizes ANI de rigs diferentes são rejeitadas no runtime. A
+   passiva Força Espectral `#101` também já está sempre aprendida, acrescenta uma
    unidade ao alcance e acopla o `SForce` clássico de três camadas à arma em
    ataques normais e skills ofensivas, sem ocupar slot ou criar buff temporário.
-   Esse recorte da Huntress está homologado; o épico só fecha depois da matriz
-   completa das quatro classes. As oito evocações reais do BeastMaster já têm
+   O primeiro lote de TransKnight agora possui renderers dedicados para Giro da
+   Fúria `#0`, Toque Sagrado `#1`, Golpe Duplo `#2`, Samaritano `#3`, Aura da
+   Vida `#5`, Lâmina Congelada `#19` e Tempestade de Gelo `#23`, usando as malhas
+   `10/702/703/706/707`, DDS, alpha DWORD, offsets, tempos e pools derivados do
+   cliente. O primeiro lote dedicado de Foema cobre Ataque de Fogo `#32`,
+   Relâmpago `#33`, Trovão `#37`, Névoa Venenosa `#40` e Velocidade `#41`; o
+   Trovão separa o cast transitório de dois segundos dos anéis persistentes do
+   estado do buff. Skills ainda não citadas continuam abertas e não devem cair
+   silenciosamente em um efeito genérico ao serem promovidas.
+   `#76/#81/#86/#101` estão homologadas; `#88` está implementada e aguarda a
+   inspeção visual no navegador. O épico só fecha depois da matriz completa das
+   quatro classes. As oito evocações reais do BeastMaster já têm
    criação, skin/LOOK_INFO, animação `LEVELUP`, seguimento, escolha de alvo,
    ataque e descarte local, sem reutilizar o Griupan. O nascimento agora porta
    `TMEffectStart(type 1)` e `TMEffectLevelUp(type 0)` por entidade, com pool

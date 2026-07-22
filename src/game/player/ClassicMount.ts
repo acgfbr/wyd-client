@@ -1,6 +1,10 @@
 import * as THREE from "three";
 import type { ClassicAssetSource } from "../../assets/ClassicAssetSource";
 import { parseAni, type AniAnimation } from "../../formats/classic/Ani";
+import type {
+  ClassicSkinnedAnimationSnapshot,
+  ClassicSkinnedCloneAnimationController,
+} from "../../render/characters/ClassicSkinnedModel";
 import { ClassicDdsTextureLoader } from "../../render/textures/ClassicDdsTextureLoader";
 import {
   ClassicSkinnedAssetLibrary,
@@ -32,6 +36,12 @@ interface MountFlightMotion {
   readonly baselineZ: number;
   readonly modelScale: number;
   readonly quarterStepSeconds: number;
+}
+
+/** Mount-owned #88 clip plus the only value copied from the rider. */
+export interface ClassicMountAfterimageAnimationSnapshot {
+  readonly animation: ClassicSkinnedAnimationSnapshot;
+  readonly riderQuarterStepMs: number;
 }
 
 /** A real classic mount model kept loaded and toggled without another hitch. */
@@ -152,6 +162,38 @@ export class ClassicMount {
 
   setEffectsEnabled(enabled: boolean): void {
     if (this.#levelEffect) this.#levelEffect.enabled.value = enabled ? 1 : 0;
+  }
+
+  /**
+   * TMHuman passes the caster animation index to the new mount TMSkinMesh.
+   * Huntress MATT3 resolves to index 99, outside hs01's ten clips, therefore
+   * SetAnimation leaves the new mount on index 0 (STAND01). Only m_dwFPS is
+   * then copied from the rider; ch02 ANI matrices never animate the mount rig.
+   */
+  captureShadowBladeAnimation(
+    riderAnimation: ClassicSkinnedAnimationSnapshot | null,
+  ): ClassicMountAfterimageAnimationSnapshot | null {
+    if (this.#released || !riderAnimation) return null;
+    const animation = this.#lease.model.animationSnapshot("STAND01");
+    return animation
+      ? Object.freeze({
+        animation,
+        riderQuarterStepMs: riderAnimation.quarterStepMs,
+      })
+      : null;
+  }
+
+  createAfterimageAnimationController(
+    cloneRoot: THREE.Object3D,
+    snapshot: ClassicMountAfterimageAnimationSnapshot | null,
+  ): ClassicSkinnedCloneAnimationController | null {
+    return this.#released || !snapshot
+      ? null
+      : this.#lease.model.createCloneAnimationController(
+        cloneRoot,
+        snapshot.animation,
+        snapshot.riderQuarterStepMs,
+      );
   }
 
   update(deltaSeconds: number): void {
