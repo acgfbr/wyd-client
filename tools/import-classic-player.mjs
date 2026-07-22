@@ -179,10 +179,17 @@ for (const summon of BEAST_MASTER_SUMMONS) {
 }
 
 // Equip[13] item #1726 (Griupan): TMHuman creates skin 32 with LOOK_INFO
-// Mesh0/Skin0 = 2/0. TMSkinMesh therefore resolves the single ag01 part to
-// ag010103, while the [angel] animation table uses ag010101.ani.
+// Mesh0/Skin0 = 2/0. TMSkinMesh therefore resolves the familiar to ag010103.
+// BM skills #50/#53 create the same skin with look 0/0, resolving their
+// motion-4 fairies/protector to ag010101. Both looks use the [angel]
+// ag010101.ani clip.
 await copyFile(path.join(meshRoot, "ag01.bon"), path.join(griupanRoot, "ag01.bon"));
 await copyFile(path.join(meshRoot, "ag010101.ani"), path.join(griupanRoot, "ag010101.ani"));
+await copyFile(path.join(meshRoot, "ag010101.msh"), path.join(griupanRoot, "ag010101.msh"));
+await writeFile(
+  path.join(griupanRoot, "ag010101.dds"),
+  decodeWys(await readFile(path.join(meshRoot, "ag010101.wys"))),
+);
 await copyFile(path.join(meshRoot, "ag010103.msh"), path.join(griupanRoot, "ag010103.msh"));
 await writeFile(
   path.join(griupanRoot, "ag010103.dds"),
@@ -190,7 +197,7 @@ await writeFile(
 );
 
 console.log(
-  `${CLASSIC_PLAYER_CLASSES.length} classes (${HUNTRESS_LOOKS.length} looks da Huntress), ${importedWeapons.size} armas, ${MOUNT_LOOKS.length} montarias, ${BEAST_MASTER_SUMMONS.length} evocacoes e Griupan importados para ${outputRoot}`,
+  `${CLASSIC_PLAYER_CLASSES.length} classes (${HUNTRESS_LOOKS.length} looks da Huntress), ${importedWeapons.size} armas, ${MOUNT_LOOKS.length} montarias, ${BEAST_MASTER_SUMMONS.length} evocacoes e Griupan/fadas importados para ${outputRoot}`,
 );
 
 function decodeWys(encoded) {

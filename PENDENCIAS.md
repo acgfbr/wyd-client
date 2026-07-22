@@ -190,7 +190,18 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
    `#44` possui o cast único `56/60` e, durante os `180 s` do mock, amostra a
    matriz final da arma para emitir o rastro `56` ao longo da lâmina, inclusive
    montado, sem o antigo pulso genérico no corpo. Os três preservam pools
-   limitados e separam o dano offline do momento do impacto visual. Skills ainda
+   limitados e separam o dano offline do momento do impacto visual. O primeiro
+   lote visual ativo do BeastMaster também deixou de usar projéteis e pulsos
+   genéricos: Fera Flamejante `#48` e Chamas Etéreas `#49` usam os dois looks
+   reais do `dr01`, Judgement, voo com alvo móvel, trilhas e respectivamente
+   fogo de impacto ou órbita residual; Som das Fadas `#50` lança três cópias
+   `ag010101` pelos offsets cumulativos e motion type `4`. Proteção Elemental
+   `#53` mantém o protetor `ag010101` e suas partículas enquanto o buff de
+   `180 s` estiver ativo, sem reutilizar o Griupan `ag010103`; Força Elemental
+   `#54` combina o cast Haste, SlowSlash e o stream persistente dos modelos
+   `704/705`, incluindo a escala montada. Todos usam materiais isolados, pools
+   limitados, lifecycle ligado a morte/mapa/classe/FX e mantêm o dano offline
+   separado do término das trajetórias. Skills ainda
    não citadas continuam abertas e não devem cair
    silenciosamente em um efeito genérico ao serem promovidas.
    `#76/#81/#86/#101` estão homologadas; `#88` está implementada e aguarda a
@@ -295,6 +306,17 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
     uma decisão explícita do projeto. O menu recebeu as opções clássicas de
     servidor/personagem/saída como estados honestamente bloqueados pela rede.
     Dano, sessão e regras econômicas continuam destinados ao futuro servidor.
+16. Estimativa final para substituição integral dos assets originais — **fazer
+    somente no encerramento das demais pendências e apenas como estimativa**.
+    Usar a matriz de cobertura produzida pela auditoria técnica para dimensionar
+    uma reconstrução visual do zero, sem executar a migração: separar mapas e
+    terreno, arquitetura/props, personagens/classes, monstros/NPCs, montarias,
+    itens/equipamentos, rigs/animações, VFX, áudio, fontes e interface; informar
+    faixas de pessoa-mês, composição mínima/ideal da equipe, etapas, dependências,
+    riscos e margem de incerteza. Comparar caminhos 1:1, remaster e redesign,
+    incluindo pipeline de arte, validação e impacto no runtime, para que a decisão
+    de abandonar todos os assets clássicos seja tomada sobre o inventário real do
+    projeto e não sobre um chute prematuro.
 
 ## Convenções do projeto
 

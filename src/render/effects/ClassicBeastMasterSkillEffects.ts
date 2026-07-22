@@ -54,22 +54,28 @@ export class ClassicBeastMasterSkillEffects {
     followTarget?: () => THREE.Vector3 | null,
   ): boolean {
     if (classicIndex === 48 || classicIndex === 49) {
-      return this.#dragonEffects.play(classicIndex, casterFeet, targetFeet, followTarget);
+      // Recognised skills stay on their dedicated path even while assets are
+      // still warming or FX are disabled; gameplay must never fall through to
+      // the generic arrow renderer because a presentation resource is late.
+      this.#dragonEffects.play(classicIndex, casterFeet, targetFeet, followTarget);
+      return true;
     }
     if (classicIndex === 50) {
-      return this.#fairyEffects.play(
+      this.#fairyEffects.play(
         casterFeet,
         targetFeet,
         casterClassicYaw,
         followTarget,
       );
+      return true;
     }
     return false;
   }
 
   playBuffCast(classicIndex: number, ownerFeet: THREE.Vector3): boolean {
     if (classicIndex !== 53 && classicIndex !== 54) return false;
-    return this.#buffEffects.playCast(classicIndex, ownerFeet);
+    this.#buffEffects.playCast(classicIndex, ownerFeet);
+    return true;
   }
 
   syncPersistentBuffs(context: BeastMasterBuffVisualContext | null): void {
