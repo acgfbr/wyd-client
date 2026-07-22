@@ -93,6 +93,7 @@ export class Player {
   #deathElapsed = 0;
   #deathAnimationSeconds = 0;
   #dead = false;
+  #moving = false;
   #disposed = false;
   #beforeClassicVisualRelease: (() => void) | null = null;
 
@@ -109,6 +110,14 @@ export class Player {
   get mountLookKey(): string { return this.#mount?.look.key ?? this.#mountLookKey; }
   get mountName(): string | null { return this.#mount?.name ?? null; }
   get invisible(): boolean { return this.#invisible; }
+  get moving(): boolean { return this.#moving; }
+  /** Retail ground portals only prompt during STAND01/STAND02 motion. */
+  get standing(): boolean {
+    if (this.#dead || this.#moving) return false;
+    return this.#avatarAction === null
+      || this.#avatarAction.includes("STAND")
+      || this.#avatarAction.includes("STND");
+  }
   /** Logical TMSkinMesh yaw used by owner-attached classic skill effects. */
   get classicYaw(): number { return this.#classicYaw; }
   /** All imported playable-class rigs currently use the retail 0.9 scale. */
@@ -496,6 +505,7 @@ export class Player {
 
   playDeath(): boolean {
     this.#dead = true;
+    this.#moving = false;
     this.#path = [];
     this.#pathIndex = 0;
     this.clearManualDetour();
@@ -510,6 +520,7 @@ export class Player {
 
   playIdle(): void {
     this.#dead = false;
+    this.#moving = false;
     this.#deathElapsed = 0;
     this.#deathAnimationSeconds = 0;
     this.#actionLockRemaining = 0;
@@ -522,6 +533,7 @@ export class Player {
     this.#pathIndex = 0;
     this.clearManualDetour();
     this.#velocity.set(0, 0);
+    this.#moving = false;
     if (!this.#dead) this.playIdle();
   }
 
@@ -579,6 +591,7 @@ export class Player {
     this.#pathIndex = 0;
     this.clearManualDetour();
     this.#velocity.set(0, 0);
+    this.#moving = false;
     this.position.x = target.x;
     this.position.y = target.y;
     this.syncObject();
@@ -662,6 +675,7 @@ export class Player {
     const movedX = this.position.x - beforeX;
     const movedY = this.position.y - beforeY;
     const moving = movedX * movedX + movedY * movedY > 1e-6;
+    this.#moving = moving;
     if (moving) {
       this.object.rotation.y = Math.atan2(movedX, movedY);
       // GameApp reads object.rotation.y for the minimap. Cancel that parent

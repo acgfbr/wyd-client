@@ -121,6 +121,33 @@ app.innerHTML = `
     <small>As ações de sessão aguardam a futura camada de rede.</small>
   </section>
 
+  <section id="ground-portal-prompt" class="ground-portal-prompt" role="dialog" aria-modal="true" aria-labelledby="ground-portal-prompt-title" aria-describedby="ground-portal-prompt-message ground-portal-prompt-price" aria-hidden="true">
+    <div class="ground-portal-prompt-surface">
+      <strong id="ground-portal-prompt-title" class="ground-portal-prompt-title">Informação</strong>
+      <p id="ground-portal-prompt-message" class="ground-portal-prompt-message">Deseja ir para este destino?</p>
+      <p id="ground-portal-prompt-price" class="ground-portal-prompt-price" aria-hidden="true"></p>
+      <button type="button" class="ground-portal-prompt-confirm" data-ground-portal-confirm>Confirmar</button>
+      <button type="button" class="ground-portal-prompt-cancel" data-ground-portal-cancel>Cancelar</button>
+    </div>
+  </section>
+
+  <section id="npc-interaction" class="npc-interaction" role="dialog" aria-modal="false" aria-labelledby="npc-interaction-name" aria-describedby="npc-interaction-message" aria-hidden="true">
+    <div class="npc-interaction-surface">
+      <header>
+        <strong id="npc-interaction-name">NPC</strong>
+        <span id="npc-interaction-kind">INTERAÇÃO</span>
+        <button type="button" aria-label="Fechar interação" data-npc-interaction-close>×</button>
+      </header>
+      <div id="npc-interaction-slots" class="npc-interaction-slots" aria-hidden="true"></div>
+      <div class="npc-interaction-panel-copy"><p id="npc-interaction-message"></p></div>
+    </div>
+    <footer class="npc-interaction-authority">
+      <strong id="npc-interaction-authority-title">Dados clássicos</strong>
+      <span id="npc-interaction-authority-detail"></span>
+      <small id="npc-interaction-source"></small>
+    </footer>
+  </section>
+
   <section id="character-panel" class="character-panel" aria-label="Dados do personagem" aria-hidden="true">
     <header><strong>PERSONAGEM</strong><button type="button" aria-label="Fechar dados do personagem" data-character-close>×</button></header>
     <div class="character-summary">

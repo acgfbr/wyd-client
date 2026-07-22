@@ -583,6 +583,27 @@ export class ClassicWorld {
       ? terrainHeight
       : Math.max(terrainHeight, collisionHeight);
   }
+
+  /**
+   * Returns the untouched AttributeMap byte for a resident world coordinate.
+   * Bit 0x10 is the retail ground-portal trigger; callers must still apply
+   * the client/server interaction rules instead of treating it as a target.
+   */
+  attributeAt(position: WydPosition): number | null {
+    const field = fieldAt(position);
+    const collision = this.#collisionMasks.get(fieldKey(field.column, field.row));
+    if (!collision?.complete || !collision.attributes) return null;
+    const localX = Math.max(
+      0,
+      Math.min(FIELD_WORLD_SIZE - 1, Math.floor(position.x - field.column * FIELD_WORLD_SIZE)),
+    );
+    const localY = Math.max(
+      0,
+      Math.min(FIELD_WORLD_SIZE - 1, Math.floor(position.y - field.row * FIELD_WORLD_SIZE)),
+    );
+    const attribute = collision.attributes[localY * FIELD_WORLD_SIZE + localX];
+    return typeof attribute === "number" ? attribute & 0xff : null;
+  }
 }
 
 function retryDelayMilliseconds(attempts: number): number {

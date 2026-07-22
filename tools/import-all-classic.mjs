@@ -9,6 +9,7 @@ const imports = [
   { label: "personagem, Skytalos, montarias e Griupan", script: "import-classic-player.mjs" },
   { label: "skills", script: "import-classic-skills.mjs" },
   { label: "HUD clássico", script: "import-classic-ui.mjs" },
+  { label: "itens e comercio", script: "import-classic-commerce.mjs", serverData: true },
 ];
 
 for (const entry of imports) {

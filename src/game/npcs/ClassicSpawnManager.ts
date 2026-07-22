@@ -3,6 +3,10 @@ import type { ClassicAssetSource } from "../../assets/ClassicAssetSource";
 import { FIELD_WORLD_SIZE, fieldAt, toScene, type WydPosition } from "../../world/coordinates";
 import { fieldKey } from "../../world/regions";
 import { ClassicSkinnedAssetLibrary, type ClassicSkinnedInstanceLease } from "./ClassicSkinnedAssetLibrary";
+import {
+  createClassicFriendlyHoverOutline,
+  type ClassicFriendlyHoverOutline,
+} from "./ClassicFriendlyHoverOutline";
 import type {
   ClassicMonsterAttackEvent,
   ClassicMonsterEventListener,
@@ -11,6 +15,11 @@ import type {
   ClassicMonsterSnapshot,
   ClassicStrikeResult,
 } from "./ClassicMonsterGameplay";
+import {
+  classicNpcHeadItemIndex,
+  classicNpcInteractionCode,
+  classifyClassicNpcInteraction,
+} from "./ClassicNpcInteraction";
 import { MonsterCatalog, type MonsterGenerator, type MonsterTemplate } from "./MonsterCatalog";
 
 export type {
@@ -21,6 +30,7 @@ export type {
   ClassicMonsterEventMap,
   ClassicMonsterEventName,
   ClassicMonsterHitEvent,
+  ClassicNpcInteractionKind,
   ClassicMonsterRespawnEvent,
   ClassicMonsterSnapshot,
   ClassicStrikeResult,
@@ -76,6 +86,7 @@ interface PersistentLifeState {
 interface SpawnedActor {
   readonly id: string;
   readonly name: string;
+  readonly templateIndex: number;
   readonly template: MonsterTemplate;
   readonly generator: MonsterGenerator;
   readonly object: THREE.Group;
@@ -97,7 +108,9 @@ interface SpawnedActor {
   actionLockRemaining: number;
   hitFlashRemaining: number;
   freezeRemainingSeconds: number;
+  cancellationRemainingSeconds: number;
   readonly affectMaterials: ActorAffectMaterial[];
+  friendlyOutline: ClassicFriendlyHoverOutline | null;
   aiMode: ActorAiMode;
   nextAttackAtSeconds: number;
   attackCount: number;
@@ -147,6 +160,7 @@ export class ClassicSpawnManager {
   readonly #fields = new Map<string, StreamedSpawnField>();
   #actors: SpawnedActor[] = [];
   readonly #actorsById = new Map<string, SpawnedActor>();
+  #friendlyHoverId: string | null = null;
   readonly #lifeStates = new Map<string, PersistentLifeState>();
   readonly #listeners = new Map<
     ClassicMonsterEventName,
@@ -182,6 +196,13 @@ export class ClassicSpawnManager {
     return this.#actors.map(actorSnapshot);
   }
 
+  /** Remaining local affect-32 lifetime used by its state-owned renderer. */
+  classicCancellationRemaining(id: string): number {
+    const actor = this.#actorsById.get(id);
+    if (!actor || !isActorAlive(actor)) return 0;
+    return actor.cancellationRemainingSeconds;
+  }
+
   targetFromObject(object: THREE.Object3D | null): ClassicMonsterSnapshot | null {
     for (let current = object; current; current = current.parent) {
       const id = current.userData[TARGET_ID_USER_DATA_KEY];
@@ -189,6 +210,42 @@ export class ClassicSpawnManager {
       if (current === this.object) break;
     }
     return null;
+  }
+
+  /** Keeps at most one short-lived green silhouette for a friendly mouse-over. */
+  setFriendlyHover(id: string | null): void {
+    if (id === this.#friendlyHoverId) {
+      const current = id ? this.#actorsById.get(id) : null;
+      if (
+        id === null
+        || (
+          current?.friendlyOutline
+          && !current.hostile
+          && isActorAlive(current)
+          && current.object.parent?.visible !== false
+        )
+      ) return;
+    }
+
+    const previousId = this.#friendlyHoverId;
+    this.#friendlyHoverId = null;
+    if (previousId) {
+      const previous = this.#actorsById.get(previousId);
+      if (previous) disposeActorFriendlyOutline(previous);
+    }
+    if (!id) return;
+
+    const actor = this.#actorsById.get(id);
+    if (
+      !actor
+      || actor.hostile
+      || !isActorAlive(actor)
+      || actor.object.parent?.visible === false
+    ) return;
+    const outline = createClassicFriendlyHoverOutline(actor.lease.model.meshes);
+    if (!outline) return;
+    actor.friendlyOutline = outline;
+    this.#friendlyHoverId = id;
   }
 
   on<K extends ClassicMonsterEventName>(
@@ -246,7 +303,21 @@ export class ClassicSpawnManager {
       return false;
     }
     actor.freezeRemainingSeconds = Math.max(actor.freezeRemainingSeconds, durationSeconds);
-    applyActorFreezeMaterial(actor);
+    applyActorAffectMaterial(actor);
+    return true;
+  }
+
+  /** Client-visible affect 32: red material while Cancelamento is active. */
+  applyClassicCancellation(id: string, durationSeconds: number): boolean {
+    const actor = this.#actorsById.get(id);
+    if (!actor || !isActorAlive(actor) || !Number.isFinite(durationSeconds) || durationSeconds <= 0) {
+      return false;
+    }
+    actor.cancellationRemainingSeconds = Math.max(
+      actor.cancellationRemainingSeconds,
+      durationSeconds,
+    );
+    applyActorAffectMaterial(actor);
     return true;
   }
 
@@ -260,6 +331,7 @@ export class ClassicSpawnManager {
     actor: SpawnedActor,
     nowSeconds: number,
   ): { readonly respawnInSeconds: number; readonly dropSeed: number } {
+    if (this.#friendlyHoverId === actor.id) this.setFriendlyHover(null);
     actor.life.hp = 0;
     actor.life.deathCount++;
     actor.life.deadAtSeconds = nowSeconds;
@@ -269,7 +341,7 @@ export class ClassicSpawnManager {
     actor.aiMode = "route";
     actor.actionLockRemaining = 0;
     actor.hitFlashRemaining = 0;
-    clearActorFreeze(actor);
+    clearActorAffects(actor);
     actor.object.visible = true;
     actor.lease.model.object.scale.setScalar(1);
     actor.label.visible = false;
@@ -282,6 +354,15 @@ export class ClassicSpawnManager {
 
   update(deltaSeconds: number, playerPosition: WydPosition): void {
     this.syncStreaming(playerPosition);
+    if (this.#friendlyHoverId) {
+      const hovered = this.#actorsById.get(this.#friendlyHoverId);
+      if (
+        !hovered
+        || hovered.hostile
+        || !isActorAlive(hovered)
+        || hovered.object.parent?.visible === false
+      ) this.setFriendlyHover(null);
+    }
     const animateDistanceSquared = FIELD_WORLD_SIZE * FIELD_WORLD_SIZE * 2.25;
     const nowSeconds = this.routeClockSeconds();
     const previousPositions = this.#actors.map((actor) => ({ ...actor.position }));
@@ -320,7 +401,7 @@ export class ClassicSpawnManager {
       }
       actor.label.visible = fieldVisible && isActorAlive(actor) && distanceSquared <= 40 * 40;
       updateHitFeedback(actor, deltaSeconds);
-      updateActorFreeze(actor, deltaSeconds);
+      updateActorAffects(actor, deltaSeconds);
       const scene = toScene(actor.position, this.environment.origin);
       actor.object.position.x = scene.x;
       actor.object.position.z = scene.z;
@@ -454,7 +535,7 @@ export class ClassicSpawnManager {
     actor.aiMode = "route";
     actor.actionLockRemaining = 0;
     actor.hitFlashRemaining = 0;
-    clearActorFreeze(actor);
+    clearActorAffects(actor);
     actor.object.visible = true;
     actor.lease.model.object.scale.setScalar(1);
     resetActorRoute(actor);
@@ -647,6 +728,7 @@ export class ClassicSpawnManager {
       const spawned: SpawnedActor = {
         id,
         name,
+        templateIndex: spec.templateIndex,
         template,
         generator: spec.generator,
         object: actor,
@@ -668,7 +750,9 @@ export class ClassicSpawnManager {
         actionLockRemaining: 0,
         hitFlashRemaining: 0,
         freezeRemainingSeconds: 0,
+        cancellationRemainingSeconds: 0,
         affectMaterials: [],
+        friendlyOutline: null,
         aiMode: "route",
         nextAttackAtSeconds: nowSeconds + ai.initialAttackDelaySeconds,
         attackCount: 0,
@@ -709,6 +793,9 @@ export class ClassicSpawnManager {
   }
 
   private releaseActor(actor: SpawnedActor): void {
+    if (this.#friendlyHoverId === actor.id && actor.friendlyOutline) {
+      this.#friendlyHoverId = null;
+    }
     disposeActor(actor);
     // Most life entries are pristine and need not accumulate while the player
     // explores many maps. Preserve only gameplay-relevant state (damage/death
@@ -924,9 +1011,17 @@ function stableUnit(seed: number): number {
 }
 
 function actorSnapshot(actor: SpawnedActor): ClassicMonsterSnapshot {
+  const interactionCode = classicNpcInteractionCode(actor.template);
+  const headItemIndex = classicNpcHeadItemIndex(actor.template);
   return {
     id: actor.id,
     name: actor.name,
+    generatorId: actor.generator.id,
+    templateIndex: actor.templateIndex,
+    templateKey: actor.template.key,
+    interactionCode,
+    headItemIndex,
+    interactionKind: classifyClassicNpcInteraction(interactionCode, headItemIndex),
     position: { ...actor.position },
     hp: actor.life.hp,
     maxHp: actor.life.maxHp,
@@ -1687,7 +1782,7 @@ function updateHitFeedback(actor: SpawnedActor, deltaSeconds: number): void {
   actor.lease.model.object.scale.setScalar(1 + Math.sin(progress * Math.PI) * 0.09);
 }
 
-function applyActorFreezeMaterial(actor: SpawnedActor): void {
+function applyActorAffectMaterial(actor: SpawnedActor): void {
   if (actor.affectMaterials.length === 0) {
     for (const mesh of actor.lease.model.meshes) {
       const source = mesh.material;
@@ -1703,23 +1798,44 @@ function applyActorFreezeMaterial(actor: SpawnedActor): void {
     }
   }
   for (const entry of actor.affectMaterials) {
-    // TMHuman::SetColorEffect uses (0.0, 0.4, 0.9) for Diffuse/Emissive.
-    entry.material.color.setRGB(0, 0.4, 0.9);
-    entry.material.emissive.setRGB(0, 0.4, 0.9);
+    if (actor.cancellationRemainingSeconds > 0) {
+      // TMHuman::SetColorEffect affect 32: preserve 40% of the lit base,
+      // then bias red by 0.2. Cancellation wins over freeze in the client.
+      entry.material.color.setRGB(
+        entry.original.color.r * 0.4 + 0.2,
+        entry.original.color.g * 0.4,
+        entry.original.color.b * 0.4,
+      );
+      entry.material.emissive.copy(entry.material.color);
+    } else {
+      // Affect 1/value 2 uses (0.0, 0.4, 0.9) for Diffuse/Emissive.
+      entry.material.color.setRGB(0, 0.4, 0.9);
+      entry.material.emissive.setRGB(0, 0.4, 0.9);
+    }
   }
 }
 
-function updateActorFreeze(actor: SpawnedActor, deltaSeconds: number): void {
-  if (actor.freezeRemainingSeconds <= 0) return;
+function updateActorAffects(actor: SpawnedActor, deltaSeconds: number): void {
+  if (actor.freezeRemainingSeconds <= 0 && actor.cancellationRemainingSeconds <= 0) return;
+  const delta = Math.max(0, Number.isFinite(deltaSeconds) ? deltaSeconds : 0);
   actor.freezeRemainingSeconds = Math.max(
     0,
-    actor.freezeRemainingSeconds - Math.max(0, Number.isFinite(deltaSeconds) ? deltaSeconds : 0),
+    actor.freezeRemainingSeconds - delta,
   );
-  if (actor.freezeRemainingSeconds === 0) restoreActorAffectMaterials(actor);
+  actor.cancellationRemainingSeconds = Math.max(
+    0,
+    actor.cancellationRemainingSeconds - delta,
+  );
+  if (actor.freezeRemainingSeconds === 0 && actor.cancellationRemainingSeconds === 0) {
+    restoreActorAffectMaterials(actor);
+  } else {
+    applyActorAffectMaterial(actor);
+  }
 }
 
-function clearActorFreeze(actor: SpawnedActor): void {
+function clearActorAffects(actor: SpawnedActor): void {
   actor.freezeRemainingSeconds = 0;
+  actor.cancellationRemainingSeconds = 0;
   restoreActorAffectMaterials(actor);
 }
 
@@ -1731,8 +1847,14 @@ function restoreActorAffectMaterials(actor: SpawnedActor): void {
   actor.affectMaterials.length = 0;
 }
 
+function disposeActorFriendlyOutline(actor: SpawnedActor): void {
+  actor.friendlyOutline?.dispose();
+  actor.friendlyOutline = null;
+}
+
 function disposeActor(actor: SpawnedActor): void {
   actor.object.removeFromParent();
+  disposeActorFriendlyOutline(actor);
   restoreActorAffectMaterials(actor);
   actor.lease.release();
   actor.labelMaterial.dispose();

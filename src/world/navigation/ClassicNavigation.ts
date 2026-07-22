@@ -12,6 +12,8 @@ export interface ClassicCollisionMask {
    * A complete mask includes terrain, AttributeMap.dat and object.bin stamps.
    */
   readonly values: ArrayLike<number>;
+  /** Raw AttributeMap byte sampled at each WYD cell of this resident Field. */
+  readonly attributes?: ArrayLike<number>;
   readonly complete: boolean;
 }
 

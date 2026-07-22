@@ -22,6 +22,25 @@
 html, body, #app { width: 100%; height: 100%; margin: 0; }
 body { overflow: hidden; background: #050607; }
 button, select { font: inherit; }
+.classic-draggable-window {
+  translate: var(--classic-window-drag-x, 0px) var(--classic-window-drag-y, 0px);
+}
+.classic-window-drag-handle {
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.classic-window-drag-handle button,
+.classic-window-drag-handle input,
+.classic-window-drag-handle select,
+.classic-window-drag-handle textarea,
+.classic-window-drag-handle a,
+.classic-window-drag-handle summary { cursor: pointer; touch-action: auto; }
+.classic-draggable-window.is-window-dragging,
+.classic-draggable-window.is-window-dragging .classic-window-drag-handle { cursor: grabbing; }
+.classic-draggable-window.is-window-dragging { will-change: translate; }
+.classic-window-layout-snap { transition: none !important; }
 .game-canvas { display: block; width: 100%; height: 100%; }
 .classic-damage-number-layer {
   position: fixed;
@@ -1089,6 +1108,335 @@ button, select { font: inherit; }
 .game-menu-divider span { position: relative; top: -7px; padding: 0 6px; background: #171713; }
 .game-menu-panel small { padding: 4px 5px 0; color: #777268; font-size: 7px; line-height: 10px; text-align: center; }
 
+.ground-portal-prompt {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity .1s, visibility .1s;
+}
+.ground-portal-prompt.is-visible {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+.ground-portal-prompt-surface {
+  position: relative;
+  width: 256px;
+  height: 172px;
+  transform: translateY(3%) scale(.97);
+  transform-origin: center;
+  background: url("/game-data/classic/ui/message-box.png") 0 0/256px 172px no-repeat;
+  color: #fff;
+  font-family: Tahoma, Arial, sans-serif;
+  text-shadow: 1px 1px #000;
+  filter: drop-shadow(4px 5px 3px rgb(0 0 0 / 76%));
+  transition: transform .1s;
+}
+.ground-portal-prompt.is-visible .ground-portal-prompt-surface { transform: translateY(0) scale(1); }
+.ground-portal-prompt-title {
+  position: absolute;
+  top: 9px;
+  left: 96px;
+  height: 22px;
+  font-size: 9px;
+  font-weight: 500;
+  line-height: 22px;
+  white-space: nowrap;
+}
+.ground-portal-prompt-message,
+.ground-portal-prompt-price {
+  position: absolute;
+  left: 20px;
+  width: 220px;
+  height: 16px;
+  margin: 0;
+  overflow: hidden;
+  font-size: 9px;
+  font-weight: 500;
+  line-height: 16px;
+  white-space: nowrap;
+}
+.ground-portal-prompt-message { top: 36px; }
+.ground-portal-prompt-price {
+  top: 52px;
+  opacity: 0;
+  visibility: hidden;
+}
+.ground-portal-prompt-price.is-visible { opacity: 1; visibility: visible; }
+.ground-portal-prompt button {
+  position: absolute;
+  top: 132px;
+  width: 103px;
+  height: 21px;
+  padding: 0;
+  border: 1px outset #797164;
+  border-radius: 0;
+  background: linear-gradient(#494943, #20221f 58%, #343630);
+  color: #eee8da;
+  font: 500 9px/18px Tahoma, Arial, sans-serif;
+  text-align: center;
+  text-shadow: 1px 1px #000;
+  cursor: pointer;
+}
+.ground-portal-prompt-confirm { left: 17px; }
+.ground-portal-prompt-cancel { left: 137px; }
+.ground-portal-prompt button:hover,
+.ground-portal-prompt button:focus-visible {
+  border-color: #c4aa69;
+  background: linear-gradient(#625c4b, #292a25 58%, #49483d);
+  color: #fff5d4;
+  outline: 1px solid rgb(226 194 103 / 58%);
+  outline-offset: -2px;
+}
+.ground-portal-prompt button:active {
+  border-style: inset;
+  background: linear-gradient(#20221f, #44443e);
+}
+
+.npc-interaction {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 42;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: 256px;
+  transform: translate(-50%, -47%) scale(.96);
+  transform-origin: center;
+  color: #ded7c6;
+  font-family: "WYD NanumGothic", Tahoma, sans-serif;
+  text-shadow: 1px 1px #000;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity .14s, transform .14s, visibility .14s;
+}
+.npc-interaction.is-visible {
+  transform: translate(-50%, -50%) scale(1);
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+.npc-interaction-surface {
+  position: relative;
+  width: 256px;
+  height: 128px;
+  background: url("/game-data/classic/ui/message-box.png") 0 0/256px 128px no-repeat;
+  filter: drop-shadow(4px 5px 3px rgb(0 0 0 / 76%));
+}
+.npc-interaction header {
+  position: absolute;
+  top: 8px;
+  right: 9px;
+  left: 12px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 18px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.npc-interaction header strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #f1e2b8;
+  font-size: 9px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+}
+.npc-interaction header span {
+  margin-left: auto;
+  color: #a79261;
+  font: 700 7px Tahoma, sans-serif;
+  letter-spacing: .06em;
+}
+.npc-interaction header button {
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1px outset #756b57;
+  border-radius: 0;
+  background: #252622;
+  color: #d9ceb5;
+  font: 700 12px/12px Tahoma, sans-serif;
+  cursor: pointer;
+}
+.npc-interaction header button:hover,
+.npc-interaction header button:focus-visible {
+  border-color: #c2a85e;
+  color: #fff0bd;
+  outline: 1px solid rgb(226 194 103 / 55%);
+}
+.npc-interaction-panel-copy {
+  position: absolute;
+  top: 37px;
+  left: 8px;
+  display: grid;
+  place-items: center;
+  width: 215px;
+  min-height: 36px;
+  padding: 3px 7px;
+  color: #c9c3b6;
+  text-align: center;
+}
+.npc-interaction-panel-copy p {
+  margin: 0;
+  font-size: 8px;
+  line-height: 12px;
+}
+.npc-interaction-authority {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  margin-top: 6px;
+  padding: 7px 8px;
+  border: 1px solid #5e584c;
+  background: linear-gradient(135deg, rgb(35 33 28 / 97%), rgb(7 9 9 / 96%));
+  box-shadow: inset 0 0 0 1px #080909, 3px 4px 5px rgb(0 0 0 / 65%);
+}
+.npc-interaction-authority strong {
+  color: #dbc47f;
+  font-size: 8px;
+  font-weight: 500;
+}
+.npc-interaction-authority span {
+  color: #aaa396;
+  font-size: 8px;
+  line-height: 11px;
+}
+.npc-interaction-authority small {
+  overflow: hidden;
+  color: #706d65;
+  font: 6px/9px Tahoma, sans-serif;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.npc-interaction-slots { display: none; }
+.npc-interaction.is-shop { width: 235px; }
+.npc-interaction.is-shop .npc-interaction-surface {
+  width: 235px;
+  height: 417px;
+  background-image: url("/game-data/classic/ui/store.png");
+  background-size: 235px 468px;
+}
+.npc-interaction.is-cargo { width: 234px; }
+.npc-interaction.is-cargo .npc-interaction-surface {
+  width: 234px;
+  height: 423px;
+  background-image: url("/game-data/classic/ui/storage.png");
+  background-size: 234px 449px;
+}
+.npc-interaction.is-shop header,
+.npc-interaction.is-cargo header {
+  top: 10px;
+  right: 11px;
+  left: 31px;
+  justify-content: center;
+  height: 24px;
+}
+.npc-interaction.is-shop header strong,
+.npc-interaction.is-cargo header strong {
+  color: #f4e2b9;
+  font-size: 10px;
+  text-align: center;
+}
+.npc-interaction.is-shop header span,
+.npc-interaction.is-cargo header span { display: none; }
+.npc-interaction.is-shop header button,
+.npc-interaction.is-cargo header button {
+  position: absolute;
+  top: 0;
+  right: -4px;
+}
+.npc-interaction.is-shop .npc-interaction-slots,
+.npc-interaction.is-cargo .npc-interaction-slots {
+  position: absolute;
+  top: 62px;
+  left: 11px;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: repeat(5, 36px);
+  grid-auto-rows: 36px;
+  gap: 5px 4px;
+  width: 196px;
+  height: 323px;
+  pointer-events: none;
+}
+.npc-interaction.is-shop .npc-interaction-slots { pointer-events: auto; }
+.npc-interaction-slot {
+  display: block;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid rgb(141 126 99 / 8%);
+  border-radius: 0;
+  background: linear-gradient(145deg, rgb(255 255 255 / 1.5%), rgb(0 0 0 / 3%));
+  box-shadow: inset 0 0 4px rgb(0 0 0 / 12%);
+}
+.classic-npc-shop-cell.has-item {
+  color: #e8dba8;
+  cursor: pointer;
+}
+.classic-npc-shop-cell.has-item:hover,
+.classic-npc-shop-cell.has-item:focus-visible,
+.classic-npc-shop-cell.is-selected {
+  border-color: rgb(224 194 95 / 74%);
+  outline: 1px solid rgb(255 224 119 / 45%);
+  outline-offset: -2px;
+  filter: brightness(1.14);
+}
+.classic-npc-shop-cell:disabled { cursor: default; }
+.classic-npc-shop-item-fallback {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  color: #d7c78f;
+  font: 700 8px/1 Tahoma, sans-serif;
+  text-shadow: 1px 1px 1px #000;
+}
+.npc-interaction.is-shop .npc-interaction-panel-copy,
+.npc-interaction.is-cargo .npc-interaction-panel-copy {
+  top: calc(100% + 6px);
+  left: 0;
+  width: 100%;
+  min-height: 24px;
+  padding: 5px 7px;
+  border: 1px solid #514c42;
+  background: rgb(8 10 10 / 94%);
+}
+.npc-interaction.is-shop .npc-interaction-authority,
+.npc-interaction.is-cargo .npc-interaction-authority { margin-top: 36px; }
+.npc-interaction.is-quest .npc-interaction-surface {
+  width: 256px;
+  height: 256px;
+  background-image: url("/game-data/classic/ui/quest.png");
+  background-size: 256px 256px;
+}
+.npc-interaction.is-quest header {
+  top: 4px;
+  right: 8px;
+  left: 44px;
+  height: 31px;
+}
+.npc-interaction.is-quest header strong { font-size: 10px; }
+.npc-interaction.is-quest .npc-interaction-panel-copy {
+  top: 127px;
+  left: 12px;
+  width: 232px;
+  min-height: 96px;
+  padding: 10px 13px;
+}
+
 .cc-panel {
   position: absolute;
   bottom: 69px;
@@ -1184,6 +1532,8 @@ button, select { font: inherit; }
   .minimap-panel canvas { width: 132px; height: 132px; }
   .minimap-panel { width: 148px; }
   .map-teleport { width: min(270px, calc(100vw - 175px)); }
+  .npc-interaction { transform: translate(-50%, -47%) scale(.82); }
+  .npc-interaction.is-visible { transform: translate(-50%, -50%) scale(.86); }
 }
 
 @media (max-width: 720px) {
@@ -1225,4 +1575,6 @@ button, select { font: inherit; }
   .combat-log { bottom: 56px; height: 48px; }
   .cc-skill-list { max-height: calc(100vh - 330px); }
   .cc-rotation > footer small { display: none; }
+  .npc-interaction { transform: translate(-50%, -47%) scale(.76); }
+  .npc-interaction.is-visible { transform: translate(-50%, -50%) scale(.82); }
 }

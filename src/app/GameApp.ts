@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { ClassicAssetSource } from "../assets/ClassicAssetSource";
 import { WydCamera } from "../camera/WydCamera";
 import { Player } from "../game/Player";
+import { loadClassicCommerceCatalog } from "../game/commerce/ClassicCommerceCatalog";
 import {
   ClassSkillSystem,
   type ClassSkill,
@@ -69,7 +70,14 @@ const ARMIA_SPAWN = { x: 2100, y: 2100 } as const;
 const CLICK_MARKER_LIFETIME = 0.72;
 const HELD_GROUND_UPDATE_SECONDS = 0.2;
 const HELD_GROUND_DESTINATION_EPSILON = 0.08;
+const NPC_INTERACTION_DEBOUNCE_SECONDS = 1;
+const NPC_HOVER_DIRTY_INTERVAL_SECONDS = 0.04;
+const NPC_HOVER_REFRESH_INTERVAL_SECONDS = 0.12;
 const BEAST_MASTER_SUMMON_PACK_SIZE = 10;
+// TMHuman's normal humanoid skin uses m_vecPickSize[1] = (0.4, 2.0).
+// Player.classicScale supplies the retail 0.9 transform at runtime.
+const CLASSIC_HUMANOID_PICK_WIDTH = 0.4;
+const CLASSIC_HUMANOID_PICK_HEIGHT = 2;
 // SkillData preserves AffectValue 10 but the client never reveals whether the
 // server treats it as points or percent. The offline-only combat mock uses 10%
 // until the authoritative server formula replaces this policy.
@@ -102,6 +110,7 @@ export class GameApp {
   readonly #raycaster = new THREE.Raycaster();
   readonly #clickMarker = createClickMarker();
   readonly #heldGroundPointer = new THREE.Vector2();
+  readonly #npcHoverPointer = new THREE.Vector2();
   readonly #input: GameInput;
   readonly #hud = new GameHud();
   readonly #telemetry = new RuntimeTelemetry();
@@ -129,6 +138,13 @@ export class GameApp {
   #boundSpawns: ClassicSpawnManager | null = null;
   #spawnUnsubscribers: (() => void)[] = [];
   #selectedTargetId: string | null = null;
+  #activeNpcId: string | null = null;
+  #pendingNpcId: string | null = null;
+  #npcOpenedInventory = false;
+  #npcShopLoadId = 0;
+  #npcInteractionCooldown = 0;
+  #npcHoverRaycastCooldown = 0;
+  #npcHoverRefreshRemaining = 0;
   #attackCooldown = 0;
   #attackSequence = 0;
   readonly #pendingBowAttacks: PendingBowAttack[] = [];
@@ -136,7 +152,8 @@ export class GameApp {
   readonly #buffVisualPulseRemaining = new Map<number, number>();
   readonly #weakenedMonsters = new Map<string, number>();
   readonly #weaponEffectSegments: ClassicWeaponEffectSegmentSample[] = [];
-  readonly #beastMasterSkinAnchor = new THREE.Vector3();
+  readonly #playerSkinAnchor = new THREE.Vector3();
+  #foemaCancellationTargetId: string | null = null;
   #targetApproachCooldown = 0;
   #respawnRemaining = 0;
   #autoCombatMode: AutoCombatMode = "off";
@@ -197,10 +214,13 @@ export class GameApp {
     this.#playerOverhead = new ClassicPlayerOverheadHud(this.container);
     this.#input = new GameInput(this.#renderer.domElement);
     this.#input.onGroundClick = this.groundClick;
+    this.#input.onGroundRelease = this.groundRelease;
+    this.#input.onGroundReleaseCancelled = this.groundReleaseCancelled;
     this.#input.onCameraRotate = (yaw, pitch) => this.#cameraRig.rotate(yaw, pitch);
     this.#input.onZoom = (delta) => this.#cameraRig.zoom(delta);
     this.#input.onSpeedToggle = () => {
       if (!this.#player) return;
+      this.closeNpcInteraction();
       this.breakInvisibility();
       const active = this.#player.toggleSpeedBoost();
       document.querySelector("#speed-boost")?.classList.toggle("is-active", active);
@@ -237,6 +257,7 @@ export class GameApp {
       this.#hud.addChatMessage(this.#playerState.snapshot.name, message, channel);
       this.#playerOverhead.showChat(message, channel);
     };
+    this.#hud.onNpcInteractionClose = () => this.closeNpcInteraction();
     this.#hud.onCatalogSkillUse = (classicIndex) => this.requestCatalogSkill(classicIndex);
     this.#hud.bindPlayer(this.#playerState);
     this.#playerState.subscribe(this.playerEquipmentChanged);
@@ -387,7 +408,10 @@ export class GameApp {
       if (!this.#streamingPaused) {
         this.updateHeldGroundDestination(dt, mouseForward);
         const keyboard = this.#input.movement();
-        if (keyboard.x !== 0 || keyboard.y !== 0 || mouseForward) this.breakInvisibility();
+        if (keyboard.x !== 0 || keyboard.y !== 0 || mouseForward) {
+          this.breakInvisibility();
+          this.closeNpcInteraction();
+        }
         const movement = new THREE.Vector2();
         if (this.#playerState.snapshot.alive) {
           const axes = this.#cameraRig.groundAxes();
@@ -406,6 +430,7 @@ export class GameApp {
         this.#world?.update(dt, this.#player.position);
       }
       this.bindSpawnGameplay();
+      this.updateNpcHover(dt);
       this.updateCombat(dt, mouseForward);
       this.updateBeastMasterSummons(dt);
       this.#cameraRig.update(this.#player.object.position, dt);
@@ -427,8 +452,10 @@ export class GameApp {
   };
 
   private readonly groundClick = (pointer: THREE.Vector2): void => {
-    if (!this.#world || !this.#player) {
+    this.#pendingNpcId = null;
+    if (!this.#world || !this.#player || !this.#playerState.snapshot.alive) {
       this.#heldGroundMode = null;
+      this.#heldGroundDestination = null;
       return;
     }
     this.#raycaster.setFromCamera(pointer, this.#camera);
@@ -436,10 +463,25 @@ export class GameApp {
     const spawns = this.#world.spawns;
     for (const candidate of hits) {
       const target = spawns?.targetFromObject(candidate.object);
-      if (!target?.alive) continue;
+      if (!target) continue;
+      // Any actor under the retail mouse-over owns this click, including a
+      // dying one; never tunnel through its geometry to another actor/ground.
+      if (!target.alive) {
+        this.#heldGroundMode = null;
+        this.#heldGroundDestination = null;
+        return;
+      }
       this.#heldGroundMode = "target";
       this.#heldGroundDestination = null;
-      this.selectTarget(target);
+      if (target.hostile) {
+        this.closeNpcInteraction();
+        this.selectTarget(target);
+      } else {
+        if (this.#activeNpcId && this.#activeNpcId !== target.id) this.closeNpcInteraction();
+        if (this.#selectedTargetId !== null) this.selectTarget(null);
+        this.#pendingNpcId = target.interactionKind === "none" ? null : target.id;
+        this.#clickMarker.visible = false;
+      }
       return;
     }
     const hit = hits.find((candidate) => !spawns?.targetFromObject(candidate.object));
@@ -453,6 +495,52 @@ export class GameApp {
     this.breakInvisibility();
     this.moveToGroundHit(hit, undefined, true);
     this.#heldGroundUpdateRemaining = HELD_GROUND_UPDATE_SECONDS;
+  };
+
+  private readonly groundRelease = (pointer: THREE.Vector2): void => {
+    const pendingNpcId = this.#pendingNpcId;
+    this.#pendingNpcId = null;
+    if (
+      !pendingNpcId
+      || !this.#world
+      || !this.#player
+      || !this.#playerState.snapshot.alive
+      || this.#npcInteractionCooldown > 0
+    ) return;
+    this.#raycaster.setFromCamera(pointer, this.#camera);
+    const spawns = this.#world.spawns;
+    if (!spawns) return;
+    const hits = this.#raycaster.intersectObject(this.#world.object, true);
+    for (const candidate of hits) {
+      const npc = spawns.targetFromObject(candidate.object);
+      if (!npc) continue;
+      // The nearest actor owns the retail mouse-over hit; never tunnel through
+      // a hostile/ordinary guard to interact with an NPC behind it.
+      if (npc.id !== pendingNpcId || !npc.alive || npc.hostile) return;
+      // Code zero/ordinary guards have no client-authored dialog mapping.
+      // MouseClick_NPC simply returns for them, so do not fabricate speech.
+      if (npc.interactionKind === "none") return;
+      const interactionWasVisible = this.#hud.npcInteractionVisible;
+      const inventoryWasVisible = document.querySelector("#inventory-panel")?.classList.contains("is-visible") ?? false;
+      if (!inventoryWasVisible) this.#npcOpenedInventory = true;
+      else if (!interactionWasVisible) this.#npcOpenedInventory = false;
+      spawns.setFriendlyHover(null);
+      this.#npcInteractionCooldown = NPC_INTERACTION_DEBOUNCE_SECONDS;
+      this.#activeNpcId = npc.id;
+      this.selectTarget(null);
+      this.#hud.setTarget(npc);
+      this.#hud.toggleInventory(true);
+      this.#hud.openNpcInteraction(npc);
+      if (npc.interactionKind === "shop") {
+        this.#hud.setNpcShopLoading();
+        void this.loadNpcShopStock(npc);
+      }
+      return;
+    }
+  };
+
+  private readonly groundReleaseCancelled = (): void => {
+    this.#pendingNpcId = null;
   };
 
   private updateHeldGroundDestination(deltaSeconds: number, mouseForward: boolean): void {
@@ -490,17 +578,26 @@ export class GameApp {
     const hits = this.#raycaster.intersectObject(this.#world.object, true);
     const spawns = this.#world.spawns;
     let liveTarget: ClassicMonsterSnapshot | null = null;
+    let actorBlocksPointer = false;
     for (const candidate of hits) {
       const target = spawns?.targetFromObject(candidate.object);
-      if (!target?.alive) continue;
-      liveTarget = target;
+      if (!target) continue;
+      actorBlocksPointer = true;
+      if (target.alive) liveTarget = target;
       break;
     }
+    if (actorBlocksPointer && !liveTarget) return;
     // Retail m_bMoveing semantics: a press on a target waits while still over
     // a living target, then permanently becomes ground navigation after
     // dragging away. A press that began on ground ignores crossed targets.
     if (this.#heldGroundMode === "target" && liveTarget) {
-      if (liveTarget.id !== this.#selectedTargetId) this.selectTarget(liveTarget);
+      if (liveTarget.hostile) {
+        this.closeNpcInteraction();
+        if (liveTarget.id !== this.#selectedTargetId) this.selectTarget(liveTarget);
+      } else {
+        if (this.#selectedTargetId !== null) this.selectTarget(null);
+        if (this.#activeNpcId && this.#activeNpcId !== liveTarget.id) this.closeNpcInteraction();
+      }
       return;
     }
     const hit = hits.find((candidate) => !spawns?.targetFromObject(candidate.object));
@@ -526,6 +623,7 @@ export class GameApp {
     showMarker = false,
   ): void {
     if (!this.#world || !this.#player) return;
+    this.closeNpcInteraction();
     const resolvedDestination = destination
       ?? toWyd(hit.point.x, hit.point.z, this.#world.origin);
     this.#player.moveTo(resolvedDestination);
@@ -549,9 +647,57 @@ export class GameApp {
     if (progress >= 1) this.#clickMarker.visible = false;
   }
 
+  private updateNpcHover(deltaSeconds: number): void {
+    this.#npcHoverRaycastCooldown = Math.max(0, this.#npcHoverRaycastCooldown - deltaSeconds);
+    this.#npcHoverRefreshRemaining = Math.max(0, this.#npcHoverRefreshRemaining - deltaSeconds);
+    const spawns = this.#world?.spawns ?? null;
+    if (
+      !spawns
+      || !this.#player
+      || !this.#playerState.snapshot.alive
+      || this.#streamingPaused
+    ) {
+      this.clearNpcHover();
+      return;
+    }
+
+    const forceRefresh = this.#npcHoverRefreshRemaining <= 0;
+    if (this.#npcHoverRaycastCooldown > 0 && !forceRefresh) return;
+    const pointerState = this.#input.consumeHoverPointer(this.#npcHoverPointer, forceRefresh);
+    if (pointerState === null) return;
+    this.#npcHoverRefreshRemaining = NPC_HOVER_REFRESH_INTERVAL_SECONDS;
+    if (!pointerState) {
+      spawns.setFriendlyHover(null);
+      return;
+    }
+
+    this.#npcHoverRaycastCooldown = NPC_HOVER_DIRTY_INTERVAL_SECONDS;
+    this.#raycaster.setFromCamera(this.#npcHoverPointer, this.#camera);
+    const hits = this.#raycaster.intersectObject(spawns.object, true);
+    let friendlyId: string | null = null;
+    for (const candidate of hits) {
+      // Status sprites are presentation only; retail mouse-over belongs to the
+      // skinned body beneath the label.
+      if (candidate.object instanceof THREE.Sprite) continue;
+      const target = spawns.targetFromObject(candidate.object);
+      if (!target) continue;
+      if (target.alive && !target.hostile) friendlyId = target.id;
+      // The nearest actor always owns the hover, even when it is hostile.
+      break;
+    }
+    spawns.setFriendlyHover(friendlyId);
+  }
+
+  private clearNpcHover(): void {
+    const worldSpawns = this.#world?.spawns ?? null;
+    this.#boundSpawns?.setFriendlyHover(null);
+    if (worldSpawns && worldSpawns !== this.#boundSpawns) worldSpawns.setFriendlyHover(null);
+  }
+
   private bindSpawnGameplay(): void {
     const spawns = this.#world?.spawns ?? null;
     if (!spawns || spawns === this.#boundSpawns) return;
+    this.#boundSpawns?.setFriendlyHover(null);
     this.#pendingBowAttacks.length = 0;
     this.#weakenedMonsters.clear();
     for (const unsubscribe of this.#spawnUnsubscribers) unsubscribe();
@@ -573,6 +719,7 @@ export class GameApp {
   }
 
   private updateCombat(deltaSeconds: number, manualMouseForward = false): void {
+    this.#npcInteractionCooldown = Math.max(0, this.#npcInteractionCooldown - deltaSeconds);
     if (!this.#player || !this.#world) return;
     if (this.#streamingPaused || this.#classSwitchInFlight) return;
     if (!this.#playerState.snapshot.alive) {
@@ -589,6 +736,25 @@ export class GameApp {
     this.updateAutoCombatRecovery(deltaSeconds);
     if (!this.#boundSpawns) return;
     this.updatePendingBowAttacks(deltaSeconds);
+    if (this.#activeNpcId) {
+      const npc = this.#boundSpawns.snapshot(this.#activeNpcId);
+      if (!npc?.alive || npc.hostile) {
+        this.closeNpcInteraction();
+      } else {
+        this.#hud.setTarget(npc);
+        return;
+      }
+    }
+    if (this.#pendingNpcId) {
+      const pendingNpc = this.#boundSpawns.snapshot(this.#pendingNpcId);
+      if (!pendingNpc?.alive || pendingNpc.hostile || pendingNpc.interactionKind === "none") {
+        this.#pendingNpcId = null;
+      } else {
+        // Mouse-down has identified an interactable NPC, but retail opens its
+        // service on mouse-up. Pause macro acquisition during that short gap.
+        return;
+      }
+    }
     // Preserve target selection/HUD but do not let combat face-lock the avatar
     // sideways while the two-button steering gesture owns locomotion.
     if (manualMouseForward) return;
@@ -775,6 +941,7 @@ export class GameApp {
 
   private toggleMount(): void {
     if (!this.#player) return;
+    this.closeNpcInteraction();
     this.breakInvisibility();
     const active = this.#player.toggleMount();
     const name = this.#player.mountName ?? "Montaria Lv. 120";
@@ -815,6 +982,7 @@ export class GameApp {
       this.#hud.setAutoCombat(mode, this.#macroSkillSlots);
       return;
     }
+    this.closeNpcInteraction();
     this.#autoCombatMode = mode;
     this.#macroDecisionCooldown = 0;
     this.#macroSkillCursor = 0;
@@ -1012,6 +1180,7 @@ export class GameApp {
   private requestSkill(slot: number): void {
     const skill = this.#skills.skill(slot);
     if (!skill || !this.#playerState.snapshot.alive) return;
+    this.closeNpcInteraction();
     if (skill.kind === "summon") {
       this.castSummonSkill(skill);
       return;
@@ -1365,6 +1534,21 @@ export class GameApp {
       if (!currentTarget?.alive || !currentTarget.hostile) return;
       const targetBase = this.combatPoint(currentTarget.position, 0);
 
+      if (skill.classKey === "foema" && skill.classicIndex === 47) {
+        // SkillData carries no damage and the retail event dispatcher has no
+        // one-shot branch for #47. Its presentation starts only when affect 32
+        // is accepted; the offline monster is a visual stand-in for that
+        // server-owned PvP target.
+        if (spawns.applyClassicCancellation(targetId, skill.affectTimeSeconds)) {
+          this.#foemaCancellationTargetId = targetId;
+          this.#hud.addLog(
+            `${skill.name}: affect visual por ${skill.affectTimeSeconds}s · resolução PvP depende do servidor.`,
+            "system",
+          );
+        }
+        return;
+      }
+
       if (skill.classKey === "huntress" && (skill.classicIndex === 72 || skill.classicIndex === 80)) {
         this.#skillEffects.playAttackBurst(skill.classicIndex, targetBase);
         if (this.#effectsEnabled) this.#cameraRig.quake(1);
@@ -1505,6 +1689,11 @@ export class GameApp {
       this.#attackCooldown,
       Math.max(0.42, (timing?.animationDurationSeconds ?? 0.54) - 0.12),
     );
+    // #45 is emitted by TMFieldScene as soon as its attack packet arrives;
+    // unlike the actor-owned effect event, it does not wait the usual 500 ms.
+    const immediateAthenaTouch = skill.classKey === "foema"
+      && skill.classicIndex === 45
+      && this.#foemaSkillEffects.playCast(45, this.#player.object.position);
     const delay = timing?.effectDelaySeconds ?? 0.5;
     this.scheduleSkillEvent(delay, () => {
       if (!this.#player || !this.#playerState.snapshot.alive) return;
@@ -1520,6 +1709,7 @@ export class GameApp {
       }
       const handledFoemaEffect = skill.classKey === "foema" && (
         skill.classicIndex === 37
+        || (skill.classicIndex === 45 && immediateAthenaTouch)
         || this.#foemaSkillEffects.playCast(skill.classicIndex, this.#player.object.position)
       );
       const handledTransKnightEffect = skill.classKey === "transknight"
@@ -1687,6 +1877,7 @@ export class GameApp {
   }
 
   private updatePersistentBuffEffects(deltaSeconds: number): void {
+    this.syncFoemaCancellationEffect();
     const player = this.#player;
     if (!player || !this.#effectsEnabled || !this.#playerState.snapshot.alive) {
       this.#buffVisualPulseRemaining.clear();
@@ -1699,7 +1890,12 @@ export class GameApp {
       this.#foemaSkillEffects.syncPersistentBuffs(null, {
         thunder: false,
         magicWeapon: false,
+        magicShield: false,
+        athenaTouch: false,
+        manaControl: false,
         mounted: false,
+        scaledPickHeight: 0,
+        ownerSkinAnchor: null,
       });
       this.#beastMasterSkillEffects.syncPersistentBuffs(null);
       return;
@@ -1716,6 +1912,7 @@ export class GameApp {
       mounted: player.mounted,
       ownerYaw: player.object.rotation.y,
     });
+    player.sampleClassicSkinAnchor(this.#playerSkinAnchor);
     const magicWeapon = this.#activeClassKey === "foema" && activeIndices.has(44);
     const weaponSegmentCount = magicWeapon
       ? player.sampleWeaponEffectSegments(this.#weaponEffectSegments)
@@ -1723,12 +1920,16 @@ export class GameApp {
     this.#foemaSkillEffects.syncPersistentBuffs(player.object.position, {
       thunder: this.#activeClassKey === "foema" && activeIndices.has(37),
       magicWeapon,
+      magicShield: this.#activeClassKey === "foema" && activeIndices.has(43),
+      athenaTouch: this.#activeClassKey === "foema" && activeIndices.has(45),
+      manaControl: this.#activeClassKey === "foema" && activeIndices.has(46),
       mounted: player.mounted,
+      scaledPickHeight: CLASSIC_HUMANOID_PICK_HEIGHT * player.classicScale,
+      ownerSkinAnchor: this.#playerSkinAnchor,
     }, this.#weaponEffectSegments, weaponSegmentCount);
-    player.sampleClassicSkinAnchor(this.#beastMasterSkinAnchor);
     this.#beastMasterSkillEffects.syncPersistentBuffs({
       ownerFeet: player.object.position,
-      ownerSkinAnchor: this.#beastMasterSkinAnchor,
+      ownerSkinAnchor: this.#playerSkinAnchor,
       ownerClassicYaw: player.classicYaw,
       ownerScale: player.classicScale,
       mounted: player.mounted,
@@ -1739,7 +1940,14 @@ export class GameApp {
     const playerBase = player.object.position;
     for (const buff of active) {
       const hasDedicatedFoemaVisual = buff.classKey === "foema"
-        && (buff.classicIndex === 37 || buff.classicIndex === 41 || buff.classicIndex === 44);
+        && (
+          buff.classicIndex === 37
+          || buff.classicIndex === 41
+          || buff.classicIndex === 43
+          || buff.classicIndex === 44
+          || buff.classicIndex === 45
+          || buff.classicIndex === 46
+        );
       const hasDedicatedTransKnightVisual = buff.classKey === "transknight"
         && (buff.classicIndex === 3 || buff.classicIndex === 5);
       const hasDedicatedBeastMasterVisual = buff.classKey === "beastmaster"
@@ -1764,6 +1972,34 @@ export class GameApp {
       }
       this.#buffVisualPulseRemaining.set(buff.classicIndex, interval);
     }
+  }
+
+  private syncFoemaCancellationEffect(): void {
+    const targetId = this.#foemaCancellationTargetId;
+    const spawns = this.#boundSpawns;
+    const player = this.#player;
+    if (!this.#effectsEnabled || !targetId || !spawns || !player) {
+      this.#foemaSkillEffects.syncCancellation(null, false);
+      return;
+    }
+    const target = spawns.snapshot(targetId);
+    if (
+      !target?.alive
+      || spawns.classicCancellationRemaining(targetId) <= 0
+    ) {
+      this.#foemaCancellationTargetId = null;
+      this.#foemaSkillEffects.syncCancellation(null, false);
+      return;
+    }
+    const targetFeet = this.combatPoint(target.position, 0);
+    this.#foemaSkillEffects.syncCancellation({
+      targetFeet,
+      targetSkinAnchor: targetFeet,
+      mounted: false,
+      // Cancelamento is a human-target PvP affect in retail. Until networking
+      // exists, the selected monster proxies the exact normal-human pick width.
+      cancelScale: CLASSIC_HUMANOID_PICK_WIDTH * player.classicScale,
+    }, true);
   }
 
   private breakInvisibility(): void {
@@ -1807,6 +2043,48 @@ export class GameApp {
     this.#clickMarker.visible = false;
   }
 
+  private closeNpcInteraction(): void {
+    if (
+      this.#activeNpcId === null
+      && this.#pendingNpcId === null
+      && !this.#hud.npcInteractionVisible
+    ) return;
+    const closeNpcOwnedInventory = this.#npcOpenedInventory;
+    this.#activeNpcId = null;
+    this.#pendingNpcId = null;
+    this.#npcOpenedInventory = false;
+    this.#npcShopLoadId++;
+    this.#hud.closeNpcInteraction();
+    if (closeNpcOwnedInventory) this.#hud.toggleInventory(false);
+    if (this.#selectedTargetId === null) this.#hud.setTarget(null);
+  }
+
+  private async loadNpcShopStock(npc: ClassicMonsterSnapshot): Promise<void> {
+    const loadId = ++this.#npcShopLoadId;
+    try {
+      const catalog = await loadClassicCommerceCatalog();
+      if (
+        loadId !== this.#npcShopLoadId
+        || this.#activeNpcId !== npc.id
+        || !this.#hud.npcInteractionVisible
+      ) return;
+
+      const carry = catalog.resolveCarry(npc.templateKey);
+      if (!carry) {
+        this.#hud.setNpcShopError(`Estoque classico nao encontrado para ${npc.templateKey}.`);
+        return;
+      }
+      await this.#hud.renderNpcShopCarry(carry);
+    } catch (error) {
+      if (
+        loadId !== this.#npcShopLoadId
+        || this.#activeNpcId !== npc.id
+        || !this.#hud.npcInteractionVisible
+      ) return;
+      this.#hud.setNpcShopError(error);
+    }
+  }
+
   private receiveMonsterAttack(event: ClassicMonsterAttackEvent): void {
     // Invisible actors are not selectable by mobs in the classic client. This
     // is distinct from invulnerability: any action removes affect 28 first.
@@ -1829,12 +2107,15 @@ export class GameApp {
     this.clearBeastMasterSummons();
     this.#buffVisualPulseRemaining.clear();
     this.#skillEffects.clear();
+    this.#foemaCancellationTargetId = null;
     this.#foemaSkillEffects.clear();
     this.#transKnightSkillEffects.clear();
     this.#beastMasterSkillEffects.clear();
     this.#etherealExplosionEffects.clear();
     this.#player?.setInvisible(false);
     this.#respawnRemaining = 4.5;
+    this.clearNpcHover();
+    this.closeNpcInteraction();
     this.#selectedTargetId = null;
     this.#macroOwnsTarget = false;
     this.#hud.setTarget(null);
@@ -1903,6 +2184,7 @@ export class GameApp {
 
   private respawnPlayer(): void {
     if (!this.#player || !this.#world) return;
+    this.closeNpcInteraction();
     // Resolve/cancel any presentation callback while the actor is still dead,
     // so a blade that was in flight cannot deal damage during respawn.
     this.#etherealExplosionEffects.clear();
@@ -1918,6 +2200,7 @@ export class GameApp {
     this.#skills.clearBuffs();
     this.#buffVisualPulseRemaining.clear();
     this.#skillEffects.clear();
+    this.#foemaCancellationTargetId = null;
     this.#foemaSkillEffects.clear();
     this.#transKnightSkillEffects.clear();
     this.#beastMasterSkillEffects.clear();
@@ -2028,6 +2311,7 @@ export class GameApp {
     const previousKey = this.#activeClassKey;
     const requestId = ++this.#classLoadId;
     this.#classSwitchInFlight = true;
+    this.closeNpcInteraction();
     if (this.#queuedSkillOrigin === "macro") {
       this.#queuedSkillSlot = null;
       this.#queuedSkillOrigin = null;
@@ -2070,6 +2354,7 @@ export class GameApp {
       this.#autoCombatSupportCooldown = 0;
       this.#buffVisualPulseRemaining.clear();
       this.#skillEffects.clear();
+      this.#foemaCancellationTargetId = null;
       this.#foemaSkillEffects.clear();
       this.#transKnightSkillEffects.clear();
       this.#beastMasterSkillEffects.clear();
@@ -2306,8 +2591,11 @@ export class GameApp {
     this.#weakenedMonsters.clear();
     this.#queuedSkillSlot = null;
     this.#queuedSkillOrigin = null;
+    this.clearNpcHover();
+    this.closeNpcInteraction();
     this.selectTarget(null);
     this.#skillEffects.clear();
+    this.#foemaCancellationTargetId = null;
     this.#foemaSkillEffects.clear();
     this.#transKnightSkillEffects.clear();
     this.#beastMasterSkillEffects.clear();

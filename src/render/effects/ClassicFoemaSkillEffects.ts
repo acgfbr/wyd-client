@@ -3,8 +3,15 @@ import type { ClassicAssetSource } from "../../assets/ClassicAssetSource";
 import type { ClassicWeaponEffectSegmentSample } from "../../game/player/ClassicPlayerAvatar";
 import { ClassicDdsTextureLoader } from "../textures/ClassicDdsTextureLoader";
 import { ClassicFoemaFirePhoenixEffects } from "./ClassicFoemaFirePhoenixEffects";
+import { ClassicFoemaAthenaTouchEffects } from "./ClassicFoemaAthenaTouchEffects";
 import { ClassicFoemaBlizzardEffects } from "./ClassicFoemaBlizzardEffects";
+import {
+  ClassicFoemaCancellationEffects,
+  type FoemaCancellationTargetContext,
+} from "./ClassicFoemaCancellationEffects";
 import { ClassicFoemaIceSpearEffects } from "./ClassicFoemaIceSpearEffects";
+import { ClassicFoemaManaControlEffects } from "./ClassicFoemaManaControlEffects";
+import { ClassicFoemaMagicShieldEffects } from "./ClassicFoemaMagicShieldEffects";
 import { ClassicFoemaMagicWeaponEffects } from "./ClassicFoemaMagicWeaponEffects";
 import { ClassicFoemaMeteorEffects } from "./ClassicFoemaMeteorEffects";
 
@@ -13,7 +20,12 @@ export type FoemaPoisonEffectLevel = 0 | 1 | 2 | 3;
 export interface FoemaPersistentBuffVisualState {
   readonly thunder: boolean;
   readonly magicWeapon: boolean;
+  readonly magicShield: boolean;
+  readonly athenaTouch: boolean;
+  readonly manaControl: boolean;
   readonly mounted: boolean;
+  readonly scaledPickHeight: number;
+  readonly ownerSkinAnchor: THREE.Vector3 | null;
 }
 
 const FIRE_EFFECT_LIFETIME_SECONDS = 2.4;
@@ -146,7 +158,8 @@ interface ThunderCastVisual {
 
 /**
  * Retail presentation facade for Foema #32/#33/#34/#35/#36/#37/#38/#39/
- * #40/#41/#44, including the dedicated meteor and skinned controllers.
+ * #40/#41/#43/#44/#45/#46/#47, including the dedicated meteor and skinned
+ * controllers. #47 is state-only because retail has no cast-event branch.
  *
  * The implementation is a direct, bounded port of TMSkillFire.cpp:8-201,
  * TMSkillThunderBolt.cpp:10-67, TMSkillPoison.cpp:8-66,
@@ -175,6 +188,10 @@ export class ClassicFoemaSkillEffects {
   readonly #magicWeaponEffects: ClassicFoemaMagicWeaponEffects;
   readonly #meteorEffects: ClassicFoemaMeteorEffects;
   readonly #blizzardEffects: ClassicFoemaBlizzardEffects;
+  readonly #magicShieldEffects: ClassicFoemaMagicShieldEffects;
+  readonly #athenaTouchEffects: ClassicFoemaAthenaTouchEffects;
+  readonly #manaControlEffects: ClassicFoemaManaControlEffects;
+  readonly #cancellationEffects: ClassicFoemaCancellationEffects;
   #resources: ClassicFoemaResources | null = null;
   #preload: Promise<void> | null = null;
   #serial = 0;
@@ -193,6 +210,10 @@ export class ClassicFoemaSkillEffects {
     this.#magicWeaponEffects = new ClassicFoemaMagicWeaponEffects(this.object);
     this.#meteorEffects = new ClassicFoemaMeteorEffects(this.object);
     this.#blizzardEffects = new ClassicFoemaBlizzardEffects(this.object);
+    this.#magicShieldEffects = new ClassicFoemaMagicShieldEffects(this.object);
+    this.#athenaTouchEffects = new ClassicFoemaAthenaTouchEffects(this.object);
+    this.#manaControlEffects = new ClassicFoemaManaControlEffects(this.object);
+    this.#cancellationEffects = new ClassicFoemaCancellationEffects(this.object);
     scene.add(this.object);
   }
 
@@ -228,6 +249,10 @@ export class ClassicFoemaSkillEffects {
       this.#magicWeaponEffects.prepareClassic(assets),
       this.#meteorEffects.prepareClassic(assets),
       this.#blizzardEffects.prepareClassic(assets),
+      this.#magicShieldEffects.prepareClassic(assets),
+      this.#athenaTouchEffects.prepareClassic(assets),
+      this.#manaControlEffects.prepareClassic(assets),
+      this.#cancellationEffects.prepareClassic(assets),
     ])
       .then((results) => {
         for (const result of results.slice(1)) {
@@ -252,6 +277,10 @@ export class ClassicFoemaSkillEffects {
     this.#magicWeaponEffects.setEnabled(enabled);
     this.#meteorEffects.setEnabled(enabled);
     this.#blizzardEffects.setEnabled(enabled);
+    this.#magicShieldEffects.setEnabled(enabled);
+    this.#athenaTouchEffects.setEnabled(enabled);
+    this.#manaControlEffects.setEnabled(enabled);
+    this.#cancellationEffects.setEnabled(enabled);
     if (!enabled) this.clear();
   }
 
@@ -265,6 +294,10 @@ export class ClassicFoemaSkillEffects {
     this.#magicWeaponEffects.update(delta);
     this.#meteorEffects.update(delta);
     this.#blizzardEffects.update(delta);
+    this.#magicShieldEffects.update(delta);
+    this.#athenaTouchEffects.update(delta);
+    this.#manaControlEffects.update(delta);
+    this.#cancellationEffects.update(delta);
 
     // Existing independent children advance before their parent controllers
     // emit this frame, so a newly emitted classic billboard starts at t=0.
@@ -321,6 +354,15 @@ export class ClassicFoemaSkillEffects {
         return true;
       case 44:
         this.#magicWeaponEffects.playCast(worldPosition);
+        return true;
+      case 43:
+        this.#magicShieldEffects.play(worldPosition);
+        return true;
+      case 45:
+        this.#athenaTouchEffects.play(worldPosition);
+        return true;
+      case 46:
+        this.#manaControlEffects.play(worldPosition);
         return true;
       default:
         return false;
@@ -457,6 +499,32 @@ export class ClassicFoemaSkillEffects {
     weaponSegmentCount = 0,
   ): void {
     if (this.#disposed) return;
+    const hasOwner = ownerWorldPosition !== null && isFiniteVector(ownerWorldPosition);
+    const hasSkinAnchor = state.ownerSkinAnchor !== null && isFiniteVector(state.ownerSkinAnchor);
+    this.#magicShieldEffects.syncPersistent(
+      hasOwner && hasSkinAnchor
+        ? {
+            ownerFeet: ownerWorldPosition,
+            ownerSkinAnchor: state.ownerSkinAnchor,
+            mounted: state.mounted,
+          }
+        : null,
+      this.#enabled && state.magicShield,
+    );
+    this.#athenaTouchEffects.syncPersistent(
+      hasOwner ? ownerWorldPosition : null,
+      this.#enabled && state.athenaTouch,
+    );
+    this.#manaControlEffects.syncPersistent(
+      hasOwner
+        ? {
+            ownerFeet: ownerWorldPosition,
+            scaledPickHeight: state.scaledPickHeight,
+            mounted: state.mounted,
+          }
+        : null,
+      this.#enabled && state.manaControl,
+    );
     this.#magicWeaponEffects.syncPersistent(
       this.#enabled && state.magicWeapon,
       weaponSegments,
@@ -486,6 +554,14 @@ export class ClassicFoemaSkillEffects {
     this.updateThunderBuffVisual(visual);
   }
 
+  /** State-owned affect 32 visual; retail has no separate #47 cast burst. */
+  syncCancellation(
+    target: FoemaCancellationTargetContext | null,
+    active: boolean,
+  ): void {
+    this.#cancellationEffects.syncPersistent(target, this.#enabled && active);
+  }
+
   clear(): void {
     for (const visual of this.#firePool) deactivateFire(visual);
     for (const particle of this.#fireParticlePool) deactivateFireParticle(particle);
@@ -499,6 +575,10 @@ export class ClassicFoemaSkillEffects {
     this.#magicWeaponEffects.clear();
     this.#meteorEffects.clear();
     this.#blizzardEffects.clear();
+    this.#magicShieldEffects.clear();
+    this.#athenaTouchEffects.clear();
+    this.#manaControlEffects.clear();
+    this.#cancellationEffects.clear();
   }
 
   /** Terminal cleanup; clear() intentionally leaves every bounded pool reusable. */
@@ -511,6 +591,10 @@ export class ClassicFoemaSkillEffects {
     this.#magicWeaponEffects.dispose();
     this.#meteorEffects.dispose();
     this.#blizzardEffects.dispose();
+    this.#magicShieldEffects.dispose();
+    this.#athenaTouchEffects.dispose();
+    this.#manaControlEffects.dispose();
+    this.#cancellationEffects.dispose();
     this.#owner.remove(this.object);
 
     for (const visual of this.#firePool) visual.shade.material.dispose();

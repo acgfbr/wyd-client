@@ -156,7 +156,118 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
    parar para disparar, a rota termina antes de `MATT` e a montaria permanece em
    `STAND01`, sem disparar a curva de elevação. Falta apenas homologar novamente
    essa sequência rara no navegador.
-7. Skills e buffs completos por classe. Implementar a matriz de habilidades de
+7. Isolamento completo do modo G — **concluído no frontend**. `G` usa velocidade
+   64, ignora a navegação/colisão, bloqueia dano recebido, revive ao ativar e
+   continua alimentando o streaming preditivo sem alterar o modo normal.
+8. Progressão e painel de personagem — **frontend implementado, fidelidade
+   parcial**. A janela `C` usa o atlas clássico, guarda e distribui
+   `STR/INT/DEX/CON`, mostra pontos livres/EXP total e aplica a tabela exata
+   `g_pNextLevel[403]`. Cada nível concede os `+5` pontos e `+3 ATQ` configurados
+   no mock, toca `LEVELUP/MLVLUP` e dispara o efeito visual clássico. Ainda
+   faltam as fórmulas autoritativas de atributos derivados e o som original;
+   não inventar essas regras no cliente antes da camada de servidor/áudio.
+9. NPCs, diálogo, lojas, portais, equipamento, inventário e loot — **parcial**.
+   Cada ator agora expõe `generatorId`, índice/chave do template, código de
+   interação, item da cabeça e categoria `shop/cargo/quest/mix/premium/special`.
+   O clique segue a separação mouse-down/mouse-up do cliente, respeita o ator
+   mais próximo, não abre fala inventada para código zero e fecha a interação
+   ao mover, atacar ou trocar de estado. A equivalência entre o nibble baixo de
+   `Merchant` e `SCORE.Reserved` permanece identificada como inferência do
+   corpus, embora tenha coincidido nos 376 templates resolvidos analisados.
+   Foram importados os atlas reais `MessageBox2`, `Store2`, `Storage2`,
+   `Quest2`, `PotalUI` e `PotalOldUI`; os painéis usam essas geometrias e o
+   serviço abre junto do inventário existente, fechando-o depois somente quando
+   ele próprio o abriu. O inventário conserva os 14 atlas de `itemicon.bin`,
+   quatro bolsas, 15 slots por página, 15 slots de equipamento, preview 3D,
+   drag/drop, merge/swap e equipar/desequipar no estado offline.
+   O novo catálogo comercial contém os 6.500 registros de `ItemList.bin`, os
+   12 efeitos e demais campos úteis, os 99 overrides ativos de `ItemPrice.bin`
+   e o `Carry` comercial mapeado nos 27 slots `0..8`, `27..35` e `54..62` de
+   79 templates. O loader runtime é explícito, lazy, cacheado e somente leitura;
+   resolve por item/template uma view congelada dos 27 slots, inclusive vazios,
+   com item completo, efeitos da instância e preço estático marcado como não
+   autoritativo. Ainda falta ligar essa view ao painel da loja e implementar no
+   servidor lista/compra/venda, saldo, Tax, cargo, combinação, missões, loot e
+   persistência; nenhuma dessas operações deve ser simulada como autoritativa.
+   Para portais, o runtime reconhece o bit `0x10` do `AttributeMap`, cruza as 37
+   entradas exatas de `g_TeleportTable` e abre o prompt clássico. Confirmar ainda
+   não move o personagem nem cobra preço: destino, autorização e transição
+   continuam pendentes do servidor. Também restam dimensões multicélula dos
+   itens e a ligação final do catálogo ao loot. NPCs amistosos mantêm o passeio
+   curto já implementado, e o Griupan segue homologado como familiar padrão.
+10. HUD, áudio, efeitos e revisão manual dos mapas — **parcial**. A HUD recebeu
+    o primeiro passe de escala/composição baseado na captura 7.54 fornecida:
+    painéis de personagem/inventário ampliados, trilho inferior contínuo,
+    orbes laterais, readout integrado, botões redondos clicáveis e telemetria
+    legível. O chat local segue `SEditableText::OnCharEvent` e
+    `TMFieldScene::OnKeyReturn`; rede continua deliberadamente fora do escopo.
+    O HUD sobre o próprio personagem também foi reconstruído como a camada 2D
+    do cliente, sem reutilizar sprites dos mobs: projeta o topo do ator a cada
+    frame, mantém nome `#ffffaa` e HP `72×7,5`, e mostra o balão preto
+    translúcido acima deles por `3 s` (`10 s` com prefixo `*`). Grupo/guild e
+    rotas `@`/`/` não geram balão; os offsets a pé/montado, a fonte
+    `FontNanum.ttf`, o recorte de viewport e a ausência deliberada de
+    depth-test seguem `TMHuman::LabelPosition` e `SText`.
+    Ainda é necessária homologação visual em 1024×768, desktop widescreen e
+    iPhone; o detalhamento dos slots equipados já foi reconstruído a partir do
+    `FieldScene2.bin`. A causa da
+    grama deslocada em `2104,2088` e `2129,2102` foi rastreada no cliente:
+    `TMLeaf/TMTree/TMShip` usam `TMSkinMesh` sem owner/type 1 e não recebem o
+    mirror Z reservado a personagens. O runtime agora segue essa transformação;
+    os DAT/MSH importados são idênticos à origem e os footprints `315/316`
+    voltaram aos canteiros, aguardando inspeção visual. A telemetria abaixo do
+    minimapa também está concluída: agrega uma vez por segundo FPS, heap JS
+    (`performance.memory`, ou `—` no Safari/iPhone) e duração/ocupação da
+    callback principal como `THREAD*`, sem alegar CPU real. Permanece aberta a
+    camada de áudio e a revisão visual final dos mapas.
+11. Distribuição web — **concluído para o escopo atual**. O build de produção
+    não publica sourcemaps, remove comentários legais/`debugger`/`console.debug`,
+    minifica identificadores/sintaxe/espaços e usa nomes de assets por hash. O
+    bootstrap mobile prepara somente os renderers da classe ativa; a troca de
+    classe aguarda o respectivo lote antes de liberar o personagem, evitando
+    manter em memória de entrada os efeitos completos das quatro classes. O
+    README documenta o limite dessa proteção, instalação e comandos somente com
+    Bun, preparo dos assets, erros comuns, iPhone/Vercel e a galeria de capturas
+    reais, incluindo as quatro classes, evocações e os 111 mapas.
+12. Auditoria técnica final e cobertura do cliente clássico. Revisar o runtime
+    contra as melhores práticas atuais do Three.js — ciclo de vida/dispose,
+    cache e compartilhamento de GPU, draw calls/instancing, streaming, LOD,
+    frustum/occlusion, materiais/shaders, animação, carregamento assíncrono e
+    orçamento de memória/frame. Em paralelo, gerar uma matriz rastreável do que
+    foi e não foi importado para todas as classes, monstros, NPCs, itens,
+    equipamentos, montarias, animações, sons e efeitos; apontar os parsers e
+    dados-fonte existentes, lacunas, dependências e a ordem segura para trazer
+    o restante sem regressões visuais.
+13. Memória canônica do projeto. Depois da auditoria final, criar e consolidar
+    `MEMORIA_PROJETO.md` com a arquitetura resultante, decisões e justificativas,
+    fontes do cliente clássico por subsistema, formatos/parsers, descobertas,
+    bugs corrigidos, bugs ainda conhecidos, limitações técnicas e de navegador,
+    soluções rejeitadas, riscos, débitos, procedimentos de importação/build e
+    um histórico cronológico das mudanças relevantes. Manter o documento vivo
+    a partir daí, sem transformar `PENDENCIAS.md` em diário de implementação.
+14. Menu do jogo e configuração `C.C` — **frontend concluído e auditado**. A
+    origem ativa não usa o handler legado `B_CCATTACK`: `B_CCMODE_SYSTEM`
+    (`66570`) mostra/esconde o painel `66817`, com `120×30` e quatro controles
+    `29×29`. A versão web reproduz essa geometria imediatamente acima do botão
+    e usa os crops reais `455/456/458/459/460/463/464/465` do atlas
+    `main.wyt`. O clique no `C.C` somente abre/fecha a caixa; o primeiro ícone e
+    `F` percorrem o mesmo estado `0` desligado, `1` físico, `2` mágico e `3`
+    suporte. O físico chama o ataque básico, o mágico nunca cai em ataque
+    básico quando aguarda mana/cooldown e o suporte mantém buffs, evocações e
+    recuperação sem atacar. HP/MP automático e movimento contínuo/fixo/parado
+    funcionam no mock; o percentual de HP/ração da montaria fica configurável,
+    mas sem efeito até existir estado autoritativo da montaria. A extensão do
+    modo mágico aceita até dez skills ofensivas realmente presentes na barra,
+    permite incluir/remover/reordenar e preserva uma configuração por classe.
+    Alvos e skills adquiridos manualmente são separados dos adquiridos pelo
+    macro; desligar não cancela uma ação manual. Troca de classe, morte,
+    respawn e teleporte limpam somente o estado transitório necessário. A
+    auditoria também registrou que o macro `Y`/`m_cAutoAttack` do cliente é um
+    sistema separado, que gira os últimos N atalhos; a lista ordenável web é
+    uma decisão explícita do projeto. O menu recebeu as opções clássicas de
+    servidor/personagem/saída como estados honestamente bloqueados pela rede.
+    Dano, sessão e regras econômicas continuam destinados ao futuro servidor.
+15. Skills e buffs completos por classe. Implementar a matriz de habilidades de
    TransKnight, Foema, BeastMaster e Huntress a partir de `SkillData.bin` e das
    rotinas do cliente clássico. Cada skill deve usar sua textura, animação de
    personagem, efeito de conjuração, trajetória e impacto originais; cada buff
@@ -205,11 +316,28 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
    textura `19`, trilhas azuis `0`, impactos `71–78` e shade `7`. O affect de
    `2 s` fica no ator: usa o RGB clássico `(0,.4,.9)` e aumenta o período da
    animação em `1,15×`; movimento continua sem regra inventada, pois no cliente
-   essa posição chega do servidor. As Foema ainda abertas foram auditadas: o
-   próximo lote seguro é Escudo Mágico `#43` + Toque da Athena `#45`, seguido
-   por Controle de Mana `#46` e Cancelamento `#47`. Teleporte `#42` fica por
-   último porque exige party, consentimento, restrições de mapa/inventário e
-   rede; não deve virar teleporte livre no mock. O primeiro
+   essa posição chega do servidor. Escudo Mágico `#43` e Toque da Athena `#45`
+   também estão integrados. O Escudo conserva o evento de `500 ms`, as quinze
+   partículas `56`, o raio `51` e o pulso persistente dos cinco pares de modelos
+   `704/705` com textura `57`, inclusive a escala montada `1,5`. Athena mantém o
+   despacho imediato do pacote, as vinte partículas `56` com vidas escalonadas
+   e o billboard horizontal persistente `93` em `feet + 0,4`, com rotação/fade
+   de `5 s`. Ambos aceitam self/aliado no binário; o mock offline seleciona self
+   sem fingir party/rede, mantém o override solicitado de `180 s` e não inventa
+   as fórmulas autoritativas de defesa/mastery que pertencem ao servidor. As
+   Controle de Mana `#46` e Cancelamento `#47` também estão integrados.
+   Controle de Mana conserva o evento de `500 ms`: quatro controllers
+   `TMEffectParticle` somam 60 filhos reais nas texturas `122/56`, o shade
+   `7` dura `1,5 s` e o affect persistente emite os dois billboards
+   `56/0` normalizados a `60 Hz`; o buff offline segue o override solicitado
+   de `180 s`. Cancelamento não inventa explosão nem dano: o dispatcher
+   clássico não possui branch de cast para `#47`, então o mock aplica somente
+   o affect `32` de `1 s`, com tint vermelho e o pulso dos modelos `501/502`
+   na textura `202`. As alegações de converter `80%` do dano em MP, preservar
+   `300 MP` ou falhar em `25%` não aparecem no cliente/SkillData e permanecem
+   fora do frontend até existir código autoritativo do servidor.
+   Teleporte `#42` fica por último porque exige party, consentimento, restrições
+   de mapa/inventário e rede; não deve virar teleporte livre no mock. O primeiro
    lote visual ativo do BeastMaster também deixou de usar projéteis e pulsos
    genéricos: Fera Flamejante `#48` e Chamas Etéreas `#49` usam os dois looks
    reais do `dr01`, Judgement, voo com alvo móvel, trilhas e respectivamente
@@ -243,102 +371,6 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
    cliente; enquanto rede está fora do escopo, a formação de 10 e sua IA são
    uma política explícita do frontend. No futuro, a simulação local deverá ser
    substituída pelos packets autoritativos do servidor.
-8. Isolamento completo do modo G — **concluído no frontend**. `G` usa velocidade
-   64, ignora a navegação/colisão, bloqueia dano recebido, revive ao ativar e
-   continua alimentando o streaming preditivo sem alterar o modo normal.
-9. Progressão e painel de personagem — **frontend implementado, fidelidade
-   parcial**. A janela `C` usa o atlas clássico, guarda e distribui
-   `STR/INT/DEX/CON`, mostra pontos livres/EXP total e aplica a tabela exata
-   `g_pNextLevel[403]`. Cada nível concede os `+5` pontos e `+3 ATQ` configurados
-   no mock, toca `LEVELUP/MLVLUP` e dispara o efeito visual clássico. Ainda
-   faltam as fórmulas autoritativas de atributos derivados e o som original;
-   não inventar essas regras no cliente antes da camada de servidor/áudio.
-10. NPCs, diálogo, lojas, portais, equipamento, inventário e loot — **parcial**.
-    O inventário atual usa os sprites reais resolvidos por `itemicon.bin`; os
-    14 atlas foram importados e itens com malha expandem em 3D sobre o próprio
-    slot somente após clique, acompanha o cursor até o próximo clique e não usa
-    painel separado; o sprite clássico ampliado é o fallback. As quatro bolsas,
-    os 15 slots por página, os 15 slots reais
-    de equipamento, drag/drop, merge/swap e equipar/desequipar estão funcionais
-    no estado offline. Poção, Skytalos, Mulher Kalintz, Unicórnio e Griupan
-    apontam para seus dados clássicos. NPCs amistosos antes congelados
-    alternam pausa/passeio em rota curta validada pela navegação e recebem um
-    limite rígido após a separação, sem afetar hostis nem `RouteType 0`.
-    Permanecem abertos diálogo, lojas, portais, dimensões multicélula de itens,
-    expansão do catálogo/loot e persistência/autorização do futuro servidor.
-    O Griupan solicitado já está equipado e homologado como familiar padrão.
-11. HUD, áudio, efeitos e revisão manual dos mapas — **parcial**. A HUD recebeu
-    o primeiro passe de escala/composição baseado na captura 7.54 fornecida:
-    painéis de personagem/inventário ampliados, trilho inferior contínuo,
-    orbes laterais, readout integrado, botões redondos clicáveis e telemetria
-    legível. O chat local segue `SEditableText::OnCharEvent` e
-    `TMFieldScene::OnKeyReturn`; rede continua deliberadamente fora do escopo.
-    O HUD sobre o próprio personagem também foi reconstruído como a camada 2D
-    do cliente, sem reutilizar sprites dos mobs: projeta o topo do ator a cada
-    frame, mantém nome `#ffffaa` e HP `72×7,5`, e mostra o balão preto
-    translúcido acima deles por `3 s` (`10 s` com prefixo `*`). Grupo/guild e
-    rotas `@`/`/` não geram balão; os offsets a pé/montado, a fonte
-    `FontNanum.ttf`, o recorte de viewport e a ausência deliberada de
-    depth-test seguem `TMHuman::LabelPosition` e `SText`.
-    Ainda é necessária homologação visual em 1024×768, desktop widescreen e
-    iPhone; o detalhamento dos slots equipados já foi reconstruído a partir do
-    `FieldScene2.bin`. A causa da
-    grama deslocada em `2104,2088` e `2129,2102` foi rastreada no cliente:
-    `TMLeaf/TMTree/TMShip` usam `TMSkinMesh` sem owner/type 1 e não recebem o
-    mirror Z reservado a personagens. O runtime agora segue essa transformação;
-    os DAT/MSH importados são idênticos à origem e os footprints `315/316`
-    voltaram aos canteiros, aguardando inspeção visual. A telemetria abaixo do
-    minimapa também está concluída: agrega uma vez por segundo FPS, heap JS
-    (`performance.memory`, ou `—` no Safari/iPhone) e duração/ocupação da
-    callback principal como `THREAD*`, sem alegar CPU real. Permanece aberta a
-    camada de áudio e a revisão visual final dos mapas.
-12. Distribuição web — **concluído para o escopo atual**. O build de produção
-    não publica sourcemaps, remove comentários legais/`debugger`/`console.debug`,
-    minifica identificadores/sintaxe/espaços e usa nomes de assets por hash. O
-    bootstrap mobile prepara somente os renderers da classe ativa; a troca de
-    classe aguarda o respectivo lote antes de liberar o personagem, evitando
-    manter em memória de entrada os efeitos completos das quatro classes. O
-    README documenta o limite dessa proteção, instalação e comandos somente com
-    Bun, preparo dos assets, erros comuns, iPhone/Vercel e a galeria de capturas
-    reais, incluindo as quatro classes, evocações e os 111 mapas.
-13. Auditoria técnica final e cobertura do cliente clássico. Revisar o runtime
-    contra as melhores práticas atuais do Three.js — ciclo de vida/dispose,
-    cache e compartilhamento de GPU, draw calls/instancing, streaming, LOD,
-    frustum/occlusion, materiais/shaders, animação, carregamento assíncrono e
-    orçamento de memória/frame. Em paralelo, gerar uma matriz rastreável do que
-    foi e não foi importado para todas as classes, monstros, NPCs, itens,
-    equipamentos, montarias, animações, sons e efeitos; apontar os parsers e
-    dados-fonte existentes, lacunas, dependências e a ordem segura para trazer
-    o restante sem regressões visuais.
-14. Memória canônica do projeto. Depois da auditoria final, criar e consolidar
-    `MEMORIA_PROJETO.md` com a arquitetura resultante, decisões e justificativas,
-    fontes do cliente clássico por subsistema, formatos/parsers, descobertas,
-    bugs corrigidos, bugs ainda conhecidos, limitações técnicas e de navegador,
-    soluções rejeitadas, riscos, débitos, procedimentos de importação/build e
-    um histórico cronológico das mudanças relevantes. Manter o documento vivo
-    a partir daí, sem transformar `PENDENCIAS.md` em diário de implementação.
-15. Menu do jogo e configuração `C.C` — **frontend concluído e auditado**. A
-    origem ativa não usa o handler legado `B_CCATTACK`: `B_CCMODE_SYSTEM`
-    (`66570`) mostra/esconde o painel `66817`, com `120×30` e quatro controles
-    `29×29`. A versão web reproduz essa geometria imediatamente acima do botão
-    e usa os crops reais `455/456/458/459/460/463/464/465` do atlas
-    `main.wyt`. O clique no `C.C` somente abre/fecha a caixa; o primeiro ícone e
-    `F` percorrem o mesmo estado `0` desligado, `1` físico, `2` mágico e `3`
-    suporte. O físico chama o ataque básico, o mágico nunca cai em ataque
-    básico quando aguarda mana/cooldown e o suporte mantém buffs, evocações e
-    recuperação sem atacar. HP/MP automático e movimento contínuo/fixo/parado
-    funcionam no mock; o percentual de HP/ração da montaria fica configurável,
-    mas sem efeito até existir estado autoritativo da montaria. A extensão do
-    modo mágico aceita até dez skills ofensivas realmente presentes na barra,
-    permite incluir/remover/reordenar e preserva uma configuração por classe.
-    Alvos e skills adquiridos manualmente são separados dos adquiridos pelo
-    macro; desligar não cancela uma ação manual. Troca de classe, morte,
-    respawn e teleporte limpam somente o estado transitório necessário. A
-    auditoria também registrou que o macro `Y`/`m_cAutoAttack` do cliente é um
-    sistema separado, que gira os últimos N atalhos; a lista ordenável web é
-    uma decisão explícita do projeto. O menu recebeu as opções clássicas de
-    servidor/personagem/saída como estados honestamente bloqueados pela rede.
-    Dano, sessão e regras econômicas continuam destinados ao futuro servidor.
 16. Estimativa final para substituição integral dos assets originais — **fazer
     somente no encerramento das demais pendências e apenas como estimativa**.
     Usar a matriz de cobertura produzida pela auditoria técnica para dimensionar

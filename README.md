@@ -133,6 +133,7 @@ Origem/
 ├── NUI/
 ├── object.bin
 ├── ItemList.bin
+├── ItemPrice.bin
 ├── Itemname.txt
 ├── SkillData.bin
 └── AniSound4.txt
@@ -158,14 +159,23 @@ bun run import:all
 ```
 
 O comando executa, em ordem, os importadores de mundo/criaturas, personagem,
-skills e UI. Para depuração, eles também podem ser chamados separadamente:
+skills, UI e comércio. Para depuração, eles também podem ser chamados
+separadamente:
 
 ```bash
 bun run import:classic -- "/caminho/para/Origem" "/caminho/para/tools/data"
 bun run import:player -- "/caminho/para/Origem"
 bun run import:skills -- "/caminho/para/Origem"
 bun run import:ui -- "/caminho/para/Origem"
+bun run import:commerce -- "/caminho/para/Origem" "/caminho/para/tools/data"
 ```
+
+`import:commerce` gera
+`public/game-data/classic/commerce/catalog.json` a partir dos 6.500 registros
+de `ItemList.bin`, dos overrides de `ItemPrice.bin` e dos 27 slots comerciais
+de `Carry` nos templates de `npcdb` referenciados por `NPCGener.txt`. Esse
+catálogo é estático e somente leitura: compra, venda, saldo, Tax e qualquer
+mutação de inventário continuam sendo responsabilidades do futuro servidor.
 
 ## Controles
 

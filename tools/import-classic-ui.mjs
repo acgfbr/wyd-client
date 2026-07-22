@@ -21,6 +21,15 @@ const textures = [
   ["UI/Skill2.wyt", "skills.png"],
   ["UI/SkillMaster2.wyt", "master-skills.png"],
   ["UI/NewAmul.wyt", "skill-icons.png"],
+  // NPC interaction surfaces from the same PC 7.54 client. Keeping these
+  // atlases intact lets the web UI reproduce the authored panel geometry
+  // without fabricating a replacement skin.
+  ["UI/MessageBox2.wyt", "message-box.png"],
+  ["UI/Store2.wyt", "store.png"],
+  ["UI/Storage2.wyt", "storage.png"],
+  ["UI/Quest2.wyt", "quest.png"],
+  ["UI/PotalUI.wyt", "portal.png"],
+  ["UI/PotalOldUI.wyt", "portal-old.png"],
 ];
 const itemIconAtlases = Array.from({ length: 14 }, (_, index) => {
   const suffix = String(index + 1).padStart(2, "0");

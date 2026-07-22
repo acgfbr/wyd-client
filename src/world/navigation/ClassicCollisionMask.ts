@@ -21,6 +21,7 @@ export function composeClassicCollisionMask(
   data: ClassicNavigationData,
 ): ClassicCollisionMask {
   const values = buildClassicTerrainMask(block);
+  const attributes = new Uint8Array(FIELD_WORLD_SIZE * FIELD_WORLD_SIZE);
   const recordCount = Math.min(records.length, MAX_CLASSIC_FIELD_OBJECTS);
   for (let index = 0; index < recordCount; index++) {
     const record = records[index];
@@ -28,8 +29,8 @@ export function composeClassicCollisionMask(
       registerClassicObjectMask(values, record, data.objectMasks.values);
     }
   }
-  applyClassicAttributes(values, block.column, block.row, data.attributes.values);
-  return { values, complete: true };
+  applyClassicAttributes(values, block.column, block.row, data.attributes.values, attributes);
+  return { values, attributes, complete: true };
 }
 
 /** Mirrors the early-continue branches in TMObjectContainer::Load. */
@@ -95,6 +96,7 @@ function applyClassicAttributes(
   column: number,
   row: number,
   attributes: Uint8Array,
+  fieldAttributes: Uint8Array,
 ): void {
   const worldBaseX = column * FIELD_WORLD_SIZE;
   const worldBaseY = row * FIELD_WORLD_SIZE;
@@ -102,7 +104,9 @@ function applyClassicAttributes(
     const attributeY = ((worldBaseY + localY) >> 2) & (ATTRIBUTE_MAP_SIDE - 1);
     for (let localX = 0; localX < FIELD_WORLD_SIZE; localX++) {
       const attributeX = ((worldBaseX + localX) >> 2) & (ATTRIBUTE_MAP_SIDE - 1);
-      if (((attributes[attributeY * ATTRIBUTE_MAP_SIDE + attributeX] ?? 0) & 2) !== 0) {
+      const attribute = attributes[attributeY * ATTRIBUTE_MAP_SIDE + attributeX] ?? 0;
+      fieldAttributes[localY * FIELD_WORLD_SIZE + localX] = attribute;
+      if ((attribute & 2) !== 0) {
         fieldMask[localY * FIELD_WORLD_SIZE + localX] = 127;
       }
     }

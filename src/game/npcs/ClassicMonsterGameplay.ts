@@ -1,8 +1,28 @@
 import type { WydPosition } from "../../world/coordinates";
 
+/**
+ * Coarse offline routing for the interaction branches in the 7.54 client.
+ * Some classic branches additionally inspect the current Field, equipment or
+ * server state; those intentionally collapse to `special` here.
+ */
+export type ClassicNpcInteractionKind =
+  | "none"
+  | "shop"
+  | "cargo"
+  | "quest"
+  | "mix"
+  | "premium"
+  | "special";
+
 export interface ClassicMonsterSnapshot {
   readonly id: string;
   readonly name: string;
+  readonly generatorId: number;
+  readonly templateIndex: number;
+  readonly templateKey: string;
+  readonly interactionCode: number;
+  readonly headItemIndex: number;
+  readonly interactionKind: ClassicNpcInteractionKind;
   readonly position: WydPosition;
   readonly hp: number;
   readonly maxHp: number;

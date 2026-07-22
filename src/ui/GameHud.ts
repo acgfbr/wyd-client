@@ -15,6 +15,17 @@ import {
   type AutoCombatMode,
   type AutoCombatPositionMode,
 } from "../game/combat/AutoCombat";
+import type {
+  ClassicMonsterSnapshot,
+  ClassicNpcInteractionKind,
+} from "../game/npcs/ClassicMonsterGameplay";
+import type { ClassicGroundPortal } from "../game/portals/ClassicGroundPortals";
+import type { ClassicResolvedTemplateCarry } from "../game/commerce/ClassicCommerceCatalog";
+import { ClassicNpcShopGrid } from "./ClassicNpcShopGrid";
+import {
+  makeClassicWindowDraggable,
+  type ClassicWindowDragController,
+} from "./ClassicWindowDrag";
 
 type InventoryItemSource =
   | { readonly kind: "inventory"; readonly slot: number }
@@ -107,6 +118,9 @@ export class GameHud {
   onAutoCombatMountThresholdChanged: ((percentage: number) => void) | null = null;
   onAutoCombatPositionModeSelected: ((mode: AutoCombatPositionMode) => void) | null = null;
   onChatSubmit: ((message: string, channel: ChatChannel) => void) | null = null;
+  onNpcInteractionClose: (() => void) | null = null;
+  onGroundPortalConfirm: ((portal: ClassicGroundPortal) => void) | null = null;
+  onGroundPortalClose: ((portal: ClassicGroundPortal) => void) | null = null;
   readonly #target = requireElement<HTMLElement>("#target-status");
   readonly #targetName = requireElement<HTMLElement>("#target-name");
   readonly #targetLevel = requireElement<HTMLElement>("#target-level");
@@ -129,6 +143,23 @@ export class GameHud {
   readonly #skillCatalogGrid = requireElement<HTMLElement>("#skill-catalog-grid");
   readonly #skillCatalogStatus = requireElement<HTMLElement>("#skill-catalog-status");
   readonly #skillClassSelect = requireElement<HTMLSelectElement>("#skill-class-select");
+  readonly #npcInteraction = requireElement<HTMLElement>("#npc-interaction");
+  readonly #npcInteractionName = requireElement<HTMLElement>("#npc-interaction-name");
+  readonly #npcInteractionKind = requireElement<HTMLElement>("#npc-interaction-kind");
+  readonly #npcInteractionMessage = requireElement<HTMLElement>("#npc-interaction-message");
+  readonly #npcInteractionSlots = requireElement<HTMLElement>("#npc-interaction-slots");
+  readonly #npcInteractionAuthorityTitle = requireElement<HTMLElement>("#npc-interaction-authority-title");
+  readonly #npcInteractionAuthorityDetail = requireElement<HTMLElement>("#npc-interaction-authority-detail");
+  readonly #npcInteractionSource = requireElement<HTMLElement>("#npc-interaction-source");
+  readonly #groundPortalPrompt = requireElement<HTMLElement>("#ground-portal-prompt");
+  readonly #groundPortalPromptMessage = requireElement<HTMLElement>("#ground-portal-prompt-message");
+  readonly #groundPortalPromptPrice = requireElement<HTMLElement>("#ground-portal-prompt-price");
+  readonly #groundPortalConfirm = requireElement<HTMLButtonElement>("[data-ground-portal-confirm]");
+  readonly #npcShopGrid: ClassicNpcShopGrid;
+  readonly #inventoryWindowDrag: ClassicWindowDragController;
+  readonly #characterWindowDrag: ClassicWindowDragController;
+  readonly #skillWindowDrag: ClassicWindowDragController;
+  readonly #npcWindowDrag: ClassicWindowDragController;
   #state: PlayerState | null = null;
   #unsubscribe: (() => void) | null = null;
   #lastSnapshot: PlayerSnapshot | null = null;
@@ -154,8 +185,39 @@ export class GameHud {
   #chatChannel: ChatChannel = "general";
   #chatHistory: string[] = [];
   #chatHistoryCursor = 0;
+  #activeGroundPortal: ClassicGroundPortal | null = null;
+  #groundPortalPreviousFocus: HTMLElement | null = null;
+  #npcAnchorSnapFrame = 0;
+  #activeNpcShopTemplateKey: string | null = null;
 
   constructor() {
+    this.#npcShopGrid = new ClassicNpcShopGrid(this.#npcInteractionSlots);
+    this.#npcWindowDrag = makeClassicWindowDraggable(
+      this.#npcInteraction,
+      requirePanelHandle(this.#npcInteraction, ".npc-interaction-surface > header"),
+      {
+        autoClampOnResize: false,
+        onReset: () => this.positionNpcBesideInventory(),
+      },
+    );
+    this.#inventoryWindowDrag = makeClassicWindowDraggable(
+      this.#inventory,
+      requirePanelHandle(this.#inventory, ":scope > header"),
+      {
+        onMove: () => this.positionNpcBesideInventory(),
+        onReset: () => this.positionNpcBesideInventory(),
+      },
+    );
+    this.#characterWindowDrag = makeClassicWindowDraggable(
+      this.#characterPanel,
+      requirePanelHandle(this.#characterPanel, ":scope > header"),
+    );
+    this.#skillWindowDrag = makeClassicWindowDraggable(
+      this.#skillPanel,
+      requirePanelHandle(this.#skillPanel, ":scope > header"),
+    );
+    window.addEventListener("resize", this.reflowNpcInteraction);
+
     document.querySelector<HTMLElement>("[data-inventory-close]")?.addEventListener("click", () => {
       this.toggleInventory(false);
     });
@@ -206,6 +268,15 @@ export class GameHud {
     document.querySelector<HTMLButtonElement>("#hud-menu-button")?.addEventListener("click", () => {
       this.toggleGameMenu();
     });
+    document.querySelector<HTMLButtonElement>("[data-npc-interaction-close]")?.addEventListener("click", () => {
+      this.requestNpcInteractionClose();
+    });
+    this.#groundPortalConfirm.addEventListener("click", () => {
+      this.requestGroundPortalConfirm();
+    });
+    document.querySelector<HTMLButtonElement>("[data-ground-portal-cancel]")?.addEventListener("click", () => {
+      this.requestGroundPortalClose();
+    });
     document.querySelector<HTMLButtonElement>("[data-game-menu-close]")?.addEventListener("click", () => {
       this.toggleGameMenu(false);
     });
@@ -242,6 +313,144 @@ export class GameHud {
     this.#targetLevel.textContent = target.level ? `Lv. ${target.level}` : (target.hostile ? "MONSTRO" : "NPC");
     this.#targetHp.style.width = `${ratio(target.hp, target.maxHp) * 100}%`;
     setText("#target-hp-text", `${Math.max(0, target.hp)} / ${Math.max(0, target.maxHp)}`);
+  }
+
+  get npcInteractionVisible(): boolean {
+    return this.#npcInteraction.classList.contains("is-visible");
+  }
+
+  openNpcInteraction(snapshot: ClassicMonsterSnapshot): void {
+    const useInventoryAnchor = !this.#npcWindowDrag.userPositioned;
+    this.#npcInteraction.classList.add("classic-window-layout-snap");
+    if (useInventoryAnchor) this.#inventory.classList.add("classic-window-layout-snap");
+    const presentation = NPC_INTERACTION_PRESENTATIONS[snapshot.interactionKind];
+    this.#npcInteraction.classList.remove(...NPC_INTERACTION_KIND_CLASSES);
+    this.#npcInteraction.classList.add(`is-${snapshot.interactionKind}`, "is-visible");
+    this.#npcInteraction.setAttribute("aria-hidden", "false");
+    this.#npcInteractionName.textContent = snapshot.name.replaceAll("_", " ");
+    this.#npcInteractionKind.textContent = presentation.label;
+    this.#npcInteractionMessage.textContent = presentation.message;
+    this.#npcInteractionAuthorityTitle.textContent = presentation.authorityTitle;
+    this.#npcInteractionAuthorityDetail.textContent = presentation.authorityDetail;
+    this.#npcInteractionSource.textContent = [
+      `Generator ${snapshot.generatorId}`,
+      `template ${snapshot.templateIndex}:${snapshot.templateKey}`,
+      `código ${snapshot.interactionCode}`,
+      `head ${snapshot.headItemIndex}`,
+    ].join(" · ");
+    this.#activeNpcShopTemplateKey = snapshot.interactionKind === "shop"
+      ? snapshot.templateKey
+      : null;
+    this.renderNpcInteractionSlots(snapshot.interactionKind);
+    if (useInventoryAnchor) this.positionNpcBesideInventory();
+    else this.#npcWindowDrag.clampToViewport();
+
+    if (this.#npcAnchorSnapFrame) cancelAnimationFrame(this.#npcAnchorSnapFrame);
+    this.#npcAnchorSnapFrame = requestAnimationFrame(() => {
+      this.#npcAnchorSnapFrame = 0;
+      this.#inventory.classList.remove("classic-window-layout-snap");
+      this.#npcInteraction.classList.remove("classic-window-layout-snap");
+    });
+  }
+
+  closeNpcInteraction(): void {
+    this.#npcInteraction.classList.remove("is-visible");
+    this.#npcInteraction.setAttribute("aria-hidden", "true");
+    this.#activeNpcShopTemplateKey = null;
+    this.#npcShopGrid.clear();
+  }
+
+  /** Clears stale stock and keeps the classic 40-cell shop grid mounted. */
+  setNpcShopLoading(): void {
+    if (!this.#activeNpcShopTemplateKey || !this.#npcInteraction.classList.contains("is-shop")) return;
+    this.#npcShopGrid.setLoading();
+    this.#npcInteractionMessage.textContent = "Carregando o estoque clássico deste NPC…";
+    this.#npcInteractionAuthorityTitle.textContent = "Estoque clássico somente leitura";
+    this.#npcInteractionAuthorityDetail.textContent =
+      "O catálogo local preserva o Carry do NPC; comprar e vender continuam dependentes do servidor.";
+  }
+
+  /** Renders the recovered 27 Carry slots; the remaining 13 classic cells stay empty. */
+  renderNpcShopCarry(carry: ClassicResolvedTemplateCarry): Promise<void> {
+    if (
+      !this.#activeNpcShopTemplateKey
+      || carry.template.templateKey !== this.#activeNpcShopTemplateKey
+      || !this.#npcInteraction.classList.contains("is-shop")
+    ) {
+      return Promise.resolve();
+    }
+
+    const itemCount = carry.slots.reduce((count, slot) => count + (slot.item ? 1 : 0), 0);
+    this.#npcInteractionMessage.textContent = itemCount === 1
+      ? "1 item recuperado do estoque clássico deste NPC."
+      : `${itemCount} itens recuperados do estoque clássico deste NPC.`;
+    this.#npcInteractionAuthorityTitle.textContent = "Estoque clássico somente leitura";
+    this.#npcInteractionAuthorityDetail.textContent =
+      "Itens e efeitos vêm de Carry/ItemList; os preços exibidos são estáticos e não autoritativos.";
+    return this.#npcShopGrid.render(carry);
+  }
+
+  /** Leaves the 40 authored cells visible and reports a catalog-loading failure. */
+  setNpcShopError(error: unknown = "Falha ao carregar o estoque clássico"): void {
+    if (!this.#activeNpcShopTemplateKey || !this.#npcInteraction.classList.contains("is-shop")) return;
+    this.#npcShopGrid.setError(error);
+    const detail = error instanceof Error ? error.message : String(error);
+    this.#npcInteractionMessage.textContent = `Não foi possível carregar o estoque: ${detail}`;
+    this.#npcInteractionAuthorityTitle.textContent = "Estoque clássico indisponível";
+    this.#npcInteractionAuthorityDetail.textContent =
+      "Nenhuma compra, venda ou alteração de inventário foi executada.";
+  }
+
+  get groundPortalPromptVisible(): boolean {
+    return this.#groundPortalPrompt.classList.contains("is-visible");
+  }
+
+  openGroundPortalPrompt(portal: ClassicGroundPortal): void {
+    if (!this.groundPortalPromptVisible) {
+      const focused = document.activeElement;
+      this.#groundPortalPreviousFocus = focused instanceof HTMLElement
+        && focused !== document.body
+        && focused !== this.#chatInput
+        ? focused
+        : null;
+    }
+
+    this.closeChat(false);
+    if (this.npcInteractionVisible) this.requestNpcInteractionClose();
+    this.toggleGameMenu(false);
+    this.toggleAutoCombatPanel(false);
+    this.cancelInventoryPointerDrag();
+
+    this.#activeGroundPortal = portal;
+    const label = portal.labelPtBr?.trim() || `#${portal.messageStringId}`;
+    this.#groundPortalPromptMessage.textContent = `Deseja ir para ${label}?`;
+
+    const hasPrice = portal.price > 0;
+    this.#groundPortalPromptPrice.textContent = hasPrice
+      ? `A taxa de transferência é de ${Math.trunc(portal.price)} Bronze.`
+      : "";
+    this.#groundPortalPromptPrice.classList.toggle("is-visible", hasPrice);
+    this.#groundPortalPromptPrice.setAttribute("aria-hidden", String(!hasPrice));
+    this.#groundPortalPrompt.classList.add("is-visible");
+    this.#groundPortalPrompt.setAttribute("aria-hidden", "false");
+    this.#groundPortalConfirm.focus({ preventScroll: true });
+  }
+
+  closeGroundPortalPrompt(): void {
+    if (!this.groundPortalPromptVisible && !this.#activeGroundPortal) return;
+    this.#groundPortalPrompt.classList.remove("is-visible");
+    this.#groundPortalPrompt.setAttribute("aria-hidden", "true");
+    this.#groundPortalPromptPrice.classList.remove("is-visible");
+    this.#groundPortalPromptPrice.setAttribute("aria-hidden", "true");
+    this.#activeGroundPortal = null;
+
+    const previousFocus = this.#groundPortalPreviousFocus;
+    this.#groundPortalPreviousFocus = null;
+    if (previousFocus?.isConnected && previousFocus.offsetParent !== null) {
+      previousFocus.focus({ preventScroll: true });
+    } else {
+      this.#groundPortalConfirm.blur();
+    }
   }
 
   toggleInventory(force?: boolean): boolean {
@@ -1082,7 +1291,99 @@ export class GameHud {
     this.#inventoryPreview.style.setProperty("--inventory-preview-top", `${Math.round(top)}px`);
   }
 
+  private positionNpcBesideInventory(): void {
+    if (!this.npcInteractionVisible || this.#npcWindowDrag.userPositioned) return;
+    if (getComputedStyle(this.#inventory).visibility === "hidden") {
+      this.#npcWindowDrag.clampToViewport();
+      return;
+    }
+
+    const gap = 8;
+    const padding = 4;
+    const inventoryRect = this.#inventory.getBoundingClientRect();
+    const npcRect = this.#npcInteraction.getBoundingClientRect();
+    const leftCandidate = inventoryRect.left - gap - npcRect.width;
+    const rightCandidate = inventoryRect.right + gap;
+    let targetLeft = leftCandidate;
+
+    if (leftCandidate < padding) {
+      targetLeft = rightCandidate + npcRect.width <= window.innerWidth - padding
+        ? rightCandidate
+        : clamp(
+          leftCandidate,
+          padding,
+          Math.max(padding, window.innerWidth - padding - npcRect.width),
+        );
+    }
+
+    this.#npcWindowDrag.moveByViewport(
+      targetLeft - npcRect.left,
+      inventoryRect.top - npcRect.top,
+    );
+  }
+
+  private readonly reflowNpcInteraction = (): void => {
+    if (!this.npcInteractionVisible) return;
+    if (this.#npcWindowDrag.userPositioned) this.#npcWindowDrag.clampToViewport();
+    else this.positionNpcBesideInventory();
+  };
+
+  private renderNpcInteractionSlots(kind: ClassicNpcInteractionKind): void {
+    this.#npcShopGrid.clear();
+    if (kind === "shop") this.setNpcShopLoading();
+  }
+
+  private requestNpcInteractionClose(): void {
+    if (!this.npcInteractionVisible) return;
+    this.closeNpcInteraction();
+    this.onNpcInteractionClose?.();
+  }
+
+  private requestGroundPortalConfirm(): void {
+    const portal = this.#activeGroundPortal;
+    if (!portal || !this.groundPortalPromptVisible) return;
+    this.closeGroundPortalPrompt();
+    this.onGroundPortalConfirm?.(portal);
+  }
+
+  private requestGroundPortalClose(): void {
+    const portal = this.#activeGroundPortal;
+    if (!portal || !this.groundPortalPromptVisible) return;
+    this.closeGroundPortalPrompt();
+    this.onGroundPortalClose?.(portal);
+  }
+
   private readonly chatGlobalKeyDown = (event: KeyboardEvent): void => {
+    if (this.groundPortalPromptVisible) {
+      const key = event.key.toLowerCase();
+      if (event.code === "Enter" || key === "y") {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        this.requestGroundPortalConfirm();
+        return;
+      }
+      if (event.code === "Escape" || key === "n") {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        this.requestGroundPortalClose();
+        return;
+      }
+      if (event.code !== "Tab" && event.code !== "Space") {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }
+      return;
+    }
+    if (
+      event.code === "Escape"
+      && this.npcInteractionVisible
+      && !isTextEntry(event.target)
+    ) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      this.requestNpcInteractionClose();
+      return;
+    }
     if (event.code === "Escape" && this.#ccPanel.classList.contains("is-visible")) {
       event.preventDefault();
       event.stopImmediatePropagation();
@@ -1309,6 +1610,12 @@ function requireElement<T extends Element>(selector: string): T {
   return element;
 }
 
+function requirePanelHandle(panel: HTMLElement, selector: string): HTMLElement {
+  const handle = panel.querySelector<HTMLElement>(selector);
+  if (!handle) throw new Error(`HUD: cabeçalho ${selector} ausente em #${panel.id}`);
+  return handle;
+}
+
 function setText(selector: string, value: string): void {
   const element = document.querySelector<HTMLElement>(selector);
   if (element) element.textContent = value;
@@ -1323,12 +1630,75 @@ function ratio(value: number, maximum: number): number {
   return maximum <= 0 ? 0 : Math.max(0, Math.min(1, value / maximum));
 }
 
+function clamp(value: number, minimum: number, maximum: number): number {
+  return Math.max(minimum, Math.min(maximum, value));
+}
+
 const PRIMARY_ATTRIBUTES = ["str", "int", "dex", "con"] as const satisfies readonly PrimaryAttribute[];
 const CHAT_CHANNELS = ["general", "party", "guild"] as const satisfies readonly ChatChannel[];
 const CHAT_CHANNEL_LABELS: Readonly<Record<ChatChannel, string>> = {
   general: "Todos",
   party: "Grupo",
   guild: "Guild",
+};
+const NPC_INTERACTION_KINDS = [
+  "none",
+  "shop",
+  "cargo",
+  "quest",
+  "mix",
+  "premium",
+  "special",
+] as const satisfies readonly ClassicNpcInteractionKind[];
+const NPC_INTERACTION_KIND_CLASSES = NPC_INTERACTION_KINDS.map((kind) => `is-${kind}`);
+const NPC_INTERACTION_PRESENTATIONS: Readonly<Record<ClassicNpcInteractionKind, {
+  readonly label: string;
+  readonly message: string;
+  readonly authorityTitle: string;
+  readonly authorityDetail: string;
+}>> = {
+  none: {
+    label: "NPC",
+    message: "Nenhuma ação clássica foi associada a este NPC pelos dados importados.",
+    authorityTitle: "Interação sem conteúdo local",
+    authorityDetail: "Nenhuma fala foi criada para substituir dados ausentes.",
+  },
+  shop: {
+    label: "LOJA",
+    message: "O catálogo da loja não está disponível no modo offline.",
+    authorityTitle: "Loja somente leitura",
+    authorityDetail: "Itens, quantidades e preços aguardam a resposta autoritativa do servidor.",
+  },
+  cargo: {
+    label: "CARGO",
+    message: "O conteúdo do armazém não está disponível no modo offline.",
+    authorityTitle: "Armazém somente leitura",
+    authorityDetail: "Os slots permanecem vazios até existir inventário autoritativo do servidor.",
+  },
+  quest: {
+    label: "MISSÃO",
+    message: "O estado e o texto desta missão aguardam dados autoritativos do servidor.",
+    authorityTitle: "Missão identificada pelo cliente",
+    authorityDetail: "Nenhum objetivo, recompensa ou fala foi inferido localmente.",
+  },
+  mix: {
+    label: "COMBINAÇÃO",
+    message: "Esta combinação depende das regras e do estado enviados pelo servidor clássico.",
+    authorityTitle: "Serviço de combinação identificado",
+    authorityDetail: "A operação permanece indisponível e não altera itens no modo offline.",
+  },
+  premium: {
+    label: "PREMIUM",
+    message: "Este serviço premium não possui autoridade no modo offline.",
+    authorityTitle: "Serviço premium identificado",
+    authorityDetail: "Nenhuma ação ou custo foi simulado sem os dados do servidor.",
+  },
+  special: {
+    label: "SERVIÇO",
+    message: "O cliente clássico escolhe esta ação usando também região e estado do servidor.",
+    authorityTitle: "Interação especial identificada",
+    authorityDetail: "A ação permanece somente leitura para evitar inventar comportamento.",
+  },
 };
 const AUTO_COMBAT_LABELS: Readonly<Record<AutoCombatMode, {
   readonly compact: string;
