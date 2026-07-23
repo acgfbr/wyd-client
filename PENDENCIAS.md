@@ -364,7 +364,7 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
     concluída; clima global futuro só deve ser ligado quando o respectivo
     sistema de weather existir. Ainda falta concluir a revisão visual final
     dos mapas.
-11. Distribuição web — **parcial; cache inicial persistente pendente**. O build de produção
+11. Distribuição web — **implementação concluída; homologação manual pendente**. O build de produção
     não publica sourcemaps, remove comentários legais/`debugger`/`console.debug`,
     minifica identificadores/sintaxe/espaços e usa nomes de assets por hash. O
     bootstrap mobile prepara somente os renderers da classe ativa; a troca de
@@ -373,16 +373,23 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
     README documenta o limite dessa proteção, instalação e comandos somente com
     Bun, preparo dos assets, erros comuns, iPhone/Vercel e a galeria de capturas
     reais, incluindo as quatro classes, evocações e os 111 mapas.
-    Falta criar uma primeira execução assistida que mostre bytes/arquivos,
-    progresso, velocidade e estado retomável enquanto persiste um pacote
-    essencial versionado em `CacheStorage`. Visitas seguintes devem validar a
-    versão e servir terreno, objetos, texturas, personagens e catálogos desse
-    cache, mantendo o streaming normal para mapas não baixados. A UI deve pedir
-    persistência quando suportada, permitir cancelar/retomar/limpar e detectar
-    quota antes de iniciar. Não baixar silenciosamente todo o pacote de cerca de
-    264 MB: Safari/iPhone pode expulsar dados sob pressão e `CacheStorage` não
-    substitui memória GPU; falha ou asset corrompido deve cair para rede e
-    regravar somente a entrada afetada.
+    A primeira execução agora lê `precache-armia.json`, valida sua chave de
+    conteúdo e prepara em `CacheStorage` um pacote essencial de Armia com 780
+    arquivos/32,9 MiB. A tela mostra arquivos, bytes, taxa e nome corrente;
+    `Entrar agora` interrompe sem impedir o boot e o próximo acesso retoma
+    apenas as entradas ausentes. O navegador recebe pedido de persistência
+    quando suportado e a estimativa de quota é conferida antes da transferência.
+    O MENU permite limpar o pacote local. Um service worker cache-first serve
+    os dados clássicos armazenados, mantém manifesto/índice network-first e
+    deixa todos os demais mapas no streaming normal. O índice é regenerado por
+    `bun run import:cache` e ao final de `bun run import:all`; uma mudança em
+    qualquer conteúdo troca a chave e invalida o pacote anterior. O pacote
+    completo de cerca de 264 MB não é baixado silenciosamente. Falha, quota,
+    modo privado ou ausência das APIs cai para a rede sem bloquear o jogo.
+    `CacheStorage` reduz downloads, mas não elimina parsing nem upload à GPU, e
+    Safari/iPhone ainda pode expulsar o cache sob pressão. Falta homologar em
+    uma publicação HTTPS real: primeira visita, interrupção/retomada, limpeza,
+    atualização de versão, offline parcial e expulsão no iPhone 15.
 12. Auditoria técnica final e cobertura do cliente clássico. Revisar o runtime
     contra as melhores práticas atuais do Three.js — ciclo de vida/dispose,
     cache e compartilhamento de GPU, draw calls/instancing, streaming, LOD,

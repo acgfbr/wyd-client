@@ -46,6 +46,8 @@ Documentação de arquitetura:
   level up e coleta continuam independentes. Passos respeitam o tipo do piso;
   monstros/NPCs usam os IDs de suas ações no `AniSound4.txt`, e cachoeiras,
   chuva local e objetos ambientais possuem loops atenuados por distância.
+- Primeiro acesso assistido com cache versionado de Armia, progresso em
+  arquivos/bytes, retomada e fallback transparente para a rede.
 
 ## Capturas do build atual
 
@@ -119,6 +121,19 @@ Abra [http://localhost:5173](http://localhost:5173). O jogo começa em Armia, na
 coordenada `2100, 2100`. Se a porta estiver ocupada, o Vite mostrará no terminal
 a próxima porta utilizada.
 
+No primeiro acesso, a tela inicial prepara 780 arquivos essenciais de Armia
+(cerca de 32,9 MiB) no armazenamento do navegador. O botão **Entrar agora**
+interrompe essa preparação sem bloquear o jogo; o próximo acesso retoma apenas
+o que estiver ausente. O pacote completo de mapas permanece sob demanda e não é
+copiado inteiro. Para apagar o pacote inicial, abra **MENU → Limpar pacote
+local**.
+
+`CacheStorage` evita baixar novamente os arquivos, mas o Three.js ainda precisa
+decodificar modelos/texturas e enviá-los à GPU quando entram no streaming. Em
+modo privado, com pouco espaço ou após expulsão automática do Safari/iOS, o jogo
+continua pela rede e recompõe o cache quando possível. Service workers exigem
+HTTPS em produção; `localhost` é aceito durante desenvolvimento.
+
 ### 3. Validar um build de produção
 
 ```bash
@@ -182,7 +197,8 @@ bun run import:all
 ```
 
 O comando executa, em ordem, os importadores de mundo/criaturas, personagem,
-skills, UI, comércio e áudio. Para depuração, eles também podem ser chamados
+skills, UI, comércio e áudio, e por último regenera o índice versionado do
+cache inicial. Para depuração, eles também podem ser chamados
 separadamente:
 
 ```bash
@@ -192,6 +208,7 @@ bun run import:skills -- "/caminho/para/Origem"
 bun run import:ui -- "/caminho/para/Origem"
 bun run import:commerce -- "/caminho/para/Origem" "/caminho/para/tools/data"
 bun run import:audio -- "/caminho/para/Origem" "/caminho/para/wyd_extracted/AudioClip"
+bun run import:cache
 ```
 
 O segundo caminho do importador de áudio é opcional e só aceita fallback com
@@ -308,6 +325,8 @@ que você tem autorização para distribuí-los.
 | Erro de nome de arquivo no Linux | Preserve exatamente as pastas `Env`, `Effect`, `UI`, `NUI` e `mesh`. |
 | Tela preta ou erro WebGL | Atualize o navegador/driver e habilite aceleração de hardware. |
 | Vercel publica o app, mas assets retornam 404 | Confirme que `public/game-data` está versionado e que `manifest.json` existe no deployment. |
+| O primeiro carregamento reinicia ou usa a rede | Evite modo privado, confira espaço livre e mantenha a aba aberta; uma preparação interrompida retoma no próximo acesso. Safari/iOS pode expulsar o cache sob pressão. |
+| Alterei/importei assets, mas o cache antigo continua | Rode `bun run import:cache`, gere um novo build e publique também `precache-armia.json`. |
 
 ## Estrutura principal
 

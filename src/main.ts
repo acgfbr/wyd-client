@@ -12,6 +12,15 @@ app.innerHTML = `
     <p class="eyebrow">WITH YOUR DESTINY</p>
     <h1>Entrando em Armia</h1>
     <p id="loading-status">Carregando terreno clássico…</p>
+    <div id="loading-cache" class="loading-cache" aria-live="polite">
+      <div class="loading-cache-track"><i id="loading-cache-fill"></i></div>
+      <div class="loading-cache-meta">
+        <span id="loading-cache-count">Verificando cache…</span>
+        <b id="loading-cache-bytes">—</b>
+      </div>
+      <small id="loading-cache-file"></small>
+      <button id="loading-cache-skip" type="button" hidden>Entrar agora</button>
+    </div>
   </section>
 
   <section id="target-status" class="target-status" aria-live="polite">
@@ -131,6 +140,7 @@ app.innerHTML = `
     <button type="button" data-game-menu-action="macro">Configurar C.C <kbd>F</kbd></button>
     <button type="button" data-game-menu-action="music-toggle"><span id="game-menu-music-state">Música: OFF</span> <kbd>M</kbd></button>
     <button type="button" data-game-menu-action="sfx-toggle"><span id="game-menu-sfx-state">SFX: ON</span> <kbd>B</kbd></button>
+    <button type="button" data-game-menu-action="cache-clear">Limpar pacote local <em>ARMIA</em></button>
     <div class="game-menu-divider"><span>Sistema clássico</span></div>
     <button type="button" data-game-menu-action="server">Selecionar servidor <em>REDE</em></button>
     <button type="button" data-game-menu-action="character-select">Selecionar personagem <em>REDE</em></button>

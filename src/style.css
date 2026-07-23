@@ -164,7 +164,57 @@ button, select { font: inherit; }
 .boot-emblem { color: #d6b959; font: 900 3.8rem/1 Georgia, serif; letter-spacing: -.12em; text-shadow: 0 2px #000, 0 0 18px #7f5a16; }
 .eyebrow { margin: .55rem 0 0; color: #b89c59; font-size: .7rem; letter-spacing: .32em; }
 .boot-screen h1 { margin: .3rem 0; color: #eee5cc; font: 700 1.35rem/1.3 Tahoma, Arial, sans-serif; text-shadow: 0 2px #000; }
-.boot-screen p:last-child { margin: .35rem 0; color: #aaa393; font-size: .72rem; }
+.boot-screen > p { margin: .35rem 0; color: #aaa393; font-size: .72rem; }
+.loading-cache {
+  width: min(34rem, 82vw);
+  margin: .85rem auto 0;
+  color: #aaa393;
+  font: 10px/1.35 Tahoma, Arial, sans-serif;
+}
+.loading-cache-track {
+  overflow: hidden;
+  height: 13px;
+  padding: 2px;
+  border: 1px solid #665a3d;
+  background: #050605;
+  box-shadow: inset 0 0 0 1px #17150f, 0 1px #000;
+}
+.loading-cache-track i {
+  display: block;
+  width: var(--classic-cache-progress, 0%);
+  height: 100%;
+  background: linear-gradient(90deg, #66501f, #d8b94f 70%, #f5dc82);
+  box-shadow: 0 0 7px rgb(222 186 72 / 60%);
+  transition: width .15s ease-out;
+}
+.loading-cache-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 5px;
+  color: #bfb49a;
+}
+.loading-cache-meta b { color: #e3ce8e; font-variant-numeric: tabular-nums; }
+.loading-cache small {
+  display: block;
+  overflow: hidden;
+  min-height: 15px;
+  margin-top: 3px;
+  color: #6f6c63;
+  font-size: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.loading-cache button {
+  margin-top: 8px;
+  padding: 5px 13px;
+  border: 1px outset #746641;
+  border-radius: 0;
+  background: linear-gradient(#403923, #171713);
+  color: #d8c78f;
+  cursor: pointer;
+}
+.loading-cache button:hover { filter: brightness(1.18); }
 
 .classic-window-title {
   display: flex;

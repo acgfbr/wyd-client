@@ -153,6 +153,7 @@ export class GameHud {
   onGroundPortalClose: ((portal: ClassicGroundPortal) => void) | null = null;
   onMusicToggle: (() => void) | null = null;
   onSoundEffectsToggle: (() => void) | null = null;
+  onInitialCacheClear: (() => void | Promise<void>) | null = null;
   readonly #target = requireElement<HTMLElement>("#target-status");
   readonly #targetName = requireElement<HTMLElement>("#target-name");
   readonly #targetLevel = requireElement<HTMLElement>("#target-level");
@@ -1880,6 +1881,7 @@ export class GameHud {
     if (action === "macro") this.toggleAutoCombatPanel(true);
     if (action === "music-toggle") this.onMusicToggle?.();
     if (action === "sfx-toggle") this.onSoundEffectsToggle?.();
+    if (action === "cache-clear") void this.onInitialCacheClear?.();
     if (action === "server") {
       this.addLog("Selecionar servidor aguarda a camada de rede.", "system");
     }

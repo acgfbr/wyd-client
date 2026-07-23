@@ -281,8 +281,12 @@ refinamento, Ancient e preco estatico quando aplicavel.
 ## Limitacoes e riscos conhecidos
 
 - Homologacao visual ainda e necessaria em 1024x768, widescreen e iPhone.
-- O cache persistente de primeira execução ainda não foi implementado. Ele deve
-  ser versionado, retomável e compatível com quota/expulsão do Safari; cache em
+- O cache persistente inicial usa `precache-armia.json` e o service worker
+  `/wyd-cache-sw.js`. O pacote atual contém 780 arquivos/32,9 MiB necessários
+  ao primeiro cenário de Armia, tem chave derivada do conteúdo, valida quota,
+  pede persistência, retoma entradas ausentes e pode ser interrompido ou limpo
+  sem bloquear o fallback de rede. Os demais mapas continuam lazy. A
+  homologação de expulsão/retomada em Safari/iPhone permanece manual; cache em
   disco reduz rede, mas não elimina parsing, upload para GPU nem streaming.
 - Reload real, bfcache e contadores GEO/TEX antes/depois de trocas pesadas
   precisam de baseline manual.

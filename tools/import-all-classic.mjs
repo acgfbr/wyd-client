@@ -31,4 +31,12 @@ for (const entry of imports) {
   }
 }
 
+console.log("\n[WYD] Gerando pacote de cache inicial...");
+const cacheIndex = Bun.spawn(
+  [process.execPath, path.join(projectRoot, "tools", "build-classic-precache.mjs")],
+  { cwd: projectRoot, stdin: "inherit", stdout: "inherit", stderr: "inherit" },
+);
+const cacheExitCode = await cacheIndex.exited;
+if (cacheExitCode !== 0) process.exit(cacheExitCode);
+
 console.log("\n[WYD] Importação completa em public/game-data/classic.");

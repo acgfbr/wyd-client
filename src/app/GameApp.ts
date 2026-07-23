@@ -1,5 +1,10 @@
 import * as THREE from "three";
 import { ClassicAssetSource } from "../assets/ClassicAssetSource";
+import {
+  clearClassicInitialCache,
+  prepareClassicInitialCache,
+  type ClassicCacheProgress,
+} from "../assets/ClassicInitialCache";
 import { WydCamera } from "../camera/WydCamera";
 import { Player } from "../game/Player";
 import { loadClassicCommerceCatalog } from "../game/commerce/ClassicCommerceCatalog";
@@ -327,6 +332,15 @@ export class GameApp {
     this.#input.onSoundEffectsToggle = toggleSoundEffects;
     this.#hud.onMusicToggle = toggleMusic;
     this.#hud.onSoundEffectsToggle = toggleSoundEffects;
+    this.#hud.onInitialCacheClear = async () => {
+      const removed = await clearClassicInitialCache();
+      this.#hud.addLog(
+        removed
+          ? "Pacote local de Armia removido. Ele será preparado novamente no próximo acesso."
+          : "Nenhum pacote local de Armia estava armazenado.",
+        "system",
+      );
+    };
     this.#hud.setAudioToggleState(
       this.#audio.musicEnabled,
       this.#audio.soundEffectsEnabled,
@@ -412,6 +426,35 @@ export class GameApp {
   }
 
   async start(): Promise<void> {
+    const cacheAbort = new AbortController();
+    const cacheSkip = document.querySelector<HTMLButtonElement>("#loading-cache-skip");
+    const skipCache = () => cacheAbort.abort();
+    cacheSkip?.addEventListener("click", skipCache);
+    try {
+      await prepareClassicInitialCache({
+        signal: cacheAbort.signal,
+        onProgress: updateBootCacheProgress,
+      });
+    } catch (error) {
+      // CacheStorage, quota and service-worker restrictions are an optimization
+      // boundary. They must never prevent the network-backed game from booting.
+      console.warn("Cache inicial indisponível; seguindo pela rede", error);
+      updateBootCacheProgress({
+        phase: "unsupported",
+        label: "Cache indisponível · carregando pela rede",
+        completedAssets: 0,
+        totalAssets: 0,
+        loadedBytes: 0,
+        totalBytes: 0,
+        currentAsset: null,
+        persistent: null,
+      });
+    } finally {
+      cacheSkip?.removeEventListener("click", skipCache);
+      if (cacheSkip) cacheSkip.hidden = true;
+    }
+    const loadingStatus = document.querySelector<HTMLElement>("#loading-status");
+    if (loadingStatus) loadingStatus.textContent = "Montando terreno e objetos de Armia…";
     const assets = await ClassicAssetSource.load();
     this.#assets = assets;
     // Small optional payload loaded alongside the world; combat keeps its
@@ -3799,6 +3842,84 @@ export class GameApp {
 
 function isArmia(field: ClassicFieldEntry): boolean {
   return isArmiaCoordinates(field.column, field.row);
+}
+
+function updateBootCacheProgress(progress: ClassicCacheProgress): void {
+  const status = document.querySelector<HTMLElement>("#loading-status");
+  const root = document.querySelector<HTMLElement>("#loading-cache");
+  const count = document.querySelector<HTMLElement>("#loading-cache-count");
+  const bytes = document.querySelector<HTMLElement>("#loading-cache-bytes");
+  const file = document.querySelector<HTMLElement>("#loading-cache-file");
+  const skip = document.querySelector<HTMLButtonElement>("#loading-cache-skip");
+  const ratio = progress.totalBytes > 0
+    ? progress.loadedBytes / progress.totalBytes
+    : progress.phase === "ready" ? 1 : 0;
+
+  if (status) status.textContent = progress.label;
+  root?.style.setProperty(
+    "--classic-cache-progress",
+    `${(Math.max(0, Math.min(1, ratio)) * 100).toFixed(2)}%`,
+  );
+  if (count) {
+    count.textContent = progress.totalAssets > 0
+      ? `${progress.completedAssets.toLocaleString("pt-BR")} / ${progress.totalAssets.toLocaleString("pt-BR")} arquivos`
+      : progress.phase === "checking" ? "Verificando cache…" : "Cache opcional";
+  }
+  if (bytes) {
+    const speed = bootCachePreparationSpeed(progress);
+    bytes.textContent = progress.totalBytes > 0
+      ? `${formatBootBytes(progress.loadedBytes)} / ${formatBootBytes(progress.totalBytes)}${speed}`
+      : "—";
+  }
+  if (file) {
+    file.textContent = progress.currentAsset
+      ? readableBootAssetName(progress.currentAsset)
+      : progress.phase === "ready"
+        ? progress.persistent
+          ? "Cache persistente confirmado pelo navegador"
+          : "Cache pronto · sujeito à política de espaço do navegador"
+        : progress.phase === "unsupported"
+          ? "O jogo continuará normalmente usando a conexão"
+          : "";
+  }
+  if (skip) skip.hidden = progress.phase !== "downloading";
+}
+
+let bootCacheStartTime = 0;
+let bootCacheStartBytes = 0;
+
+function bootCachePreparationSpeed(progress: ClassicCacheProgress): string {
+  if (progress.phase === "checking") {
+    bootCacheStartTime = 0;
+    bootCacheStartBytes = 0;
+    return "";
+  }
+  if (progress.phase !== "downloading") return "";
+  if (bootCacheStartTime === 0) {
+    bootCacheStartTime = performance.now();
+    bootCacheStartBytes = progress.loadedBytes;
+    return "";
+  }
+  const elapsedSeconds = (performance.now() - bootCacheStartTime) / 1_000;
+  if (elapsedSeconds < 0.4) return "";
+  const bytesPerSecond = Math.max(0, progress.loadedBytes - bootCacheStartBytes) / elapsedSeconds;
+  return bytesPerSecond > 0 ? ` · ${formatBootBytes(bytesPerSecond)}/s` : "";
+}
+
+function formatBootBytes(bytes: number): string {
+  const safeBytes = Math.max(0, Number.isFinite(bytes) ? bytes : 0);
+  if (safeBytes < 1_024) return `${Math.round(safeBytes)} B`;
+  if (safeBytes < 1_048_576) return `${(safeBytes / 1_024).toFixed(1)} KiB`;
+  return `${(safeBytes / 1_048_576).toFixed(1)} MiB`;
+}
+
+function readableBootAssetName(url: string): string {
+  const name = url.slice(url.lastIndexOf("/") + 1);
+  try {
+    return decodeURIComponent(name);
+  } catch {
+    return name;
+  }
 }
 
 function isArmiaCoordinates(column: number, row: number): boolean {
