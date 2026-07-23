@@ -7,6 +7,17 @@ const clientRoot = process.argv[2]
   ? path.resolve(process.argv[2])
   : path.resolve(projectRoot, "../tjs/Origem");
 const outputRoot = path.join(projectRoot, "public/game-data/classic/audio");
+const inferredMobileAudioRoot = path.resolve(
+  projectRoot,
+  "../../../Downloads/wyd_extracted/AudioClip",
+);
+const mobileAudioRoot = process.argv[3]
+  ? path.resolve(process.argv[3])
+  : process.env.WYD_MOBILE_AUDIO_ROOT
+    ? path.resolve(process.env.WYD_MOBILE_AUDIO_ROOT)
+    : (await Bun.file(path.join(inferredMobileAudioRoot, "mguardatt.wav")).exists())
+      ? inferredMobileAudioRoot
+      : null;
 
 const soundListPath = path.join(clientRoot, "sound/soundlist.txt");
 if (!(await Bun.file(soundListPath).exists())) {
@@ -22,15 +33,29 @@ for (const line of soundList.split(/\r?\n/)) {
   const index = Number.parseInt(match[1], 10);
   const sourceRelative = match[2].replaceAll("\\", "/").replace(/\/+/g, "/");
   const channels = Number.parseInt(match[3], 10);
-  const source = path.join(clientRoot, sourceRelative);
+  let source = path.join(clientRoot, sourceRelative);
+  let fallbackSource = null;
   const outputRelative = sourceRelative.replace(/^sound\//i, "sounds/");
   const destination = path.join(outputRoot, outputRelative);
   if (!(await Bun.file(source).exists())) {
-    missing.push({ kind: "sound", index, source: sourceRelative });
-    continue;
+    const exactMobileCandidate = mobileAudioRoot
+      ? path.join(mobileAudioRoot, path.basename(sourceRelative))
+      : null;
+    if (!exactMobileCandidate || !(await Bun.file(exactMobileCandidate).exists())) {
+      missing.push({ kind: "sound", index, source: sourceRelative });
+      continue;
+    }
+    source = exactMobileCandidate;
+    fallbackSource = `AudioClip/${path.basename(exactMobileCandidate)}`;
   }
   await copyFile(source, destination);
-  sounds.push({ index, channels, file: `audio/${outputRelative}`, source: sourceRelative });
+  sounds.push({
+    index,
+    channels,
+    file: `audio/${outputRelative}`,
+    source: sourceRelative,
+    ...(fallbackSource ? { fallbackSource } : {}),
+  });
 }
 
 // Exact DS_SOUND_MANAGER::m_szMusicPathOrigin order in DirShow.cpp.
@@ -68,6 +93,7 @@ const catalog = {
     soundList: "sound/soundlist.txt",
     musicOrder: "DirShow.cpp DS_SOUND_MANAGER::m_szMusicPathOrigin",
     routing: "TMFieldScene.cpp music selection block",
+    mobileAudioFallback: mobileAudioRoot ? "wyd_extracted/AudioClip (exact basename only)" : null,
   },
   counts: {
     sounds: sounds.length,

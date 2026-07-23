@@ -3,12 +3,13 @@
   "source": {
     "soundList": "sound/soundlist.txt",
     "musicOrder": "DirShow.cpp DS_SOUND_MANAGER::m_szMusicPathOrigin",
-    "routing": "TMFieldScene.cpp music selection block"
+    "routing": "TMFieldScene.cpp music selection block",
+    "mobileAudioFallback": "wyd_extracted/AudioClip (exact basename only)"
   },
   "counts": {
-    "sounds": 332,
+    "sounds": 333,
     "music": 13,
-    "missing": 5
+    "missing": 4
   },
   "sounds": [
     {
@@ -1968,6 +1969,13 @@
       "source": "sound/monster/queenidle.wav"
     },
     {
+      "index": 363,
+      "channels": 1,
+      "file": "audio/sounds/monster/mguardatt.wav",
+      "source": "sound/monster/mguardatt.wav",
+      "fallbackSource": "AudioClip/mguardatt.wav"
+    },
+    {
       "index": 364,
       "channels": 1,
       "file": "audio/sounds/monster/mguarddam.wav",
@@ -2091,11 +2099,6 @@
       "kind": "sound",
       "index": 103,
       "source": "sound/weather/weath03.wav"
-    },
-    {
-      "kind": "sound",
-      "index": 363,
-      "source": "sound/monster/mguardatt.wav"
     }
   ]
 }

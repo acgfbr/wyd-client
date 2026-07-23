@@ -47,15 +47,22 @@ com vários drops, com NPC shop/cargo/inventário aberto e no iPhone.
   textura, draw calls e triângulos em tempo real.
 - Mobile/iPhone reduz pixel ratio, sombras e antialias, e usa fallback de DDS
   quando o navegador não suporta o caminho ideal.
+- A varredura estática de `src/render/effects` confirmou `dispose()` em todos
+  os módulos que alocam geometria/material/textura e limites explícitos nos
+  pools variáveis de projéteis, partículas, trails, impactos e shades. Efeitos
+  persistentes sem pool variável possuem quantidade fixa por ator/buff.
+- Listeners globais de ciclo longo pertencem a `GameApp`/`GameInput` e são
+  removidos no shutdown. Listeners locais de HUD/tooltip/shop pertencem a nós
+  DOM descartados junto com a página e não criam registros por troca de mapa.
 
 ## Riscos técnicos abertos
 
 - O shutdown central existe, mas ainda precisa de teste visual/manual de
   navegação/reload e inspeção dos contadores `GEO/TEX` antes/depois de trocas
   pesadas de mapa/classe.
-- Alguns efeitos de skill possuem pools próprios e modelos/texuras dedicados;
-  a matriz completa deve confirmar que cada pool tem limite, cleanup de mapa e
-  cleanup de troca de classe.
+- Os efeitos já promovidos têm pools limitados e cleanup; novas skills só
+  podem entrar na matriz depois de declarar limite e descarte de
+  mapa/classe/morte.
 - O runtime principal agora fica separado do vendor Three.js. Foema,
   TransKnight e BeastMaster possuem chunks de renderer próprios carregados
   apenas no primeiro switch para a classe; o build medido gerou chunks de
@@ -93,7 +100,7 @@ nos demais Fields fazem parte do proprio manifesto, nao sao links quebrados.
 | Itens/comércio | 6.500 ItemList, ItemPrice, Carry de NPC, tooltips clássicos | `ClassicCommerceCatalog`, `ClassicItemTooltip` | Footprint multicélula EF_GRID e ownership de drops |
 | HUD/chat | Orbes, C.C., menu, chat local, overhead name/HP/balão | `main.ts`, `GameHud`, `ClassicPlayerOverheadHud` | Homologar 1024x768, widescreen e iPhone |
 | Skills/VFX | Vários lotes por classe implementados; skills não citadas bloqueadas | `ClassSkills`, `render/effects` | Épico de skills completo continua aberto |
-| Áudio | 332 SFX, 13 músicas, BGM opcional por mapa e SFX de ataque/skills/impacto/level up/coleta | `audio/catalog.json`, `ClassicAudio` | Ligar passos, monstros e ambiente do AniSound |
+| Áudio | 333 SFX, 13 músicas, BGM opcional, combate/coleta, passos por piso, 82 IDs AniSound de atores e loops ambientais próximos | `audio/catalog.json`, `ClassicAudio`, `ClassicSpawnManager`, `MapObjects` | Quatro referências órfãs dos corpora desktop/mobile; clima global depende do futuro weather |
 | Rede/servidor | Deliberadamente fora do escopo atual | n/a | Sessão, economia, dano autoritativo, drops reais |
 
 ## Ordem segura para continuar

@@ -223,10 +223,16 @@ refinamento, Ancient e preco estatico quando aplicavel.
   precisam de baseline manual.
 - Nem todas as 248 skills possuem definicao jogavel e renderer fiel; a matriz
   automatica mostra a cobertura por classe.
-- Audio possui 332 entradas SFX e 13 musicas importadas. O BGM segue o
+- Audio possui 333 entradas SFX e 13 musicas importadas. O `mguardatt.wav`
+  faltante no desktop veio do cliente mobile por correspondencia exata de
+  nome; quatro referencias seguem ausentes, sem substituicao aproximada. O BGM segue o
   roteamento classico, inicia desligado e `M` alterna apenas a musica. Ataque,
-  skill, impacto, level up e coleta ja usam IDs recuperados do cliente; ainda
-  faltam caminhada, monstros e ambiente do `AniSound4.txt`.
+  skill, impacto, level up e coleta usam IDs recuperados do cliente. Passos
+  seguem os pares por piso de `TMHuman::AnimationFrame`; os 82 IDs distintos
+  usados pelas acoes de NPCs/monstros no `AniSound4.txt` estao presentes e
+  ligados, com atenuacao e limite de canais. Cachoeira, chuva local e o objeto
+  ambiental 607 mantem loops por proximidade. Clima global fica condicionado
+  a implementacao futura do sistema de weather, nao ao audio.
 - Cobertura visual de todos os equipamentos, skins raros e acoes especiais de
   criaturas continua incompleta.
 - WebGPU nao e substituto direto: shaders `onBeforeCompile` e materiais WebGL

@@ -5,7 +5,10 @@ import type { TrnBlock, TrnTile } from "../formats/classic/Trn";
 import { TRN_SIDE } from "../formats/classic/Trn";
 import { createTerrainBlockMesh } from "../render/terrain/TerrainBlockMesh";
 import { TerrainMaterialLibrary } from "../render/terrain/TerrainMaterialLibrary";
-import { MapObjects } from "../render/objects/MapObjects";
+import {
+  MapObjects,
+  type ClassicMapAmbientSoundSource,
+} from "../render/objects/MapObjects";
 import { ModelLibrary } from "../render/objects/ModelLibrary";
 import { ClassicSpawnManager } from "../game/npcs/ClassicSpawnManager";
 import {
@@ -113,6 +116,10 @@ export class ClassicWorld {
 
   setEffectsEnabled(enabled: boolean): void {
     this.#mapObjects.setEffectsEnabled(enabled);
+  }
+
+  ambientSoundSources(): readonly ClassicMapAmbientSoundSource[] {
+    return this.#mapObjects.ambientSoundSources();
   }
 
   dispose(): void {
@@ -661,6 +668,33 @@ export class ClassicWorld {
     );
     const attribute = collision.attributes[localY * FIELD_WORLD_SIZE + localX];
     return typeof attribute === "number" ? attribute & 0xff : null;
+  }
+
+  /** TMGround::GetTileType, used by TMHuman::AnimationFrame footstep routing. */
+  tileTypeAt(position: WydPosition): number {
+    const field = fieldAt(position);
+    const key = fieldKey(field.column, field.row);
+    const block = this.#blocks.get(key);
+    if (!block) return 3;
+    const localX = Math.max(
+      0,
+      Math.min(FIELD_WORLD_SIZE - 1, Math.floor(position.x - field.column * FIELD_WORLD_SIZE)),
+    );
+    const localY = Math.max(
+      0,
+      Math.min(FIELD_WORLD_SIZE - 1, Math.floor(position.y - field.row * FIELD_WORLD_SIZE)),
+    );
+    const collision = this.#collisionMasks.get(key);
+    if (collision?.complete && collision.attributes?.[localY * FIELD_WORLD_SIZE + localX] === 1) {
+      return 1;
+    }
+    const tileX = Math.max(0, Math.min(TRN_SIDE - 1, Math.floor(localX / TILE_WORLD_SIZE)));
+    const tileY = Math.max(0, Math.min(TRN_SIDE - 1, Math.floor(localY / TILE_WORLD_SIZE)));
+    const textureIndex = (block.tiles[tileY * TRN_SIDE + tileX]?.texture ?? 0) + 10;
+    if (textureIndex >= 186 && textureIndex <= 193) return 11;
+    if (textureIndex >= 202 && textureIndex <= 205) return 8;
+    if (textureIndex >= 230 && textureIndex <= 231) return 9;
+    return 3;
   }
 }
 

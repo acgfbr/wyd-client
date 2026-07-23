@@ -10,6 +10,14 @@ import { MapWater } from "../water/MapWater";
 import { ClassicFloatObjects } from "../water/ClassicFloatObjects";
 
 const nonStaticTypes = new Set([2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 121, 343, 344]);
+const WATERFALL_OBJECT_TYPES = new Set([292, 490, 1526, 1665, 2005]);
+
+export interface ClassicMapAmbientSoundSource {
+  readonly soundIndex: number;
+  readonly position: WydPosition;
+  readonly radius: number;
+  readonly volume: number;
+}
 
 function isStaticMeshType(type: number): boolean {
   // These ids instantiate dedicated TMLeaf/TMTree/TMShip/fauna classes. They
@@ -28,6 +36,7 @@ export class MapObjects {
   readonly #floats: ClassicFloatObjects;
   readonly #fieldGroups = new Map<string, THREE.Group>();
   readonly #fieldTypes = new Map<string, ReadonlySet<number>>();
+  readonly #ambientSources = new Map<string, readonly ClassicMapAmbientSoundSource[]>();
   readonly #generations = new Map<string, number>();
 
   constructor(
@@ -66,6 +75,10 @@ export class MapObjects {
     this.#floats.update(deltaSeconds);
   }
 
+  ambientSoundSources(): readonly ClassicMapAmbientSoundSource[] {
+    return [...this.#ambientSources.values()].flat();
+  }
+
   async addBlock(column: number, row: number, records: readonly MapObjectRecord[]): Promise<void> {
     const key = fieldKey(column, row);
     this.removeBlock(column, row);
@@ -74,6 +87,29 @@ export class MapObjects {
     const group = new THREE.Group();
     group.name = `objects-${key}`;
     this.#fieldGroups.set(key, group);
+    this.#ambientSources.set(
+      key,
+      records.flatMap((record): readonly ClassicMapAmbientSoundSource[] => {
+        const position = {
+          x: column * FIELD_WORLD_SIZE + record.localX,
+          y: row * FIELD_WORLD_SIZE + record.localY,
+        };
+        if (WATERFALL_OBJECT_TYPES.has(record.type)) {
+          // TMHouse type 3: waterfall.wav while the focused actor is < 7 cells.
+          return [{ soundIndex: 6, position, radius: 7, volume: 0.28 }];
+        }
+        if (record.type === 607) {
+          // TMHouse type 4 uses effect28.wav in a tight three-cell radius.
+          return [{ soundIndex: 39, position, radius: 3, volume: 0.24 }];
+        }
+        if (record.type === 10) {
+          // TMRain owns weather sample 101. Multiple emitters collapse to the
+          // nearest source in ClassicAudio, matching IsSoundPlaying().
+          return [{ soundIndex: 101, position, radius: 18, volume: 0.2 }];
+        }
+        return [];
+      }),
+    );
     this.object.add(group);
 
     const effects = this.#effects.addBlock(column, row, records);
@@ -130,6 +166,7 @@ export class MapObjects {
   removeBlock(column: number, row: number): void {
     const key = fieldKey(column, row);
     this.#generations.set(key, (this.#generations.get(key) ?? 0) + 1);
+    this.#ambientSources.delete(key);
     const group = this.#fieldGroups.get(key);
     if (group) {
       this.#fieldGroups.delete(key);
@@ -157,6 +194,7 @@ export class MapObjects {
     }
     this.#generations.clear();
     this.#fieldTypes.clear();
+    this.#ambientSources.clear();
     this.#effects.dispose();
     this.#environment.dispose();
     this.#floats.dispose();

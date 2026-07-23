@@ -12,7 +12,15 @@ interface ClassicAudioCatalog {
   }[];
 }
 
+export interface ClassicAmbientSoundSource {
+  readonly soundIndex: number;
+  readonly position: WydPosition;
+  readonly radius: number;
+  readonly volume: number;
+}
+
 const AUDIO_ROOT = "/game-data/classic/";
+const MAX_SIMULTANEOUS_SFX_VOICES = 28;
 
 /**
  * Effect-event sounds recovered from TMHuman.cpp and the TMSkill* controllers.
@@ -54,6 +62,9 @@ const CLASSIC_SKILL_IMPACT_SOUNDS: Readonly<Record<number, readonly number[]>> =
 export class ClassicAudio {
   readonly #music = new Audio();
   readonly #voices = new Set<HTMLAudioElement>();
+  readonly #ambientLoops = new Map<number, HTMLAudioElement>();
+  readonly #ambientLoads = new Set<number>();
+  #ambientDesired = new Map<number, number>();
   #catalogPromise: Promise<ClassicAudioCatalog | null> | null = null;
   #unlocked = false;
   #disposed = false;
@@ -104,6 +115,63 @@ export class ClassicAudio {
     void this.playSound(pair[Math.abs(sequence) % pair.length]!, 0.28);
   }
 
+  playPlayerAction(classKey: string, action: "hit" | "death", mounted: boolean): void {
+    // AniSound4: Mage is skin 1; TK/BM/Huntress use the Knight action table.
+    const soundIndex = classKey === "foema"
+      ? (action === "hit" ? 21 : 17)
+      : action === "hit"
+        ? 22
+        : mounted
+          ? 12
+          : 21;
+    void this.playSound(soundIndex, action === "death" ? 0.38 : 0.3);
+  }
+
+  playSpatialSound(
+    index: number,
+    source: WydPosition,
+    listener: WydPosition,
+    maximumDistance = 36,
+    volume = 0.32,
+  ): void {
+    const distance = Math.hypot(source.x - listener.x, source.y - listener.y);
+    if (distance >= maximumDistance) return;
+    const attenuation = 1 - distance / Math.max(0.01, maximumDistance);
+    void this.playSound(index, volume * attenuation * attenuation);
+  }
+
+  updateAmbient(
+    sources: readonly ClassicAmbientSoundSource[],
+    listener: WydPosition,
+  ): void {
+    const desired = new Map<number, number>();
+    for (const source of sources) {
+      const distance = Math.hypot(
+        source.position.x - listener.x,
+        source.position.y - listener.y,
+      );
+      if (distance >= source.radius) continue;
+      const attenuation = 1 - distance / Math.max(0.01, source.radius);
+      const volume = source.volume * attenuation * attenuation;
+      desired.set(source.soundIndex, Math.max(volume, desired.get(source.soundIndex) ?? 0));
+    }
+    this.#ambientDesired = desired;
+    for (const [index, loop] of this.#ambientLoops) {
+      const volume = desired.get(index);
+      if (volume === undefined || volume <= 0.002) {
+        releaseAudio(loop);
+        this.#ambientLoops.delete(index);
+        continue;
+      }
+      loop.volume = Math.min(1, volume);
+    }
+    if (!this.#unlocked || this.#disposed) return;
+    for (const index of desired.keys()) {
+      if (this.#ambientLoops.has(index) || this.#ambientLoads.has(index)) continue;
+      void this.startAmbientLoop(index);
+    }
+  }
+
   playSkill(classicIndex: number): void {
     this.playSoundSet(CLASSIC_SKILL_SOUNDS[classicIndex], 0.3);
   }
@@ -123,7 +191,19 @@ export class ClassicAudio {
     const catalog = await this.loadCatalog();
     const entry = catalog?.sounds.find((candidate) => candidate.index === index);
     if (!entry || this.#disposed) return false;
+    const sameSound = [...this.#voices].filter(
+      (voice) => voice.dataset.classicSoundIndex === String(index),
+    );
+    if (sameSound.length >= Math.max(1, entry.channels)) return false;
+    if (this.#voices.size >= MAX_SIMULTANEOUS_SFX_VOICES) {
+      const oldest = this.#voices.values().next().value;
+      if (oldest) {
+        releaseAudio(oldest);
+        this.#voices.delete(oldest);
+      }
+    }
     const voice = new Audio(classicAudioUrl(entry.file));
+    voice.dataset.classicSoundIndex = String(index);
     voice.preload = "auto";
     voice.volume = Math.max(0, Math.min(1, volume));
     this.#voices.add(voice);
@@ -151,10 +231,12 @@ export class ClassicAudio {
     this.#music.pause();
     this.#music.removeAttribute("src");
     this.#music.load();
+    for (const loop of this.#ambientLoops.values()) releaseAudio(loop);
+    this.#ambientLoops.clear();
+    this.#ambientLoads.clear();
+    this.#ambientDesired.clear();
     for (const voice of this.#voices) {
-      voice.pause();
-      voice.removeAttribute("src");
-      voice.load();
+      releaseAudio(voice);
     }
     this.#voices.clear();
   }
@@ -165,6 +247,11 @@ export class ClassicAudio {
     window.removeEventListener("pointerdown", this.unlock, { capture: true });
     window.removeEventListener("keydown", this.unlock, { capture: true });
     if (this.#musicEnabled) void this.playRequestedMusic();
+    for (const index of this.#ambientDesired.keys()) {
+      if (!this.#ambientLoops.has(index) && !this.#ambientLoads.has(index)) {
+        void this.startAmbientLoop(index);
+      }
+    }
   };
 
   private async playRequestedMusic(): Promise<void> {
@@ -209,6 +296,39 @@ export class ClassicAudio {
   private playSoundSet(indices: readonly number[] | undefined, volume: number): void {
     if (!indices) return;
     for (const index of indices) void this.playSound(index, volume);
+  }
+
+  private async startAmbientLoop(index: number): Promise<void> {
+    this.#ambientLoads.add(index);
+    try {
+      const catalog = await this.loadCatalog();
+      const volume = this.#ambientDesired.get(index);
+      const entry = catalog?.sounds.find((candidate) => candidate.index === index);
+      if (
+        !entry
+        || volume === undefined
+        || volume <= 0.002
+        || !this.#unlocked
+        || this.#disposed
+        || this.#ambientLoops.has(index)
+      ) return;
+      const loop = new Audio(classicAudioUrl(entry.file));
+      loop.preload = "auto";
+      loop.loop = true;
+      loop.volume = Math.min(1, volume);
+      try {
+        await loop.play();
+        if (this.#disposed || !this.#ambientDesired.has(index)) {
+          releaseAudio(loop);
+          return;
+        }
+        this.#ambientLoops.set(index, loop);
+      } catch {
+        releaseAudio(loop);
+      }
+    } finally {
+      this.#ambientLoads.delete(index);
+    }
   }
 }
 
@@ -268,4 +388,10 @@ function inRect(
 
 function classicAudioUrl(file: string): string {
   return `${AUDIO_ROOT}${file.split("/").map(encodeURIComponent).join("/")}`;
+}
+
+function releaseAudio(audio: HTMLAudioElement): void {
+  audio.pause();
+  audio.removeAttribute("src");
+  audio.load();
 }

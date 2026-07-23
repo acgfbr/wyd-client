@@ -62,12 +62,20 @@ export interface ClassicMonsterAttackEvent {
   readonly distance: number;
 }
 
+export interface ClassicActorSoundEvent {
+  readonly source: ClassicMonsterSnapshot;
+  readonly action: string;
+  readonly soundIndex: number;
+  readonly position: WydPosition;
+}
+
 export interface ClassicMonsterEventMap {
   readonly hit: ClassicMonsterHitEvent;
   readonly death: ClassicMonsterDeathEvent;
   readonly respawn: ClassicMonsterRespawnEvent;
   readonly drop: ClassicMonsterDropEvent;
   readonly monsterAttack: ClassicMonsterAttackEvent;
+  readonly actorSound: ClassicActorSoundEvent;
 }
 
 export type ClassicMonsterEventName = keyof ClassicMonsterEventMap;

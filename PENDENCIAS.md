@@ -280,16 +280,26 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
     (`performance.memory`, ou `—` no Safari/iPhone) e duração/ocupação da
     callback principal como `THREAD*`, sem alegar CPU real. A primeira camada
     de áudio também foi integrada: `soundlist.txt` gera um catálogo lazy com
-    332 entradas de SFX, os 13 MP3 seguem a ordem exata de `DirShow.cpp` e o
+    333 entradas de SFX, os 13 MP3 seguem a ordem exata de `DirShow.cpp` e o
     BGM usa o roteamento não-war recuperado de `TMFieldScene.cpp`; começa
     desligado e a tecla `M` alterna somente a música, sem silenciar os efeitos.
     Ataques usam os pares de arma de `TMHuman::PlayAttackSound`, e skills,
     impactos e level up já disparam os IDs recuperados de `TMHuman.cpp` e dos
     controladores `TMSkill*`; a coleta confirmada usa o som `31` do fluxo
-    clássico. Cinco referências do soundlist não existem no corpus e
-    permanecem explicitamente listadas. Ainda faltam conectar os eventos de
-    caminhada, monstros e ambiente aos IDs de `AniSound4.txt` e concluir a
-    revisão visual final dos mapas.
+    clássico. A segunda camada também está ligada: passos escolhem os pares de
+    `TMHuman::AnimationFrame` pelo tipo de piso; NPCs e monstros disparam os 82
+    IDs distintos preservados em suas ações `AniSound4`, incluindo ataque,
+    dano, morte e loops de movimento/idle; cachoeiras `TMHouse type 3`, chuva
+    local e o objeto `607` usam loops com os raios clássicos. Atenuação,
+    `IsSoundPlaying` por quantidade de canais e teto de 28 vozes impedem spam
+    em Fields densos. A auditoria confirma zero IDs de ação ausentes no pacote.
+    O `mguardatt.wav` ausente no desktop foi recuperado pelo nome exato do
+    cliente mobile reduzido, com a procedência registrada no catálogo. Quatro
+    referências gerais do soundlist ainda não existem em nenhum dos dois
+    corpora e permanecem explicitamente listadas. A pendência de áudio do runtime atual está
+    concluída; clima global futuro só deve ser ligado quando o respectivo
+    sistema de weather existir. Ainda falta concluir a revisão visual final
+    dos mapas.
 11. Distribuição web — **concluído para o escopo atual**. O build de produção
     não publica sourcemaps, remove comentários legais/`debugger`/`console.debug`,
     minifica identificadores/sintaxe/espaços e usa nomes de assets por hash. O
@@ -315,7 +325,10 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
     listeners, input, mundo, spawns, player, ground items, preview, efeitos,
     renderer e caches de terreno/modelos/texturas, preservando o bfcache do
     Safari/iOS em `pagehide.persisted=true`. Ainda faltam baseline visual/perf
-    por cenário e teste manual de reload/bfcache. A matriz automatica por
+    por cenário e teste manual de reload/bfcache. A varredura estática confirmou
+    `dispose()` em todos os módulos de efeito que alocam GPU, limites nos pools
+    variáveis e ownership dos listeners globais; novas skills ficam obrigadas
+    a manter esse contrato. A matriz automatica por
     arquivo importado foi concluida: `bun run audit:coverage` cruza o manifesto,
     o corpus fisico e as definicoes TypeScript do runtime, gerando Markdown e
     JSON em `docs/matriz-cobertura-classico.*`. O snapshot atual valida 2.285
@@ -327,6 +340,9 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
     ficou em cerca de 460 KiB minificados e os renderers de Foema, TransKnight
     e BeastMaster viraram chunks lazy de aproximadamente 20/54/96 KiB,
     carregados somente no primeiro switch para cada classe.
+    As verificações que exigem navegador/dispositivo estão isoladas em
+    `docs/checklist-homologacao-manual.md`, com cenário, duração, coordenadas e
+    critério de evidência; elas não são marcadas como aprovadas pelo build.
 13. Memória canônica do projeto — **primeira consolidacao concluida**.
     `MEMORIA_PROJETO.md` registra a arquitetura resultante, decisões e justificativas,
     fontes do cliente clássico por subsistema, formatos/parsers, descobertas,

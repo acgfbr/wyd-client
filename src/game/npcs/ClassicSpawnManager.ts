@@ -9,6 +9,7 @@ import {
 } from "./ClassicFriendlyHoverOutline";
 import type {
   ClassicMonsterAttackEvent,
+  ClassicActorSoundEvent,
   ClassicMonsterEventListener,
   ClassicMonsterEventMap,
   ClassicMonsterEventName,
@@ -23,6 +24,7 @@ import {
 import { MonsterCatalog, type MonsterGenerator, type MonsterTemplate } from "./MonsterCatalog";
 
 export type {
+  ClassicActorSoundEvent,
   ClassicMonsterAttackEvent,
   ClassicMonsterDeathEvent,
   ClassicMonsterDropEvent,
@@ -51,6 +53,17 @@ const FRIENDLY_IDLE_HARD_RADIUS = 2.25;
 const FRIENDLY_IDLE_NAVIGATION_STEP = 0.25;
 const HOSTILE_HOVER_OUTLINE_COLOR = 0xff5b4d;
 const HOSTILE_SELECTED_OUTLINE_COLOR = 0xffd45a;
+const ACTOR_SOUND_DISTANCE = 36;
+const LOOPING_SOUND_ACTIONS = new Set([
+  "STAND01",
+  "STAND02",
+  "WALK",
+  "RUN",
+  "MSTND01",
+  "MSTND02",
+  "MWALK",
+  "MRUN",
+]);
 
 export interface ClassicSpawnEnvironment {
   readonly origin: WydPosition;
@@ -107,6 +120,8 @@ interface SpawnedActor {
   moving: boolean;
   yaw: number;
   currentAction: string | null;
+  soundAction: string | null;
+  nextActionSoundAt: number;
   actionLockRemaining: number;
   hitFlashRemaining: number;
   freezeRemainingSeconds: number;
@@ -479,6 +494,7 @@ export class ClassicSpawnManager {
         // equivalent elapsed animation time is divided by the same factor.
         actor.lease.model.update(actor.freezeRemainingSeconds > 0 ? deltaSeconds / 1.15 : deltaSeconds);
       }
+      this.updateActorSound(actor, nowSeconds, playerPosition, fieldVisible);
       actor.label.visible = fieldVisible && isActorAlive(actor) && distanceSquared <= 40 * 40;
       updateHitFeedback(actor, deltaSeconds);
       updateActorAffects(actor, deltaSeconds);
@@ -490,6 +506,45 @@ export class ClassicSpawnManager {
       // the very frame its terrain becomes resident.
       if (fieldVisible) actor.object.position.y = this.environment.heightAt(actor.position);
     }
+  }
+
+  private updateActorSound(
+    actor: SpawnedActor,
+    nowSeconds: number,
+    listenerPosition: WydPosition,
+    fieldVisible: boolean,
+  ): void {
+    const action = actor.currentAction;
+    if (action !== actor.soundAction) {
+      actor.soundAction = action;
+      actor.nextActionSoundAt = nowSeconds;
+    }
+    if (
+      !action
+      || !fieldVisible
+      || !actor.object.visible
+      || nowSeconds < actor.nextActionSoundAt
+      || distanceBetween(actor.position, listenerPosition) > ACTOR_SOUND_DISTANCE
+    ) return;
+    const family = actor.template.visual
+      ? this.catalog.visualFamily(actor.template.visual.skin)
+      : null;
+    const values = family?.actions?.[action];
+    const soundIndex = values?.[values.length - 1] ?? 0;
+    if (!Number.isFinite(soundIndex) || soundIndex <= 0) {
+      actor.nextActionSoundAt = Number.POSITIVE_INFINITY;
+      return;
+    }
+    const event: ClassicActorSoundEvent = {
+      source: actorSnapshot(actor),
+      action,
+      soundIndex: Math.trunc(soundIndex),
+      position: { ...actor.position },
+    };
+    this.emit("actorSound", event);
+    actor.nextActionSoundAt = LOOPING_SOUND_ACTIONS.has(action)
+      ? nowSeconds + Math.max(0.3, actor.lease.actionDurationSeconds(action) ?? 0.8)
+      : Number.POSITIVE_INFINITY;
   }
 
   private updateActorGameplay(
@@ -830,6 +885,8 @@ export class ClassicSpawnManager {
         moving: false,
         yaw: initialYaw,
         currentAction: lease.model.currentClip,
+        soundAction: null,
+        nextActionSoundAt: nowSeconds,
         actionLockRemaining: 0,
         hitFlashRemaining: 0,
         freezeRemainingSeconds: 0,

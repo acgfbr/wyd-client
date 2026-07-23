@@ -26,9 +26,11 @@ reutilizado.
   classe/master do `SkillData.bin` renovados por 15 minutos.
 - HUD clássico e inventário 7.54 com quatro bolsas, drag/drop, equipamento e
   preview 3D por clique, além do catálogo de skills e seletor de mapas.
-- Trilha clássica roteada por mapa/cidade e catálogo lazy de 332 SFX. A música
+- Trilha clássica roteada por mapa/cidade e catálogo lazy de 333 SFX. A música
   começa desligada e pode ser alternada com `M`; SFX de ataque, skill, impacto,
-  level up e coleta continuam independentes.
+  level up e coleta continuam independentes. Passos respeitam o tipo do piso;
+  monstros/NPCs usam os IDs de suas ações no `AniSound4.txt`, e cachoeiras,
+  chuva local e objetos ambientais possuem loops atenuados por distância.
 
 ## Capturas do build atual
 
@@ -174,8 +176,13 @@ bun run import:player -- "/caminho/para/Origem"
 bun run import:skills -- "/caminho/para/Origem"
 bun run import:ui -- "/caminho/para/Origem"
 bun run import:commerce -- "/caminho/para/Origem" "/caminho/para/tools/data"
-bun run import:audio -- "/caminho/para/Origem"
+bun run import:audio -- "/caminho/para/Origem" "/caminho/para/wyd_extracted/AudioClip"
 ```
+
+O segundo caminho do importador de áudio é opcional e só aceita fallback com
+o mesmo nome de arquivo. No corpus atual ele recupera `mguardatt.wav` do
+cliente mobile; aproximações como `weath03-A/B` não substituem referências
+desktop diferentes.
 
 `import:commerce` gera
 `public/game-data/classic/commerce/catalog.json` a partir dos 6.500 registros

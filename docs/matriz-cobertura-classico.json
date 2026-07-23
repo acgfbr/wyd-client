@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-23T02:57:25.689Z",
+  "generatedAt": "2026-07-23T03:18:04.788Z",
   "command": "bun run audit:coverage",
   "source": "WYD classic",
   "referencedFiles": {
@@ -276,8 +276,8 @@
     "dedicatedEffectSourceFiles": 27
   },
   "audio": {
-    "importedFiles": 335,
-    "catalogSounds": 332,
+    "importedFiles": 336,
+    "catalogSounds": 333,
     "catalogMusic": 13,
     "missingReferences": [
       {
@@ -299,13 +299,10 @@
         "kind": "sound",
         "index": 103,
         "source": "sound/weather/weath03.wav"
-      },
-      {
-        "kind": "sound",
-        "index": 363,
-        "source": "sound/monster/mguardatt.wav"
       }
-    ]
+    ],
+    "actorActionSounds": 82,
+    "missingActorActionSounds": []
   },
   "screenshots": {
     "total": 124,
@@ -480,12 +477,12 @@
     {
       "label": "Audio",
       "directory": "audio",
-      "files": 336,
-      "bytes": 119533948,
+      "files": 337,
+      "bytes": 119563381,
       "extensions": {
         ".json": 1,
         ".mp3": 13,
-        ".wav": 322
+        ".wav": 323
       }
     }
   ]

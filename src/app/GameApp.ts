@@ -224,6 +224,10 @@ export class GameApp {
   #autoCombatSupportCursor = 0;
   readonly #autoCombatSummonRefreshAt = new Map<number, number>();
   #effectsEnabled = true;
+  #lastFootstepPosition: WydPosition | null = null;
+  #footstepDistance = 0;
+  #footstepCooldown = 0;
+  #footstepSide: 0 | 1 = 0;
   #clickMarkerElapsed = CLICK_MARKER_LIFETIME;
   #heldGroundUpdateRemaining = 0;
   #heldGroundDestination: WydPosition | null = null;
@@ -543,9 +547,14 @@ export class GameApp {
         }
         this.#player.update(dt, movement);
         this.#world?.update(dt, this.#player.position);
+        this.updatePlayerFootsteps(dt);
         this.#audio.updateMusic(
           this.#player.position,
           this.#world?.attributeAt(this.#player.position) ?? null,
+        );
+        this.#audio.updateAmbient(
+          this.#world?.ambientSoundSources() ?? [],
+          this.#player.position,
         );
         this.#groundItems?.update(dt);
         this.updateGroundItemPickup(dt);
@@ -1172,6 +1181,16 @@ export class GameApp {
     for (const unsubscribe of this.#spawnUnsubscribers) unsubscribe();
     this.#spawnUnsubscribers = [
       spawns.on("monsterAttack", (event) => this.receiveMonsterAttack(event)),
+      spawns.on("actorSound", (event) => {
+        if (!this.#player) return;
+        this.#audio.playSpatialSound(
+          event.soundIndex,
+          event.position,
+          this.#player.position,
+          36,
+          0.34,
+        );
+      }),
       spawns.on("drop", (event) => this.receiveMonsterDrop(event)),
       spawns.on("death", ({ target, respawnInSeconds }) => {
         if (this.#selectedTargetId === target.id) this.#hud.setTarget(target);
@@ -1390,6 +1409,35 @@ export class GameApp {
       classKey: this.#activeClassKey,
       remainingSeconds: attack.releaseDelaySeconds,
     });
+  }
+
+  private updatePlayerFootsteps(deltaSeconds: number): void {
+    if (!this.#player || !this.#world) return;
+    const current = { ...this.#player.position };
+    const previous = this.#lastFootstepPosition;
+    this.#lastFootstepPosition = current;
+    this.#footstepCooldown = Math.max(0, this.#footstepCooldown - deltaSeconds);
+    if (!previous) return;
+    const distance = Math.hypot(current.x - previous.x, current.y - previous.y);
+    if (distance > 4) {
+      this.#footstepDistance = 0;
+      return;
+    }
+    if (!this.#player.moving || !this.#playerState.snapshot.alive) {
+      this.#footstepDistance = 0;
+      return;
+    }
+    this.#footstepDistance += distance;
+    const stride = this.#player.speedBoost ? 3.2 : this.#player.mounted ? 1.45 : 0.82;
+    if (this.#footstepDistance < stride || this.#footstepCooldown > 0) return;
+    this.#footstepDistance %= stride;
+    const soundIndex = classicFootstepSound(
+      this.#world.tileTypeAt(current),
+      this.#footstepSide,
+    );
+    this.#footstepSide = this.#footstepSide === 0 ? 1 : 0;
+    this.#footstepCooldown = this.#player.speedBoost ? 0.12 : this.#player.mounted ? 0.2 : 0.16;
+    void this.#audio.playSound(soundIndex, this.#player.mounted ? 0.22 : 0.18);
   }
 
   private updatePendingBowAttacks(deltaSeconds: number): void {
@@ -2662,7 +2710,10 @@ export class GameApp {
     const damage = this.#playerState.takeDamage(incomingDamage);
     playOptionalPlayerAction(this.#player, "playHit");
     this.#hud.addLog(`${event.attacker.name} causou ${damage} de dano.`, "damage");
-    if (this.#playerState.snapshot.alive) return;
+    if (this.#playerState.snapshot.alive) {
+      this.#audio.playPlayerAction(this.#activeClassKey, "hit", this.#player?.mounted ?? false);
+      return;
+    }
     this.#pendingBowAttacks.length = 0;
     this.#pendingSkillEvents.length = 0;
     this.#weakenedMonsters.clear();
@@ -2685,6 +2736,7 @@ export class GameApp {
     this.closeNpcInteraction();
     this.selectTarget(null);
     playOptionalPlayerAction(this.#player, "playDeath");
+    this.#audio.playPlayerAction(this.#activeClassKey, "death", this.#player?.mounted ?? false);
     this.#hud.addLog("Você morreu · retornando a Armia…", "system");
   }
 
@@ -3333,6 +3385,14 @@ function squaredDistance(left: WydPosition, right: WydPosition): number {
   const dx = left.x - right.x;
   const dy = left.y - right.y;
   return dx * dx + dy * dy;
+}
+
+/** TMHuman::AnimationFrame surface pairs for the focused actor. */
+function classicFootstepSound(tileType: number, side: 0 | 1): number {
+  if (tileType === 1 || tileType === 11) return side === 0 ? 184 : 185;
+  if (tileType === 8 || tileType === 9) return side === 0 ? 198 : 199;
+  if (tileType === 4) return side === 0 ? 190 : 191;
+  return side === 0 ? 192 : 193;
 }
 
 function canAcceptInventoryItem(snapshot: PlayerSnapshot, item: InventoryItem): boolean {

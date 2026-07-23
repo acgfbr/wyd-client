@@ -105,6 +105,13 @@ const screenshotFiles = (await walk(join(docsRoot, "screenshots")))
 const mapScreenshotFiles = screenshotFiles.filter((file) => file.path.includes("/maps/"));
 const audioFiles = (await walk(classicRoot))
   .filter((file) => /\.(?:wav|mp3|ogg|m4a|aac)$/i.test(file.path));
+const catalogSoundIndices = new Set((audioCatalog?.sounds ?? []).map((entry) => entry.index));
+const actorActionSoundIndices = [...new Set(
+  Object.values(monsterCatalog.visualFamilies)
+    .flatMap((family) => Object.values(family.actions ?? {}))
+    .map((values) => values.at(-1))
+    .filter((value) => Number.isFinite(value) && value > 0),
+)].sort((left, right) => left - right);
 
 const coverage = {
   generatedAt: new Date().toISOString(),
@@ -166,6 +173,8 @@ const coverage = {
     catalogSounds: audioCatalog?.counts.sounds ?? 0,
     catalogMusic: audioCatalog?.counts.music ?? 0,
     missingReferences: audioCatalog?.missing ?? [],
+    actorActionSounds: actorActionSoundIndices.length,
+    missingActorActionSounds: actorActionSoundIndices.filter((index) => !catalogSoundIndices.has(index)),
   },
   screenshots: {
     total: screenshotFiles.length,
@@ -200,7 +209,7 @@ function renderMarkdown(report) {
 
   const audioGap = report.audio.importedFiles === 0
     ? "- Audio continua sem arquivos importados."
-    : `- Audio: ${report.audio.catalogSounds} entradas de SFX e ${report.audio.catalogMusic} musicas; ${report.audio.missingReferences.length} referencias do soundlist nao existem no corpus.`;
+    : `- Audio: ${report.audio.catalogSounds} entradas de SFX e ${report.audio.catalogMusic} musicas; ${report.audio.actorActionSounds} IDs distintos do AniSound usados por atores, com ${report.audio.missingActorActionSounds.length} ausentes; ${report.audio.missingReferences.length} referencias do soundlist nao existem no corpus.`;
 
   return `# Matriz automatica de cobertura do cliente classico
 
@@ -247,6 +256,8 @@ ${areaRows}
 | Arquivos de audio importados | ${report.audio.importedFiles} |
 | Entradas SFX no catalogo de audio | ${report.audio.catalogSounds} |
 | Musicas no catalogo de audio | ${report.audio.catalogMusic} |
+| IDs distintos de ação do AniSound | ${report.audio.actorActionSounds} |
+| IDs de ação do AniSound ausentes | ${report.audio.missingActorActionSounds.length} |
 
 Templates de NPC/monstro nao resolvidos: ${report.monsters.unresolvedTemplates.length}.
 Templates comerciais nao resolvidos: ${report.items.unresolvedNpcTemplates}.

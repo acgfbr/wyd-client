@@ -1,6 +1,6 @@
 # Matriz automatica de cobertura do cliente classico
 
-Gerado por `bun run audit:coverage` em 2026-07-23T02:57:25.689Z. Este arquivo e
+Gerado por `bun run audit:coverage` em 2026-07-23T03:18:04.788Z. Este arquivo e
 derivado dos artefatos importados e do runtime; nao deve ser editado
 manualmente. A analise e as decisoes ficam em `auditoria-threejs-cobertura.md`.
 
@@ -37,7 +37,7 @@ Nenhum arquivo referenciado pelo manifesto esta ausente.
 | Dados | `data` | 1 | 158.8 KiB | .json 1 |
 | Comercio | `commerce` | 1 | 3.9 MiB | .json 1 |
 | Navegacao | `navigation` | 2 | 1.5 MiB | .bin 1, .dat 1 |
-| Audio | `audio` | 336 | 114.0 MiB | .json 1, .mp3 13, .wav 322 |
+| Audio | `audio` | 337 | 114.0 MiB | .json 1, .mp3 13, .wav 323 |
 
 ## Manifesto e dados estruturados
 
@@ -56,9 +56,11 @@ Nenhum arquivo referenciado pelo manifesto esta ausente.
 | Atlas de icones | 14 |
 | Registros de skill | 248 |
 | Arquivos TS dedicados a efeitos | 27 |
-| Arquivos de audio importados | 335 |
-| Entradas SFX no catalogo de audio | 332 |
+| Arquivos de audio importados | 336 |
+| Entradas SFX no catalogo de audio | 333 |
 | Musicas no catalogo de audio | 13 |
+| IDs distintos de ação do AniSound | 82 |
+| IDs de ação do AniSound ausentes | 0 |
 
 Templates de NPC/monstro nao resolvidos: 1.
 Templates comerciais nao resolvidos: 1.
@@ -92,7 +94,7 @@ manual e rastreada em `PENDENCIAS.md`.
 
 ## Lacunas objetivas
 
-- Audio: 332 entradas de SFX e 13 musicas; 5 referencias do soundlist nao existem no corpus.
+- Audio: 333 entradas de SFX e 13 musicas; 82 IDs distintos do AniSound usados por atores, com 0 ausentes; 4 referencias do soundlist nao existem no corpus.
 - Skills importadas mas ainda nao promovidas aparecem na tabela acima.
 - Compra, venda, ownership, economia, drops e formulas autoritativas dependem
   do futuro servidor e nao podem ser inferidos desta matriz de assets.
