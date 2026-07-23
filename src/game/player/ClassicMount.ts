@@ -204,6 +204,19 @@ export class ClassicMount {
       : null;
   }
 
+  currentAnimationSnapshot(): ClassicSkinnedAnimationSnapshot | null {
+    return this.#released ? null : this.#lease.model.currentAnimationSnapshot();
+  }
+
+  createIllusionAnimationController(
+    cloneRoot: THREE.Object3D,
+    animation: ClassicSkinnedAnimationSnapshot | null,
+  ): ClassicSkinnedCloneAnimationController | null {
+    return this.#released
+      ? null
+      : this.#lease.model.createCloneAnimationController(cloneRoot, animation);
+  }
+
   createAfterimageAnimationController(
     cloneRoot: THREE.Object3D,
     snapshot: ClassicMountAfterimageAnimationSnapshot | null,

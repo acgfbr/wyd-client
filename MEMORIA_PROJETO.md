@@ -142,7 +142,7 @@ O passe Ancient segue `MODULATE2X + ADDSMOOTH`. Os adicionais atuais do Carry
 de Utilidades sao `EF2=120`, `EF3=120`, `EF43=251`, grade 5; o tooltip calcula
 `Dano de Perfuracao: 480`.
 
-As skills Huntress promovidas ao runtime somam treze. Meditacao `#77` foi
+As skills Huntress promovidas ao runtime somam quatorze. Meditacao `#77` foi
 recuperada de `TMHuman.cpp` como cinco pares de billboards `101` em espiral;
 Escudo Dourado `#85` usa o mesmo `TMEffectLevelUp` tipo `1` do cliente, com
 texturas `122/56/2/7`. Esses casts nao usam o pulso generico e seus buffs
@@ -152,7 +152,12 @@ regra de copiar apenas o animal. Troca de Espirito `#87` recupera
 `TMSkillSpChange`: tres instancias skinned `86/wg01` seguem os bones `1/2` do
 dono em `0/400/800 ms`, com o shade `7`, vinte particulas `231` e os tempos,
 cores, crescimento e fade do motion type `10`. BON, ANI, as duas MSH e DDS
-indiretas agora fazem parte do importador reproduzivel.
+indiretas agora fazem parte do importador reproduzivel. Ilusao `#73` e uma
+rota especial de movimento, nao um buff: o proximo clique resolve ate oito
+passos navegaveis, clona por `3 s` a pose corrente completa na origem e
+teleporta ao centro da celula confirmada. O portal tipo `2` conserva mesh
+`703`, texturas `58/94`, cyan `0x0055FF`, pulso/rotacao e som `159`; montada,
+a ilusao anima separadamente o rig do animal e o da cavaleira.
 
 Montarias conservam rig, partes, bancos ANI, escala e bone de sela proprios.
 Nunca aplicar ANI de cavaleiro diretamente ao animal. A MATT3 da Huntress pode
@@ -310,10 +315,15 @@ atualizado para remover a divergencia.
 - Gameplay: combate, critico, C.C, skills iniciais, buffs, progressao e drops.
 - UI: HUD 7.54, chat, overhead, inventario/equipamento/cargo/lojas e tooltips.
 - Classes: TransKnight, Foema, BeastMaster, Huntress e evocacoes.
-- Skills: Meditacao `#77`, Escudo Dourado `#85`, Troca de Espirito `#87` e
-  Evasao Aprimorada `#89` promovidos no lote Huntress, reduzindo a lacuna total
-  de 97 para 93
-  registros.
+- Skills: Ilusao `#73`, Meditacao `#77`, Escudo Dourado `#85`, Troca de
+  Espirito `#87` e Evasao Aprimorada `#89` promovidos no lote Huntress; Assalto
+  `#11`, Espada da Fenix `#12` e Possuido `#13` promovidos no TransKnight.
+  Assalto usa billboards `56/60` e som `168`; Espada da Fenix reutiliza o
+  DoubleSwing nivel `1`; Possuido separa o burst type `4` da armadura critica
+  persistente `2838/413`. A lacuna total caiu de 97 para 89 registros.
+- Backend futuro: a ultima tarefa da fila deve inventariar o servidor-base e
+  produzir o guia de um multiplayer autoritativo, sem ativar rede durante o
+  escopo frontend atual.
 - Distribuicao: README, capturas dos 111 mapas, Vercel/iPhone, minificacao,
   telemetria, dispose e code splitting.
 - Auditoria: matriz automatica de arquivos/cobertura e memoria canonica.

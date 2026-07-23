@@ -28,12 +28,20 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
 - O Griupan item `1726` está homologado como familiar padrão independente da
   montaria, usando `32/ag01`, malha `ag010103`, animação, seguimento flutuante
   tipo `5` e partículas clássicas.
-- O recorte da Huntress formado por Imunidade `#76`, Ligação Espectral `#81`,
-  Explosão Etérea `#86`, Troca de Espírito `#87`, Lâmina das Sombras `#88` e
-  Força Espectral `#101`
+- O recorte da Huntress formado por Ilusão `#73`, Imunidade `#76`, Ligação
+  Espectral `#81`, Explosão Etérea `#86`, Troca de Espírito `#87`, Lâmina das
+  Sombras `#88` e Força Espectral `#101`
   está implementado. Os buffs
   persistem por `180 s`, com efeitos suavizados; a passiva `#101` acrescenta
   alcance e acopla o `SForce` clássico aos ataques.
+- Assalto `#11`, Espada da Fênix `#12` e Possuído `#13` do TransKnight estão
+  jogáveis com os registros exatos de `SkillData.bin`. Assalto usa os dois
+  billboards clássicos `56/60`, cores, crescimento, fade e som `168`; Espada
+  da Fênix usa o `TMSkillDoubleSwing` de nível `1`, malha `702`, textura `91`,
+  escala `5×2`, rastro rosa, shade vermelho e som `160`; Possuído usa a malha
+  `2838`, textura `413`, expansão type `4` de `500 ms` e a armadura crítica
+  persistente com brilho de `1,5 s`. Os affects offline duram `180 s`, mas as
+  fórmulas de status continuam reservadas ao futuro servidor.
 - HUD clássico, minimapa, seletor de mapas, câmera, zoom e modo G estão ligados.
   A composição inferior passou a usar a proporção da interface 7.54: trilho em
   toda a base, orbes nos cantos, readout compacto dentro da barra e áreas reais
@@ -81,9 +89,9 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
   `ch01/ch02`, `bExpand`, armaduras da seleção clássica, armas Ancient, bancos
   a pé/montado e attachments de mão já foram derivados do cliente. Cada classe
   possui traje base/armadura no seletor e um primeiro loadout auditado. A
-  Huntress possui nove atalhos visíveis e treze skills promovidas; Meditação
-  `#77`, Escudo Dourado `#85`, Troca de Espírito `#87` e Evasão Aprimorada
-  `#89` continuam utilizáveis pelo catálogo `K`.
+  Huntress possui nove atalhos visíveis e quatorze skills promovidas; Ilusão
+  `#73`, Meditação `#77`, Escudo Dourado `#85`, Troca de Espírito `#87` e
+  Evasão Aprimorada `#89` continuam utilizáveis pelo catálogo `K`.
 - BeastMaster possui as oito evocações de Natureza auditadas (`#56–#63`):
   Condor, Javali, Lobo, Urso, Grande Tigre, Gorila, Dragão Negro e Succubus.
   BON/MSH/DDS, variantes LOOK_INFO e ações AniSound/ValidIndex são reais; no
@@ -418,9 +426,19 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
    ataques normais e skills ofensivas, sem ocupar slot ou criar buff temporário.
    O primeiro lote de TransKnight agora possui renderers dedicados para Giro da
    Fúria `#0`, Toque Sagrado `#1`, Golpe Duplo `#2`, Samaritano `#3`, Aura da
-   Vida `#5`, Lâmina Congelada `#19` e Tempestade de Gelo `#23`, usando as malhas
-   `10/702/703/706/707`, DDS, alpha DWORD, offsets, tempos e pools derivados do
-   cliente. O primeiro lote dedicado de Foema cobre Ataque de Fogo `#32`,
+   Vida `#5`, Assalto `#11`, Espada da Fênix `#12`, Possuído `#13`, Lâmina
+   Congelada `#19` e Tempestade de Gelo `#23`, usando as malhas
+   `10/702/703/706/707/2838`, DDS, alpha DWORD, offsets, tempos e pools
+   derivados do cliente. Assalto não recebe o antigo pulso genérico: reproduz
+   somente as texturas `56/60` do evento original. Espada da Fênix reutiliza o
+   controller do Golpe Duplo no nível `1`, preservando a escala horizontal
+   `5`, vertical `2`, cor `0xFFFF0000`, trail `0xFFFF9999`, grid de shade `5`
+   e percurso até quatro vezes o vetor do alvo. Possuído separa o cast type
+   `4` do estado
+   `m_cCriticalArmor`: enquanto o affect `24` estiver ativo, mantém a malha
+   `2838`/textura `413`, escala `2×1,5`, brilho senoidal de `1,5 s`, yaw e
+   offsets próprios para montaria. O primeiro lote dedicado de Foema cobre
+   Ataque de Fogo `#32`,
    Relâmpago `#33`, Trovão `#37`, Névoa Venenosa `#40` e Velocidade `#41`; o
    Trovão separa o cast transitório de dois segundos dos anéis persistentes do
    estado do buff. O segundo lote da Foema também está implementado: Lança de
@@ -496,10 +514,18 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
    midpoint dos bones `1/2` do dono com o Y do bone `1`, conserva as vidas
    `2/1,8/1,6 s`, o crescimento/fade do motion type `10`, o shade `7`
    vermelho/azul e as vinte partículas `231` disparadas após `1 s`.
+   Ilusão `#73` também segue o fluxo especial do cliente, sem virar buff ou
+   projétil: selecionar no catálogo arma o próximo clique no terreno, a rota
+   navegável é recortada nos primeiros oito passos de `BASE_GetRoute`, a pose
+   corrente deixa uma cópia branca `EF_BRIGHT` por `3 s` na origem e o ator é
+   reposicionado no centro da célula confirmada. Montada, a cópia preserva os
+   dois rigs independentes de animal e cavaleira. O portal tipo `2` usa a malha
+   `703`, textura `58`, pulsos `94`, cor `0x0055FF`, escalas, rotação e som
+   `159` de `TMSkillTownPortal`.
    Evasão Aprimorada `#89`
    cria as cinco cópias cinzas reais da pose corrente, iniciadas a cada
    `100 ms`, com vidas de `400–600 ms`; montada, duplica somente o animal.
-   A matriz agora registra treze skills Huntress no runtime e 23 registros
+   A matriz agora registra quatorze skills Huntress no runtime e 22 registros
    ainda não promovidos.
    `#76/#81/#86/#101` estão homologadas; `#88` está implementada e aguarda a
    inspeção visual no navegador. O épico só fecha depois da matriz completa das
@@ -523,6 +549,22 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
     incluindo pipeline de arte, validação e impacto no runtime, para que a decisão
     de abandonar todos os assets clássicos seja tomada sobre o inventário real do
     projeto e não sobre um chute prematuro.
+17. Guia final para criação do servidor multiplayer — **documentação somente,
+    executar depois das demais pendências**. Localizar e inventariar o
+    servidor-base informado pelo projeto, confrontar seus packets, estados e
+    regras com o cliente clássico e produzir um guia reproduzível para ligar
+    este frontend a um backend autoritativo. O documento deve cobrir login e
+    sessão, seleção/criação de personagem, gateway, mundos/channels, loop de
+    simulação, movimento e colisão, spawn/IA, combate/skills/buffs, inventário,
+    equipamento, loot, comércio, portais, quests, guild/grupo/chat, persistência
+    e migrações. Incluir contratos de mensagens e versionamento, reconexão,
+    idempotência, validação/anti-cheat, concorrência, segurança, observabilidade,
+    backups, deploy, escalabilidade e um ambiente local passo a passo. Separar
+    claramente o que foi comprovado no servidor-base, o que pertence ao
+    protocolo do cliente e o que será uma decisão moderna; não copiar
+    vulnerabilidades, credenciais ou regras desconhecidas por suposição. Como
+    rede continua fora do escopo atual, esta tarefa gera arquitetura, roteiro e
+    instruções, não ativa multiplayer silenciosamente no frontend.
 
 ## Convenções do projeto
 

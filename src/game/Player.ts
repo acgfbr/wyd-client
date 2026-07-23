@@ -490,6 +490,51 @@ export class Player {
     return result;
   }
 
+  /**
+   * Skill #73 snapshots the complete current look at the departure point.
+   * Mounted actors are two TMSkinMesh instances, so their independent rigs are
+   * cloned separately while preserving the same world-space pose.
+   */
+  createIllusionAfterimages(): ClassicSkinnedAfterimage[] {
+    if (this.#dead || this.#disposed) return [];
+    const avatar = this.#avatar;
+    const avatarAnimation = avatar?.currentAnimationSnapshot() ?? null;
+    if (!avatar || !avatarAnimation) return [];
+    const excluded = new Set(["classic-spectral-force-sforce-type-2"]);
+    const result: ClassicSkinnedAfterimage[] = [];
+    try {
+      const rider = createClassicSkinnedAfterimage(avatar.object, {
+        excludedObjectNames: excluded,
+        color: 0xffffff,
+        animationControllerFactory: (cloneRoot) => (
+          avatar.createAfterimageAnimationController(cloneRoot, avatarAnimation)
+        ),
+      });
+      if (rider) result.push(rider);
+      if (!this.#mounted || !this.#mount) return result;
+
+      const mount = this.#mount;
+      const mountAnimation = mount.currentAnimationSnapshot();
+      const riderAnchorParent = mount.riderAnchor.parent;
+      if (riderAnchorParent) riderAnchorParent.remove(mount.riderAnchor);
+      try {
+        const animal = createClassicSkinnedAfterimage(mount.object, {
+          color: 0xffffff,
+          animationControllerFactory: (cloneRoot) => (
+            mount.createIllusionAnimationController(cloneRoot, mountAnimation)
+          ),
+        });
+        if (animal) result.unshift(animal);
+      } finally {
+        if (riderAnchorParent) riderAnchorParent.add(mount.riderAnchor);
+      }
+      return result;
+    } catch {
+      for (const afterimage of result) afterimage.dispose();
+      return [];
+    }
+  }
+
   playHit(): boolean {
     if (this.#dead) return false;
     const action = this.playAvatarAction(this.#mounted ? ["MSTRIKE", "STRIKE"] : ["STRIKE"], true);

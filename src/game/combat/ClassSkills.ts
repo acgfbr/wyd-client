@@ -18,9 +18,10 @@ export type ClassSkillKind =
   | "cone"
   | "shadow"
   | "buff"
+  | "movement"
   | "summon";
 
-export type ClassSkillTarget = "enemy" | "self";
+export type ClassSkillTarget = "enemy" | "self" | "ground";
 
 export type ClassicActionSequence = readonly [
   number,
@@ -283,6 +284,100 @@ export const TRANSKNIGHT_SKILLS = defineLoadout("transknight", [
     radius: 2,
     color: 0xaaaaff,
     effectKey: "tk-holy-touch",
+  },
+  {
+    slot: 8,
+    classicIndex: 11,
+    name: "Assalto",
+    shortName: "Assalto",
+    mana: 47,
+    cooldownSeconds: 0,
+    range: 0,
+    kind: "buff",
+    target: "self",
+    classicTargetType: 0,
+    maxTargets: 1,
+    instanceType: 0,
+    instanceValue: 0,
+    tickType: 0,
+    tickValue: 0,
+    affectType: 13,
+    affectValue: 7,
+    affectTimeSeconds: 12,
+    runtimeDurationSeconds: CLASS_BUFF_DURATION_SECONDS,
+    aggressive: 0,
+    party: 0,
+    action1: [19, 0, 0, 24, 0, 0, 0, 0],
+    action2: [20, 0, 0, 24, 0, 0, 0, 0],
+    // SkillData carries no damage payload. The future server owns the exact
+    // attack-speed/stat interpretation of AffectType 13.
+    damageCoefficient: 0,
+    radius: 0,
+    color: 0x994444,
+    effectKey: "tk-assault",
+  },
+  {
+    slot: 9,
+    classicIndex: 13,
+    name: "Possuído",
+    shortName: "Possuído",
+    mana: 25,
+    cooldownSeconds: 1,
+    range: 5,
+    kind: "buff",
+    target: "self",
+    classicTargetType: 0,
+    maxTargets: 1,
+    instanceType: 0,
+    instanceValue: 0,
+    tickType: 0,
+    tickValue: 0,
+    affectType: 24,
+    affectValue: 0,
+    affectTimeSeconds: 12,
+    runtimeDurationSeconds: CLASS_BUFF_DURATION_SECONDS,
+    aggressive: 0,
+    party: 0,
+    action1: [7, 0, 0, 8, 0, 0, 0, 0],
+    action2: [6, 0, 0, 8, 0, 0, 0, 0],
+    // Critical-damage/stat math remains server-authoritative. The client
+    // faithfully exposes AffectType 24 and its visual state only.
+    damageCoefficient: 0,
+    radius: 0,
+    color: 0x999999,
+    effectKey: "tk-possessed",
+  },
+  {
+    // The classic bottom bar has nine visible keys; this tenth runtime record
+    // remains castable from the K catalog, matching the existing extended
+    // class-loadout route without stealing a configured hotkey.
+    slot: 10,
+    classicIndex: 12,
+    name: "Espada da Fênix",
+    shortName: "Fênix",
+    mana: 33,
+    cooldownSeconds: 15,
+    range: 1,
+    kind: "direct",
+    target: "enemy",
+    classicTargetType: 1,
+    maxTargets: 2,
+    instanceType: 1,
+    instanceValue: 60,
+    tickType: 0,
+    tickValue: 0,
+    affectType: 0,
+    affectValue: 0,
+    affectTimeSeconds: 0,
+    runtimeDurationSeconds: 0,
+    aggressive: 1,
+    party: 0,
+    action1: [7, 0, 0, 5, 0, 0, 0, 0],
+    action2: [7, 0, 0, 5, 0, 0, 0, 0],
+    damageCoefficient: 1,
+    radius: 0,
+    color: 0xff0000,
+    effectKey: "tk-phoenix-sword",
   },
 ]);
 
@@ -1019,6 +1114,7 @@ export const BEASTMASTER_SKILLS = defineLoadout("beastmaster", [
 
 const HUNTRESS_CLASSIC_RECORDS: Readonly<Record<number, ClassicRecordFields>> = Object.freeze({
   72: classicRecord(1, 1, 30, 0, 0, 0, 0, 0, [9, 0, 0, 7, 0, 0, 0, 0], [8, 0, 0, 7, 0, 0, 0, 0], 1, 1, 0),
+  73: classicRecord(0, 0, 0, 0, 0, 0, 0, 0, [16, 0, 0, 8, 0, 0, 0, 0], [10, 0, 0, 8, 0, 0, 0, 0], 0, 1, 0),
   75: classicRecord(0, 0, 0, 0, 0, 27, 1, 12, [8, 0, 0, 7, 0, 0, 0, 0], [9, 0, 0, 7, 0, 0, 0, 0], 0, 1, 0),
   76: classicRecord(0, 0, 0, 0, 0, 19, 15, 12, [20, 0, 0, 9, 0, 0, 0, 0], [19, 0, 0, 8, 0, 0, 0, 0], 0, 1, 0),
   77: classicRecord(0, 0, 0, 0, 0, 21, 10, 12, [20, 0, 0, 9, 0, 0, 0, 0], [20, 0, 0, 8, 0, 0, 0, 0], 0, 1, 0),

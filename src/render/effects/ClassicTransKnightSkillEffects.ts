@@ -3,8 +3,8 @@ import type { ClassicAssetSource } from "../../assets/ClassicAssetSource";
 import { parseMsa } from "../../formats/classic/Msa";
 import { ClassicDdsTextureLoader } from "../textures/ClassicDdsTextureLoader";
 
-export type ClassicTransKnightAttackIndex = 0 | 1 | 2 | 19 | 23;
-export type ClassicTransKnightBuffIndex = 3 | 5;
+export type ClassicTransKnightAttackIndex = 0 | 1 | 2 | 12 | 19 | 23;
+export type ClassicTransKnightBuffIndex = 3 | 5 | 11 | 13;
 export type ClassicTransKnightSkillIndex =
   | ClassicTransKnightAttackIndex
   | ClassicTransKnightBuffIndex;
@@ -15,6 +15,7 @@ const DOUBLE_SWING_POOL_LIMIT = 16;
 const START_POOL_LIMIT = 16;
 const FREEZE_POOL_LIMIT = 48;
 const JUDGEMENT_POOL_LIMIT = 16;
+const CRITICAL_ARMOR_POOL_LIMIT = 16;
 const BILLBOARD_VISIBLE_FRACTION = 0.05;
 
 const DUST_LIFETIMES_SECONDS = [1.5, 1.9, 2.3, 2.7, 3.1, 3.5, 3.9, 4.3, 4.7, 5.1] as const;
@@ -34,7 +35,7 @@ const FREEZE_PARTICLE_INTERVAL_SECONDS = 0.1;
 const JUDGEMENT_LIFETIME_SECONDS = 1.5;
 const JUDGEMENT_RING_KILL_SECONDS = 0.3;
 
-type EffectTextureIndex = 0 | 2 | 7 | 19 | 54 | 55 | 56 | 91 | 122 | 416;
+type EffectTextureIndex = 0 | 2 | 7 | 19 | 54 | 55 | 56 | 60 | 91 | 122 | 416;
 type BillboardMotion = "static" | "rise" | "rise-sine" | "fall-orbit";
 
 interface ClassicTransKnightResources {
@@ -43,6 +44,7 @@ interface ClassicTransKnightResources {
   readonly startGeometry: THREE.BufferGeometry;
   readonly freezeGeometry: THREE.BufferGeometry;
   readonly freezeStormGeometry: THREE.BufferGeometry;
+  readonly criticalArmorGeometry: THREE.BufferGeometry;
   readonly judgementModelTexture: THREE.Texture;
   readonly particleTexture: THREE.Texture;
   readonly slopeTexture: THREE.Texture;
@@ -52,6 +54,8 @@ interface ClassicTransKnightResources {
   readonly startTexture: THREE.Texture;
   readonly holyRingTexture: THREE.Texture;
   readonly magicParticleTexture: THREE.Texture;
+  readonly assaultFlameTexture: THREE.Texture;
+  readonly criticalArmorTexture: THREE.Texture;
   readonly doubleSwingTexture: THREE.Texture;
   readonly hasteRayTexture: THREE.Texture;
   readonly judgementRingTexture: THREE.Texture;
@@ -104,6 +108,7 @@ interface DoubleSwingVisual {
   lifetime: number;
   nextEmission: number;
   serial: number;
+  level: 0 | 1;
 }
 
 interface StartVisual {
@@ -136,6 +141,26 @@ interface JudgementVisual {
   serial: number;
 }
 
+interface CriticalArmorVisual {
+  readonly root: THREE.Group;
+  readonly mesh: THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>;
+  active: boolean;
+  elapsed: number;
+  serial: number;
+}
+
+export interface ClassicTransKnightOwnerContext {
+  readonly skinAnchor: THREE.Vector3;
+  readonly mounted: boolean;
+  readonly scale: number;
+  readonly classicYaw: number;
+}
+
+export interface ClassicTransKnightPersistentBuffs extends ClassicTransKnightOwnerContext {
+  readonly ownerFeet: THREE.Vector3;
+  readonly possessed: boolean;
+}
+
 interface BillboardOptions {
   readonly position: THREE.Vector3;
   readonly textureIndex: EffectTextureIndex;
@@ -166,7 +191,7 @@ interface GroundOptions {
 
 /**
  * Bounded Three.js port of the original TransKnight presentation for records
- * #0/#1/#2/#3/#5/#19/#23.
+ * #0/#1/#2/#3/#5/#11/#13/#19/#23.
  *
  * Public positions are actor or target feet in Three.js world space. The
  * retail +0.5/+1.0 attachment offsets are applied internally. Gameplay,
@@ -182,12 +207,15 @@ export class ClassicTransKnightSkillEffects {
   readonly #fallbackStartGeometry = new THREE.CylinderGeometry(0.8, 1.2, 2.2, 12, 1, true);
   readonly #fallbackFreezeGeometry = new THREE.ConeGeometry(0.65, 2.4, 6, 1, true);
   readonly #fallbackJudgementGeometry = new THREE.CylinderGeometry(0.7, 0.7, 2.2, 12, 1, true);
+  readonly #fallbackCriticalArmorGeometry = new THREE.SphereGeometry(0.85, 12, 8);
   readonly #billboardPool: BillboardVisual[] = [];
   readonly #groundPool: GroundVisual[] = [];
   readonly #doubleSwingPool: DoubleSwingVisual[] = [];
   readonly #startPool: StartVisual[] = [];
   readonly #freezePool: FreezeVisual[] = [];
   readonly #judgementPool: JudgementVisual[] = [];
+  readonly #criticalArmorPool: CriticalArmorVisual[] = [];
+  readonly #possessedAura: THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>;
   #resources: ClassicTransKnightResources | null = null;
   #preload: Promise<void> | null = null;
   #serial = 0;
@@ -200,10 +228,18 @@ export class ClassicTransKnightSkillEffects {
   constructor(scene: THREE.Object3D) {
     this.#owner = scene;
     this.object.name = "classic-transknight-skill-effects";
+    this.#possessedAura = new THREE.Mesh(
+      this.#fallbackCriticalArmorGeometry,
+      createBrightMeshMaterial(this.#fallbackGlow, 0x999999),
+    );
+    this.#possessedAura.name = "classic-transknight-possessed-persistent-model-2838-texture-413";
+    this.#possessedAura.visible = false;
+    this.#possessedAura.renderOrder = 8;
+    this.object.add(this.#possessedAura);
     scene.add(this.object);
   }
 
-  /** Loads retail models 10/702/703/706/707 and their DDS overrides once. */
+  /** Loads retail models 10/702/703/706/707/2838 and their DDS overrides once. */
   async prepareClassic(assets: ClassicAssetSource): Promise<void> {
     if (this.#disposed || this.#resources) return;
     if (this.#preload) return this.#preload;
@@ -221,6 +257,8 @@ export class ClassicTransKnightSkillEffects {
         for (const visual of this.#startPool) this.applyStartAssets(visual);
         for (const visual of this.#freezePool) this.applyFreezeAssets(visual);
         for (const visual of this.#judgementPool) this.applyJudgementAssets(visual);
+        for (const visual of this.#criticalArmorPool) this.applyCriticalArmorAsset(visual);
+        this.applyPossessedAuraAsset();
       })
       .catch((error: unknown) => {
         console.warn("Efeitos clássicos do TransKnight indisponíveis; usando fallback.", error);
@@ -269,6 +307,11 @@ export class ClassicTransKnightSkillEffects {
       visual.elapsed += delta;
       this.updateJudgementVisual(visual);
     }
+    for (const visual of this.#criticalArmorPool) {
+      if (!visual.active) continue;
+      visual.elapsed += delta;
+      this.updateCriticalArmorVisual(visual);
+    }
 
     // TMSkillFreezeBlade owns one function-static emission timestamp. Four
     // storm blades therefore share a single particle cadence.
@@ -303,7 +346,10 @@ export class ClassicTransKnightSkillEffects {
         this.playHolyTouch(casterFeet, 0);
         return true;
       case 2:
-        this.playDoubleSwing(casterFeet, targetFeet);
+        this.playDoubleSwing(casterFeet, targetFeet, 0);
+        return true;
+      case 12:
+        this.playDoubleSwing(casterFeet, targetFeet, 1);
         return true;
       case 19:
         this.playFreezeBlade(targetFeet, 0);
@@ -317,13 +363,23 @@ export class ClassicTransKnightSkillEffects {
   }
 
   /** Numeric self-buff dispatch used by the class combat route. */
-  playBuff(classicIndex: number, ownerFeet: THREE.Vector3): boolean {
+  playBuff(
+    classicIndex: number,
+    ownerFeet: THREE.Vector3,
+    context?: ClassicTransKnightOwnerContext,
+  ): boolean {
     switch (classicIndex) {
       case 3:
         this.playSamaritan(ownerFeet);
         return true;
       case 5:
         this.playLifeAura(ownerFeet);
+        return true;
+      case 11:
+        this.playAssault(ownerFeet);
+        return true;
+      case 13:
+        this.playPossessedCast(ownerFeet, context);
         return true;
       default:
         return false;
@@ -335,9 +391,10 @@ export class ClassicTransKnightSkillEffects {
     classicIndex: number,
     casterFeet: THREE.Vector3,
     targetFeet: THREE.Vector3 = casterFeet,
+    context?: ClassicTransKnightOwnerContext,
   ): boolean {
     return this.playAttack(classicIndex, casterFeet, targetFeet)
-      || this.playBuff(classicIndex, casterFeet);
+      || this.playBuff(classicIndex, casterFeet, context);
   }
 
   /** #0: ten independently growing texture-0 dust billboards. */
@@ -442,14 +499,19 @@ export class ClassicTransKnightSkillEffects {
     });
   }
 
-  /** #2 level 0: model-702 projectile, attached shade and texture-0 trail. */
-  playDoubleSwing(casterFeet: THREE.Vector3, targetFeet: THREE.Vector3): void {
+  /** #2 level 0 or #12 level 1: model-702 projectile, shade and texture-0 trail. */
+  playDoubleSwing(
+    casterFeet: THREE.Vector3,
+    targetFeet: THREE.Vector3,
+    level: 0 | 1 = 0,
+  ): void {
     if (!this.canPlayAt(casterFeet) || !isFiniteVector(targetFeet)) return;
     const visual = this.acquireDoubleSwingVisual();
     visual.active = true;
     visual.elapsed = 0;
     visual.nextEmission = 0.1;
     visual.serial = ++this.#serial;
+    visual.level = level;
     visual.start.copy(casterFeet);
     visual.start.y += 1;
     visual.destination.copy(targetFeet);
@@ -463,7 +525,7 @@ export class ClassicTransKnightSkillEffects {
     const angle = Math.atan2(visual.direction.x, visual.direction.z) - Math.PI / 2;
     visual.mesh.rotation.set(Math.PI / 2, -angle, Math.PI / 2, "YXZ");
     this.applyDoubleSwingAssets(visual);
-    this.spawnDoubleSwingParticle(visual.mesh.position);
+    this.spawnDoubleSwingParticle(visual.mesh.position, level);
     this.updateDoubleSwingVisual(visual);
   }
 
@@ -486,6 +548,96 @@ export class ClassicTransKnightSkillEffects {
     visual.root.visible = true;
     this.applyStartAssets(visual);
     this.updateStartVisual(visual);
+  }
+
+  /**
+   * #11 Assalto: the two additive fire billboards authored directly in
+   * TMHuman's effect-event branch. The classic rand()%5 only changes the
+   * second flame's scale and axis angle.
+   */
+  playAssault(ownerFeet: THREE.Vector3): void {
+    if (!this.canPlayAt(ownerFeet)) return;
+    const position = ownerFeet.clone();
+    position.y += 1.2;
+    this.spawnBillboard({
+      position,
+      textureIndex: 56,
+      lifetime: 0.7,
+      baseScaleX: 1.6,
+      baseScaleY: 1.6,
+      scaleVelocityX: 2,
+      scaleVelocityY: 2,
+      color: 0xff990000,
+    });
+
+    const serial = ++this.#randomSerial;
+    const randomScale = classicRandomStep(serial, 0, 5);
+    this.spawnBillboard({
+      position,
+      textureIndex: 60,
+      lifetime: 1.2,
+      baseScaleX: randomScale * 0.3 + 2.6,
+      baseScaleY: randomScale * 0.3 + 2.3,
+      scaleVelocityX: 0.5,
+      scaleVelocityY: 0.5,
+      color: 0xff994444,
+      rotation: Math.PI * randomScale / 3,
+    });
+  }
+
+  /** #13 cast event: model 2838, texture 413, type-4 half-second expansion. */
+  playPossessedCast(
+    ownerFeet: THREE.Vector3,
+    context?: ClassicTransKnightOwnerContext,
+  ): void {
+    if (!this.canPlayAt(ownerFeet)) return;
+    const visual = this.acquireCriticalArmorVisual();
+    visual.active = true;
+    visual.elapsed = 0;
+    visual.serial = ++this.#serial;
+    visual.root.position.copy(this.criticalArmorCastPosition(ownerFeet, context));
+    visual.root.rotation.set(
+      Math.PI / 2,
+      -(context?.classicYaw ?? 0),
+      Math.PI / 2,
+      "YXZ",
+    );
+    visual.root.visible = true;
+    this.applyCriticalArmorAsset(visual);
+    this.updateCriticalArmorVisual(visual);
+  }
+
+  /**
+   * AffectType 24 (`m_cCriticalArmor`) keeps the same mesh alive while the
+   * buff exists. Its 1.5-second shine cycle is distinct from the cast burst.
+   */
+  syncPersistentBuffs(options: ClassicTransKnightPersistentBuffs | null): void {
+    if (
+      this.#disposed
+      || !this.#enabled
+      || !options?.possessed
+      || !isFiniteVector(options.ownerFeet)
+      || !isFiniteVector(options.skinAnchor)
+    ) {
+      this.#possessedAura.visible = false;
+      return;
+    }
+    const scaledPickHeight = 2 * options.scale;
+    this.#possessedAura.position.copy(options.mounted ? options.skinAnchor : options.ownerFeet);
+    this.#possessedAura.position.y += options.mounted
+      ? scaledPickHeight + 1.7
+      : scaledPickHeight + 1.3;
+    this.#possessedAura.rotation.set(
+      Math.PI / 2,
+      -options.classicYaw,
+      Math.PI / 2,
+      "YXZ",
+    );
+    this.#possessedAura.scale.set(2, 1.5, 2);
+    const progress = (this.#clockSeconds % 1.5) / 1.5;
+    const shine = Math.sin(progress * Math.PI * 2) * 0.2 + 0.8;
+    setFadedColor(this.#possessedAura.material, 0xff999999, shine);
+    this.#possessedAura.visible = true;
   }
 
   /** #19 type 0, or the type-1 blade used by #23. */
@@ -531,6 +683,8 @@ export class ClassicTransKnightSkillEffects {
     for (const visual of this.#startPool) deactivateStart(visual);
     for (const visual of this.#freezePool) deactivateFreeze(visual);
     for (const visual of this.#judgementPool) deactivateJudgement(visual);
+    for (const visual of this.#criticalArmorPool) deactivateCriticalArmor(visual);
+    this.#possessedAura.visible = false;
     this.#lastFreezeParticleAt = Number.NEGATIVE_INFINITY;
   }
 
@@ -555,6 +709,8 @@ export class ClassicTransKnightSkillEffects {
       visual.mesh.material.dispose();
       for (const ring of visual.rings) ring.material.dispose();
     }
+    for (const visual of this.#criticalArmorPool) visual.mesh.material.dispose();
+    this.#possessedAura.material.dispose();
 
     this.#billboardPool.length = 0;
     this.#groundPool.length = 0;
@@ -562,12 +718,14 @@ export class ClassicTransKnightSkillEffects {
     this.#startPool.length = 0;
     this.#freezePool.length = 0;
     this.#judgementPool.length = 0;
+    this.#criticalArmorPool.length = 0;
     this.#planeGeometry.dispose();
     this.#fallbackGlow.dispose();
     this.#fallbackDoubleSwingGeometry.dispose();
     this.#fallbackStartGeometry.dispose();
     this.#fallbackFreezeGeometry.dispose();
     this.#fallbackJudgementGeometry.dispose();
+    this.#fallbackCriticalArmorGeometry.dispose();
     if (this.#resources) disposeClassicResources(this.#resources);
     this.#resources = null;
   }
@@ -606,7 +764,7 @@ export class ClassicTransKnightSkillEffects {
     });
   }
 
-  private spawnDoubleSwingParticle(worldPosition: THREE.Vector3): void {
+  private spawnDoubleSwingParticle(worldPosition: THREE.Vector3, level: 0 | 1): void {
     const serial = ++this.#randomSerial;
     const position = worldPosition.clone();
     // TMSkillDoubleSwing subtracts .5 from the moving mesh position before
@@ -620,7 +778,7 @@ export class ClassicTransKnightSkillEffects {
       scaleVelocityX: 1,
       scaleVelocityY: 1,
       stickGround: true,
-      color: 0xffaaffee,
+      color: level === 0 ? 0xffaaffee : 0xffff9999,
     });
   }
 
@@ -865,8 +1023,9 @@ export class ClassicTransKnightSkillEffects {
       active: false,
       elapsed: 0,
       lifetime: 1,
-      nextEmission: 0.1,
-      serial: 0,
+        nextEmission: 0.1,
+        serial: 0,
+        level: 0,
     };
   }
 
@@ -884,7 +1043,12 @@ export class ClassicTransKnightSkillEffects {
     const progress = visual.elapsed / visual.lifetime;
     visual.mesh.position.copy(visual.start).addScaledVector(visual.direction, progress * 4);
     visual.mesh.visible = progress >= BILLBOARD_VISIBLE_FRACTION;
-    visual.mesh.material.color.setHex(0xaaaaaa);
+    visual.mesh.scale.set(
+      visual.level === 0 ? 1.5 : 5,
+      visual.level === 0 ? 1.5 : 2,
+      visual.level === 0 ? 1.5 : 5,
+    );
+    visual.mesh.material.color.setHex(visual.level === 0 ? 0xaaaaaa : 0xff0000);
     visual.mesh.material.opacity = 1;
 
     const casterGroundY = visual.start.y - 1;
@@ -894,11 +1058,17 @@ export class ClassicTransKnightSkillEffects {
       THREE.MathUtils.lerp(casterGroundY, targetGroundY, progress) + 0.005,
       visual.mesh.position.z,
     );
+    const shadeScale = visual.level === 0 ? 6 : 10;
+    visual.shade.scale.set(shadeScale, shadeScale, 1);
     visual.shade.visible = true;
-    setFadedColor(visual.shade.material, 0x005533, Math.sin(progress * Math.PI));
+    setFadedColor(
+      visual.shade.material,
+      visual.level === 0 ? 0x005533 : 0x770000,
+      Math.sin(progress * Math.PI),
+    );
 
     if (visual.elapsed >= visual.nextEmission) {
-      this.spawnDoubleSwingParticle(visual.mesh.position);
+      this.spawnDoubleSwingParticle(visual.mesh.position, visual.level);
       visual.nextEmission = visual.elapsed + 0.1;
     }
   }
@@ -1016,6 +1186,80 @@ export class ClassicTransKnightSkillEffects {
     setFadedColor(visual.ring.material, 0xff2255aa, Math.sin(ringProgress * Math.PI));
   }
 
+  private acquireCriticalArmorVisual(): CriticalArmorVisual {
+    const free = this.#criticalArmorPool.find((visual) => !visual.active);
+    if (free) return free;
+    if (this.#criticalArmorPool.length < CRITICAL_ARMOR_POOL_LIMIT) {
+      const root = new THREE.Group();
+      root.name = `classic-transknight-possessed-cast-${this.#criticalArmorPool.length}`;
+      root.visible = false;
+      const mesh = new THREE.Mesh(
+        this.#fallbackCriticalArmorGeometry,
+        createBrightMeshMaterial(this.#fallbackGlow, 0x999999),
+      );
+      mesh.name = "classic-transknight-possessed-cast-model-2838-texture-413";
+      mesh.renderOrder = 8;
+      root.add(mesh);
+      const visual: CriticalArmorVisual = {
+        root,
+        mesh,
+        active: false,
+        elapsed: 0,
+        serial: 0,
+      };
+      this.#criticalArmorPool.push(visual);
+      this.object.add(root);
+      return visual;
+    }
+    const oldest = oldestBySerial(this.#criticalArmorPool);
+    deactivateCriticalArmor(oldest);
+    return oldest;
+  }
+
+  private applyCriticalArmorAsset(visual: CriticalArmorVisual): void {
+    visual.mesh.geometry = this.#resources?.criticalArmorGeometry
+      ?? this.#fallbackCriticalArmorGeometry;
+    setMaterialMap(
+      visual.mesh.material,
+      this.#resources?.criticalArmorTexture ?? this.#fallbackGlow,
+    );
+  }
+
+  private applyPossessedAuraAsset(): void {
+    this.#possessedAura.geometry = this.#resources?.criticalArmorGeometry
+      ?? this.#fallbackCriticalArmorGeometry;
+    setMaterialMap(
+      this.#possessedAura.material,
+      this.#resources?.criticalArmorTexture ?? this.#fallbackGlow,
+    );
+  }
+
+  private updateCriticalArmorVisual(visual: CriticalArmorVisual): void {
+    if (visual.elapsed >= 0.5) {
+      deactivateCriticalArmor(visual);
+      return;
+    }
+    const progress = visual.elapsed / 0.5;
+    const expansion = progress >= 0.2
+      ? Math.sin((progress - 0.2) * Math.PI * 0.5) + 1.5
+      : progress * 5 + 0.5;
+    visual.mesh.scale.setScalar(expansion * 2.5);
+    setFadedColor(visual.mesh.material, 0xff999999, Math.sin(progress * Math.PI));
+    visual.mesh.visible = true;
+  }
+
+  private criticalArmorCastPosition(
+    ownerFeet: THREE.Vector3,
+    context?: ClassicTransKnightOwnerContext,
+  ): THREE.Vector3 {
+    if (context?.mounted && isFiniteVector(context.skinAnchor)) {
+      return context.skinAnchor.clone().add(
+        new THREE.Vector3(0, context.scale - 0.3, 0),
+      );
+    }
+    return ownerFeet.clone().add(new THREE.Vector3(0, (context?.scale ?? 0.9) + 0.3, 0));
+  }
+
   private playJudgement(targetFeet: THREE.Vector3): void {
     const visual = this.acquireJudgementVisual();
     visual.active = true;
@@ -1124,6 +1368,8 @@ export class ClassicTransKnightSkillEffects {
         return resources.holyRingTexture;
       case 56:
         return resources.magicParticleTexture;
+      case 60:
+        return resources.assaultFlameTexture;
       case 91:
         return resources.doubleSwingTexture;
       case 122:
@@ -1136,16 +1382,31 @@ export class ClassicTransKnightSkillEffects {
   private async loadClassicResources(
     assets: ClassicAssetSource,
   ): Promise<ClassicTransKnightResources> {
-    const [judgementSource, doubleSwingSource, startSource, freezeSource, freezeStormSource] =
+    const [
+      judgementSource,
+      doubleSwingSource,
+      startSource,
+      freezeSource,
+      freezeStormSource,
+      criticalArmorSource,
+    ] =
       await Promise.all([
         assets.loadModel(10),
         assets.loadModel(702),
         assets.loadModel(703),
         assets.loadModel(706),
         assets.loadModel(707),
+        assets.loadModel(2838),
       ]);
-    if (!judgementSource || !doubleSwingSource || !startSource || !freezeSource || !freezeStormSource) {
-      throw new Error("Modelos clássicos 10/702/703/706/707 ausentes do manifesto");
+    if (
+      !judgementSource
+      || !doubleSwingSource
+      || !startSource
+      || !freezeSource
+      || !freezeStormSource
+      || !criticalArmorSource
+    ) {
+      throw new Error("Modelos clássicos 10/702/703/706/707/2838 ausentes do manifesto");
     }
     const judgementTextureFile = judgementSource.textures[0];
     if (!judgementTextureFile) throw new Error("Modelo clássico 10 sem textura de origem");
@@ -1164,6 +1425,8 @@ export class ClassicTransKnightSkillEffects {
         this.loadEffectTexture(assets, 54),
         this.loadEffectTexture(assets, 55),
         this.loadEffectTexture(assets, 56),
+        this.loadEffectTexture(assets, 60),
+        this.loadEffectTexture(assets, 413),
         this.loadEffectTexture(assets, 91),
         this.loadEffectTexture(assets, 122),
         this.loadEffectTexture(assets, 416),
@@ -1189,11 +1452,15 @@ export class ClassicTransKnightSkillEffects {
         startTexture,
         holyRingTexture,
         magicParticleTexture,
+        assaultFlameTexture,
+        criticalArmorTexture,
         doubleSwingTexture,
         hasteRayTexture,
         judgementRingTexture,
         judgementModelTexture,
       ] = loadedTextures as [
+        THREE.Texture,
+        THREE.Texture,
         THREE.Texture,
         THREE.Texture,
         THREE.Texture,
@@ -1218,12 +1485,15 @@ export class ClassicTransKnightSkillEffects {
       loadedGeometries.push(freezeGeometry);
       const freezeStormGeometry = parseMsa(freezeStormSource.buffer).geometry;
       loadedGeometries.push(freezeStormGeometry);
+      const criticalArmorGeometry = parseMsa(criticalArmorSource.buffer).geometry;
+      loadedGeometries.push(criticalArmorGeometry);
 
       configureClassicBillboardUvs(particleTexture);
       configureClassicGroundPlaneUvs(slopeTexture);
       configureClassicBillboardUvs(holyColumnTexture);
       configureClassicBillboardUvs(holyRingTexture);
       configureClassicBillboardUvs(magicParticleTexture);
+      configureClassicBillboardUvs(assaultFlameTexture);
       configureClassicBillboardUvs(hasteRayTexture);
       configureClassicGroundPlaneUvs(judgementRingTexture);
 
@@ -1233,6 +1503,7 @@ export class ClassicTransKnightSkillEffects {
         startGeometry,
         freezeGeometry,
         freezeStormGeometry,
+        criticalArmorGeometry,
         judgementModelTexture,
         particleTexture,
         slopeTexture,
@@ -1242,6 +1513,8 @@ export class ClassicTransKnightSkillEffects {
         startTexture,
         holyRingTexture,
         magicParticleTexture,
+        assaultFlameTexture,
+        criticalArmorTexture,
         doubleSwingTexture,
         hasteRayTexture,
         judgementRingTexture,
@@ -1399,6 +1672,13 @@ function deactivateJudgement(visual: JudgementVisual): void {
   for (const ring of visual.rings) ring.visible = false;
 }
 
+function deactivateCriticalArmor(visual: CriticalArmorVisual): void {
+  visual.active = false;
+  visual.elapsed = 0;
+  visual.root.visible = false;
+  visual.mesh.visible = false;
+}
+
 function oldestBySerial<T extends { serial: number }>(visuals: readonly T[]): T {
   let oldest = visuals[0]!;
   for (const visual of visuals) {
@@ -1447,6 +1727,7 @@ function disposeClassicResources(resources: ClassicTransKnightResources): void {
   resources.startGeometry.dispose();
   resources.freezeGeometry.dispose();
   resources.freezeStormGeometry.dispose();
+  resources.criticalArmorGeometry.dispose();
   resources.judgementModelTexture.dispose();
   resources.particleTexture.dispose();
   resources.slopeTexture.dispose();
@@ -1456,6 +1737,8 @@ function disposeClassicResources(resources: ClassicTransKnightResources): void {
   resources.startTexture.dispose();
   resources.holyRingTexture.dispose();
   resources.magicParticleTexture.dispose();
+  resources.assaultFlameTexture.dispose();
+  resources.criticalArmorTexture.dispose();
   resources.doubleSwingTexture.dispose();
   resources.hasteRayTexture.dispose();
   resources.judgementRingTexture.dispose();

@@ -21,6 +21,13 @@ const LEVEL_UP_COLUMN_LIFETIMES_SECONDS = [1.5, 1.9, 2.3, 2.7] as const;
 const GOLDEN_SHIELD_COLOR = 0x666600;
 const GOLDEN_SHIELD_SHADE_COLOR = 0x333300;
 const GOLDEN_SHIELD_PARTICLE_COLOR = 0xffff00;
+const TOWN_PORTAL_LIFETIME_SECONDS = 1;
+const TOWN_PORTAL_CHILD_LIFETIME_SECONDS = 0.7;
+const TOWN_PORTAL_TOTAL_LIFETIME_SECONDS = 1.6;
+const TOWN_PORTAL_PULSE_INTERVAL_SECONDS = 0.1;
+const TOWN_PORTAL_PULSE_COUNT = 10;
+const TOWN_PORTAL_POOL_LIMIT = 12;
+const TOWN_PORTAL_TYPE_2_COLOR = 0x0055ff;
 
 interface ClassicLevelUpResources {
   readonly startGeometry: THREE.BufferGeometry;
@@ -31,6 +38,8 @@ interface ClassicLevelUpResources {
   readonly goldenRingTexture: THREE.Texture;
   readonly slopeTexture: THREE.Texture;
   readonly shadeTexture: THREE.Texture;
+  readonly portalTexture: THREE.Texture;
+  readonly portalPulseTexture: THREE.Texture;
 }
 
 interface ClassicLevelUpVisual {
@@ -44,6 +53,15 @@ interface ClassicLevelUpVisual {
   active: boolean;
   includeStart: boolean;
   variant: 0 | 1;
+  elapsed: number;
+  serial: number;
+}
+
+interface ClassicTownPortalVisual {
+  readonly root: THREE.Group;
+  readonly mesh: THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>;
+  readonly pulses: readonly THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>[];
+  active: boolean;
   elapsed: number;
   serial: number;
 }
@@ -62,6 +80,7 @@ export class ClassicLevelUpEffects {
   readonly #owner: THREE.Object3D;
   readonly #dds = new ClassicDdsTextureLoader();
   readonly #pool: ClassicLevelUpVisual[] = [];
+  readonly #portalPool: ClassicTownPortalVisual[] = [];
   readonly #planeGeometry = new THREE.PlaneGeometry(1, 1);
   readonly #fallbackStartGeometry = new THREE.CylinderGeometry(1.2, 1.2, 2.4, 16, 1, true);
   readonly #fallbackGlow = createFallbackGlowTexture();
@@ -77,7 +96,7 @@ export class ClassicLevelUpEffects {
     scene.add(this.object);
   }
 
-  /** Loads common mesh 703 and retail effect textures 2/7/52/54/55 once. */
+  /** Loads mesh 703 and the level-up/portal effect textures once. */
   async prepareClassic(assets: ClassicAssetSource): Promise<void> {
     if (this.#disposed || this.#resources) return;
     if (this.#preload) return this.#preload;
@@ -90,9 +109,10 @@ export class ClassicLevelUpEffects {
         }
         this.#resources = resources;
         for (const visual of this.#pool) this.applyClassicResources(visual);
+        for (const visual of this.#portalPool) this.applyTownPortalResources(visual);
       })
       .catch((error: unknown) => {
-        console.warn("Efeito clássico de nascimento/level up indisponível; usando fallback.", error);
+        console.warn("Efeito clássico de nascimento/level up/portal indisponível; usando fallback.", error);
       })
       .finally(() => {
         this.#preload = null;
@@ -132,10 +152,16 @@ export class ClassicLevelUpEffects {
       visual.elapsed += delta;
       this.updateVisual(visual);
     }
+    for (const visual of this.#portalPool) {
+      if (!visual.active) continue;
+      visual.elapsed += delta;
+      this.updateTownPortalVisual(visual);
+    }
   }
 
   clear(): void {
     for (const visual of this.#pool) deactivateVisual(visual);
+    for (const visual of this.#portalPool) deactivateTownPortalVisual(visual);
   }
 
   dispose(): void {
@@ -151,7 +177,12 @@ export class ClassicLevelUpEffects {
       visual.slope.material.dispose();
       visual.shade.material.dispose();
     }
+    for (const visual of this.#portalPool) {
+      visual.mesh.material.dispose();
+      for (const pulse of visual.pulses) pulse.material.dispose();
+    }
     this.#pool.length = 0;
+    this.#portalPool.length = 0;
     this.#planeGeometry.dispose();
     this.#fallbackStartGeometry.dispose();
     this.#fallbackGlow.dispose();
@@ -185,6 +216,20 @@ export class ClassicLevelUpEffects {
     }
     this.applyClassicResources(visual);
     this.updateVisual(visual);
+  }
+
+  /** `TMSkillTownPortal(position, 2)`, used by Huntress Ilusão #73. */
+  playTownPortalType2(worldPosition: THREE.Vector3): void {
+    if (this.#disposed || !this.#enabled || !isFiniteVector(worldPosition)) return;
+    const visual = this.acquireTownPortalVisual();
+    visual.active = true;
+    visual.elapsed = 0;
+    visual.serial = ++this.#serial;
+    visual.root.position.copy(worldPosition);
+    visual.root.position.y += 0.05;
+    visual.root.visible = true;
+    this.applyTownPortalResources(visual);
+    this.updateTownPortalVisual(visual);
   }
 
   private acquireVisual(): ClassicLevelUpVisual {
@@ -290,6 +335,117 @@ export class ClassicLevelUpEffects {
     };
   }
 
+  private acquireTownPortalVisual(): ClassicTownPortalVisual {
+    const free = this.#portalPool.find((visual) => !visual.active);
+    if (free) return free;
+    if (this.#portalPool.length < TOWN_PORTAL_POOL_LIMIT) {
+      const visual = this.createTownPortalVisual(this.#portalPool.length);
+      this.#portalPool.push(visual);
+      this.object.add(visual.root);
+      return visual;
+    }
+    let oldest = this.#portalPool[0]!;
+    for (const visual of this.#portalPool) {
+      if (visual.serial < oldest.serial) oldest = visual;
+    }
+    deactivateTownPortalVisual(oldest);
+    return oldest;
+  }
+
+  private createTownPortalVisual(index: number): ClassicTownPortalVisual {
+    const root = new THREE.Group();
+    root.name = `classic-town-portal-type-2-${index}`;
+    root.visible = false;
+    const mesh = new THREE.Mesh(
+      this.#fallbackStartGeometry,
+      createBrightMeshMaterial(this.#fallbackGlow, TOWN_PORTAL_TYPE_2_COLOR),
+    );
+    mesh.name = "classic-town-portal-mesh-703-texture-58";
+    mesh.rotation.set(Math.PI / 2, 0, Math.PI / 2, "YXZ");
+    mesh.renderOrder = 10;
+    root.add(mesh);
+    const pulses = Array.from({ length: TOWN_PORTAL_PULSE_COUNT }, (_, pulseIndex) => {
+      const pulse = createGroundPlane(
+        this.#planeGeometry,
+        this.#fallbackGlow,
+        TOWN_PORTAL_TYPE_2_COLOR,
+        `classic-town-portal-billboard2-94-${pulseIndex}`,
+        11,
+      );
+      pulse.scale.set(1.5, 1.5, 1);
+      pulse.visible = false;
+      root.add(pulse);
+      return pulse;
+    });
+    return {
+      root,
+      mesh,
+      pulses,
+      active: false,
+      elapsed: 0,
+      serial: 0,
+    };
+  }
+
+  private applyTownPortalResources(visual: ClassicTownPortalVisual): void {
+    const resources = this.#resources;
+    visual.mesh.geometry = resources?.startGeometry ?? this.#fallbackStartGeometry;
+    setMaterialMap(visual.mesh.material, resources?.portalTexture ?? this.#fallbackGlow);
+    for (const pulse of visual.pulses) {
+      setMaterialMap(pulse.material, resources?.portalPulseTexture ?? this.#fallbackGlow);
+    }
+  }
+
+  private updateTownPortalVisual(visual: ClassicTownPortalVisual): void {
+    if (visual.elapsed >= TOWN_PORTAL_TOTAL_LIFETIME_SECONDS) {
+      deactivateTownPortalVisual(visual);
+      return;
+    }
+    const parentProgress = THREE.MathUtils.clamp(
+      visual.elapsed / TOWN_PORTAL_LIFETIME_SECONDS,
+      0,
+      1,
+    );
+    const parentIntensity = Math.abs(Math.sin(parentProgress * Math.PI));
+    visual.mesh.visible = visual.elapsed >= TOWN_PORTAL_LIFETIME_SECONDS * 0.05
+      && visual.elapsed < TOWN_PORTAL_LIFETIME_SECONDS;
+    visual.mesh.scale.set(
+      parentIntensity * 0.5 + 0.5,
+      parentProgress * Math.PI,
+      parentIntensity * 0.5 + 0.5,
+    );
+    setFadedColor(
+      visual.mesh.material,
+      TOWN_PORTAL_TYPE_2_COLOR,
+      parentIntensity,
+      false,
+    );
+
+    for (let index = 0; index < visual.pulses.length; index++) {
+      const pulse = visual.pulses[index]!;
+      const spawnTime = index * TOWN_PORTAL_PULSE_INTERVAL_SECONDS;
+      const localElapsed = visual.elapsed - spawnTime;
+      const progress = localElapsed / TOWN_PORTAL_CHILD_LIFETIME_SECONDS;
+      const visible = localElapsed >= TOWN_PORTAL_CHILD_LIFETIME_SECONDS * 0.05
+        && progress < 1;
+      pulse.visible = visible;
+      if (!visible) {
+        pulse.material.opacity = 0;
+        continue;
+      }
+      const intensity = Math.abs(Math.sin(progress * Math.PI));
+      pulse.position.y = Math.min(1, spawnTime) * 2;
+      pulse.rotation.z = Math.PI / 4
+        + ((localElapsed % 0.08) / 0.08) * Math.PI * 2;
+      setFadedColor(
+        pulse.material,
+        TOWN_PORTAL_TYPE_2_COLOR,
+        intensity,
+        true,
+      );
+    }
+  }
+
   private applyClassicResources(visual: ClassicLevelUpVisual): void {
     const resources = this.#resources;
     visual.start.geometry = resources?.startGeometry ?? this.#fallbackStartGeometry;
@@ -388,7 +544,7 @@ export class ClassicLevelUpEffects {
     const source = await assets.loadModel(703);
     if (!source) throw new Error("Modelo clássico 703/start.msa ausente do manifesto");
 
-    const textureIndices = [2, 7, 52, 54, 55, 122, 56] as const;
+    const textureIndices = [2, 7, 52, 54, 55, 122, 56, 58, 94] as const;
     const loadedTextures: THREE.Texture[] = [];
     let startGeometry: THREE.BufferGeometry | null = null;
     try {
@@ -414,12 +570,15 @@ export class ClassicLevelUpEffects {
         ringTexture,
         goldenColumnTexture,
         goldenRingTexture,
+        portalTexture,
+        portalPulseTexture,
       ] = textures;
       configureClassicBillboardUvs(columnTexture!);
       configureClassicBillboardUvs(goldenColumnTexture!);
       configureClassicBillboardUvs(goldenRingTexture!);
       configureClassicGroundPlaneUvs(slopeTexture!);
       configureClassicGroundPlaneUvs(ringTexture!);
+      configureClassicGroundPlaneUvs(portalPulseTexture!);
       return {
         startGeometry,
         startTexture: startTexture!,
@@ -429,6 +588,8 @@ export class ClassicLevelUpEffects {
         goldenRingTexture: goldenRingTexture!,
         slopeTexture: slopeTexture!,
         shadeTexture: shadeTexture!,
+        portalTexture: portalTexture!,
+        portalPulseTexture: portalPulseTexture!,
       };
     } catch (error) {
       startGeometry?.dispose();
@@ -547,6 +708,17 @@ function deactivateVisual(visual: ClassicLevelUpVisual): void {
   visual.shade.visible = false;
 }
 
+function deactivateTownPortalVisual(visual: ClassicTownPortalVisual): void {
+  visual.active = false;
+  visual.elapsed = 0;
+  visual.root.visible = false;
+  visual.mesh.visible = false;
+  for (const pulse of visual.pulses) {
+    pulse.visible = false;
+    pulse.material.opacity = 0;
+  }
+}
+
 function isFiniteVector(position: THREE.Vector3): boolean {
   return Number.isFinite(position.x) && Number.isFinite(position.y) && Number.isFinite(position.z);
 }
@@ -590,4 +762,6 @@ function disposeResources(resources: ClassicLevelUpResources): void {
   resources.goldenRingTexture.dispose();
   resources.slopeTexture.dispose();
   resources.shadeTexture.dispose();
+  resources.portalTexture.dispose();
+  resources.portalPulseTexture.dispose();
 }

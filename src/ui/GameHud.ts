@@ -73,7 +73,7 @@ export interface SkillHudEntry {
   readonly runtimeDurationSeconds?: number;
   readonly range?: number;
   readonly kind?: string;
-  readonly target?: "enemy" | "self";
+  readonly target?: "enemy" | "self" | "ground";
 }
 
 export interface BuffHudEntry {
@@ -1832,7 +1832,12 @@ function skillTooltip(skill: SkillHudEntry): GameTooltipContent {
   if (skill.runtimeDurationSeconds !== undefined && skill.runtimeDurationSeconds > 0) {
     lines.push(`Duração: ${formatDuration(skill.runtimeDurationSeconds)}`);
   }
-  if (skill.target) lines.push(`Alvo: ${skill.target === "self" ? "próprio personagem" : "inimigo"}`);
+  if (skill.target) {
+    const target = skill.target === "self"
+      ? "próprio personagem"
+      : (skill.target === "ground" ? "posição no terreno" : "inimigo");
+    lines.push(`Alvo: ${target}`);
+  }
   if (skill.classicIndex !== undefined) lines.push(`Skill clássica: #${skill.classicIndex}`);
   return {
     title: skill.name,

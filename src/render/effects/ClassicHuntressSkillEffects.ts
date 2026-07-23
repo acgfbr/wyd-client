@@ -35,6 +35,8 @@ const IMMUNITY_PERSISTENT_OPACITY = 0.18;
 const MEDITATION_POOL_LIMIT = 12;
 const MEDITATION_LAYER_COUNT = 5;
 const MEDITATION_COLOR = 0x5500ff;
+const ILLUSION_LIFETIME_SECONDS = 3;
+const ILLUSION_POOL_LIMIT = 4;
 const SPIRIT_CHANGE_POOL_LIMIT = 2;
 const SPIRIT_CHANGE_PARENT_LIFETIME_SECONDS = 2;
 const SPIRIT_CHANGE_TOTAL_LIFETIME_SECONDS = 2.9;
@@ -166,6 +168,12 @@ interface MeditationVisual {
   serial: number;
 }
 
+interface IllusionVisual {
+  readonly afterimages: readonly ClassicSkinnedAfterimage[];
+  elapsed: number;
+  serial: number;
+}
+
 interface SpiritWingVisual {
   readonly model: ClassicSkinnedModel;
   readonly materials: readonly [THREE.MeshLambertMaterial, THREE.MeshLambertMaterial];
@@ -264,6 +272,7 @@ export class ClassicHuntressSkillEffects {
   readonly #enchantIcePool: EnchantIceVisual[] = [];
   readonly #immunityCastPool: ImmunityCastVisual[] = [];
   readonly #meditationPool: MeditationVisual[] = [];
+  readonly #illusionVisuals: IllusionVisual[] = [];
   readonly #spiritChangePool: SpiritChangeVisual[] = [];
   readonly #soulLinkCastPool: SoulLinkCastVisual[] = [];
   readonly #immunityVisual: ImmunityVisual;
@@ -377,6 +386,7 @@ export class ClassicHuntressSkillEffects {
       visual.elapsed += delta;
       this.updateMeditationVisual(visual);
     }
+    this.updateIllusionVisuals(delta);
     for (const visual of this.#spiritChangePool) {
       if (!visual.active) continue;
       visual.elapsed += delta;
@@ -459,6 +469,30 @@ export class ClassicHuntressSkillEffects {
     }
     this.applyMeditationAssets(visual);
     this.updateMeditationVisual(visual);
+  }
+
+  /** Huntress #73: the white three-second TMEffectSkinMesh left at departure. */
+  playIllusion(afterimages: readonly ClassicSkinnedAfterimage[]): void {
+    if (this.#disposed || !this.#enabled || afterimages.length === 0) {
+      for (const afterimage of afterimages) afterimage.dispose();
+      return;
+    }
+    while (this.#illusionVisuals.length >= ILLUSION_POOL_LIMIT) {
+      const oldest = this.#illusionVisuals.reduce((left, right) => (
+        left.serial <= right.serial ? left : right
+      ));
+      this.disposeIllusionVisual(oldest);
+    }
+    const visual: IllusionVisual = {
+      afterimages: [...afterimages],
+      elapsed: 0,
+      serial: ++this.#serial,
+    };
+    for (const afterimage of visual.afterimages) {
+      afterimage.setIntensity(1);
+      this.object.add(afterimage.object);
+    }
+    this.#illusionVisuals.push(visual);
   }
 
   /** Updates the live TMHuman owner transform consumed by motion type 10. */
@@ -666,6 +700,7 @@ export class ClassicHuntressSkillEffects {
     for (const visual of this.#enchantIcePool) deactivateEnchantIce(visual);
     for (const visual of this.#immunityCastPool) deactivateImmunityCast(visual);
     for (const visual of this.#meditationPool) deactivateMeditation(visual);
+    this.clearIllusionVisuals();
     for (const visual of this.#spiritChangePool) deactivateSpiritChange(visual);
     for (const visual of this.#soulLinkCastPool) deactivateSoulLinkCast(visual);
     deactivateImmunity(this.#immunityVisual);
@@ -711,6 +746,7 @@ export class ClassicHuntressSkillEffects {
     this.#enchantIcePool.length = 0;
     this.#immunityCastPool.length = 0;
     this.#meditationPool.length = 0;
+    this.#illusionVisuals.length = 0;
     this.#spiritChangePool.length = 0;
     this.#soulLinkCastPool.length = 0;
     this.#soulParticlePool.length = 0;
@@ -976,6 +1012,40 @@ export class ClassicHuntressSkillEffects {
       layer.sprite.material.opacity = Math.max(0, Math.sin(progress * Math.PI));
     }
     if (!anyVisible) deactivateMeditation(visual);
+  }
+
+  private updateIllusionVisuals(deltaSeconds: number): void {
+    for (let index = this.#illusionVisuals.length - 1; index >= 0; index--) {
+      const visual = this.#illusionVisuals[index]!;
+      visual.elapsed += deltaSeconds;
+      if (visual.elapsed >= ILLUSION_LIFETIME_SECONDS) {
+        this.disposeIllusionVisual(visual);
+        continue;
+      }
+      const progress = THREE.MathUtils.clamp(
+        visual.elapsed / ILLUSION_LIFETIME_SECONDS,
+        0,
+        1,
+      );
+      // TMEffectSkinMesh m_nFade=1 dims RGB by cos(progress * PI / 2).
+      const intensity = Math.max(0, Math.cos(progress * Math.PI / 2));
+      for (const afterimage of visual.afterimages) {
+        afterimage.setIntensity(intensity);
+        afterimage.update(deltaSeconds);
+      }
+    }
+  }
+
+  private disposeIllusionVisual(visual: IllusionVisual): void {
+    const index = this.#illusionVisuals.indexOf(visual);
+    if (index >= 0) this.#illusionVisuals.splice(index, 1);
+    for (const afterimage of visual.afterimages) afterimage.dispose();
+  }
+
+  private clearIllusionVisuals(): void {
+    for (const visual of this.#illusionVisuals.splice(0)) {
+      for (const afterimage of visual.afterimages) afterimage.dispose();
+    }
   }
 
   private acquireSpiritChangeVisual(): SpiritChangeVisual {

@@ -1,6 +1,6 @@
 import type { PlayerState } from "../state/PlayerState";
 
-export type HuntressSkillKind = "direct" | "volley" | "cone" | "shadow" | "buff";
+export type HuntressSkillKind = "direct" | "volley" | "cone" | "shadow" | "buff" | "movement";
 
 export interface HuntressSkill {
   readonly slot: number;
@@ -12,7 +12,7 @@ export interface HuntressSkill {
   readonly cooldownSeconds: number;
   readonly range: number;
   readonly kind: HuntressSkillKind;
-  readonly target: "enemy" | "self";
+  readonly target: "enemy" | "self" | "ground";
   readonly maxTargets: number;
   readonly affectType: number;
   readonly affectValue: number;
@@ -48,6 +48,7 @@ export const HUNTRESS_SKILLS: readonly HuntressSkill[] = [
   { slot: 11, classicIndex: 85, name: "Escudo Dourado", shortName: "Escudo", mana: 120, cooldownSeconds: 5, range: 0, kind: "buff", target: "self", maxTargets: 1, affectType: 31, affectValue: 150, affectTimeSeconds: 30, runtimeDurationSeconds: 180, damageCoefficient: 0, radius: 0, color: 0xffff55 },
   { slot: 12, classicIndex: 89, name: "Evasão Aprimorada", shortName: "Evasão", mana: 24, cooldownSeconds: 6, range: 0, kind: "buff", target: "self", maxTargets: 1, affectType: 26, affectValue: 1, affectTimeSeconds: 12, runtimeDurationSeconds: 180, damageCoefficient: 0, radius: 0, color: 0x4d4d4d },
   { slot: 13, classicIndex: 87, name: "Troca de Espírito", shortName: "Espírito", mana: 90, cooldownSeconds: 10, range: 0, kind: "buff", target: "self", maxTargets: 1, affectType: 38, affectValue: 0, affectTimeSeconds: 14, runtimeDurationSeconds: 180, damageCoefficient: 0, radius: 0, color: 0xff7777 },
+  { slot: 14, classicIndex: 73, name: "Ilusão", shortName: "Ilusão", mana: 45, cooldownSeconds: 3, range: 0, kind: "movement", target: "ground", maxTargets: 1, affectType: 0, affectValue: 0, affectTimeSeconds: 0, runtimeDurationSeconds: 0, damageCoefficient: 0, radius: 0, color: 0x0055ff },
 ] as const;
 
 export interface ActiveHuntressBuff {

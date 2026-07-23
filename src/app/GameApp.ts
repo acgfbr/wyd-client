@@ -207,6 +207,7 @@ export class GameApp {
   #autoCombatMode: AutoCombatMode = "off";
   #queuedSkillSlot: number | null = null;
   #queuedSkillOrigin: "manual" | "macro" | null = null;
+  #queuedGroundSkillSlot: number | null = null;
   #macroOwnsTarget = false;
   #macroDecisionCooldown = 0;
   readonly #macroUnreachableTargets = new Map<string, number>();
@@ -595,6 +596,19 @@ export class GameApp {
     this.#raycaster.setFromCamera(pointer, this.#camera);
     const hits = this.#raycaster.intersectObject(this.#world.object, true);
     const spawns = this.#world.spawns;
+    const queuedGroundSkill = this.#queuedGroundSkillSlot === null
+      ? null
+      : this.#skills.skill(this.#queuedGroundSkillSlot);
+    if (queuedGroundSkill?.target === "ground") {
+      const groundHit = hits.find((candidate) => (
+        !spawns?.targetFromObject(candidate.object)
+        && !this.#groundItems?.itemFromObject(candidate.object)
+      ));
+      this.#heldGroundMode = null;
+      this.#heldGroundDestination = null;
+      if (groundHit) this.castGroundMovementSkill(queuedGroundSkill, groundHit);
+      return;
+    }
     for (const candidate of hits) {
       const target = spawns?.targetFromObject(candidate.object);
       if (!target) continue;
@@ -1727,6 +1741,25 @@ export class GameApp {
     const skill = this.#skills.skill(slot);
     if (!skill || !this.#playerState.snapshot.alive) return;
     this.closeNpcInteraction();
+    if (skill.target === "ground") {
+      if (this.#skills.remaining(slot) > 0) {
+        this.#hud.addLog(
+          `${skill.name} recarrega em ${this.#skills.remaining(slot).toFixed(1)}s.`,
+          "system",
+        );
+        return;
+      }
+      if (this.#playerState.snapshot.mp < skill.mana) {
+        this.#hud.addLog(`MP insuficiente para ${skill.name}.`, "system");
+        return;
+      }
+      this.#queuedGroundSkillSlot = slot;
+      this.#queuedSkillSlot = null;
+      this.#queuedSkillOrigin = null;
+      this.#hud.addLog(`${skill.name}: clique em uma posição no terreno.`, "system");
+      return;
+    }
+    this.#queuedGroundSkillSlot = null;
     if (skill.kind === "summon") {
       this.castSummonSkill(skill);
       return;
@@ -1747,6 +1780,69 @@ export class GameApp {
     this.#queuedSkillSlot = slot;
     this.#queuedSkillOrigin = "manual";
     if (!this.#selectedTargetId) this.acquireNearestTarget(false);
+  }
+
+  private castGroundMovementSkill(
+    skill: ClassSkill,
+    hit: THREE.Intersection<THREE.Object3D>,
+  ): void {
+    const player = this.#player;
+    const world = this.#world;
+    if (
+      !player
+      || !world
+      || skill.classKey !== "huntress"
+      || skill.classicIndex !== 73
+      || skill.kind !== "movement"
+      || skill.target !== "ground"
+    ) return;
+    const requested = toWyd(hit.point.x, hit.point.z, world.origin);
+    const route = world.navigation.findPath(player.position, requested, {
+      allowDiagonal: true,
+      maxStepHeight: 8,
+      maxVisited: 65_536,
+    });
+    if (
+      route.status !== "found"
+      || route.points.length <= 1
+      || !route.authoritative
+    ) {
+      this.#hud.addLog("Ilusão: não há rota válida até essa posição.", "system");
+      return;
+    }
+    const routeIndex = Math.min(8, route.points.length - 1);
+    const routeCell = route.points[routeIndex]!;
+    const destination = { x: routeCell.x + 0.5, y: routeCell.y + 0.5 };
+    const started = this.#skills.start(skill.slot, this.#playerState);
+    if (!started.ok) {
+      this.#queuedGroundSkillSlot = null;
+      this.#hud.addLog(
+        started.reason === "mana"
+          ? `MP insuficiente para ${skill.name}.`
+          : `${skill.name} ainda está recarregando.`,
+        "system",
+      );
+      return;
+    }
+
+    this.#queuedGroundSkillSlot = null;
+    this.closeNpcInteraction();
+    this.selectTarget(null);
+    this.breakInvisibility();
+    const departure = player.object.position.clone();
+    if (this.#effectsEnabled) {
+      this.#skillEffects.playIllusion(player.createIllusionAfterimages());
+      this.#levelUpEffects.playTownPortalType2(departure);
+    }
+    this.#audio.playSkill(skill.classicIndex);
+    player.teleport(destination);
+    this.refreshAutoCombatPositionAnchor(destination);
+    this.#clickMarker.visible = false;
+    this.#attackCooldown = Math.max(this.#attackCooldown, 0.3);
+    this.#hud.addLog(
+      `${skill.name} · ${skill.mana} MP · ${routeIndex} passo${routeIndex === 1 ? "" : "s"}.`,
+      "system",
+    );
   }
 
   private requestCatalogSkill(classicIndex: number): void {
@@ -2271,8 +2367,18 @@ export class GameApp {
         || (skill.classicIndex === 45 && immediateAthenaTouch)
         || this.#foemaSkillEffects?.playCast(skill.classicIndex, this.#player.object.position)
       );
+      this.#player.sampleClassicSkinAnchor(this.#playerSkinAnchor);
       const handledTransKnightEffect = skill.classKey === "transknight"
-        && this.#transKnightSkillEffects?.playBuff(skill.classicIndex, this.#player.object.position);
+        && this.#transKnightSkillEffects?.playBuff(
+          skill.classicIndex,
+          this.#player.object.position,
+          {
+            skinAnchor: this.#playerSkinAnchor,
+            mounted: this.#player.mounted,
+            scale: this.#player.classicScale,
+            classicYaw: this.#player.classicYaw,
+          },
+        );
       const handledBeastMasterEffect = skill.classKey === "beastmaster"
         && this.#beastMasterSkillEffects?.playBuffCast(
           skill.classicIndex,
@@ -2458,6 +2564,7 @@ export class GameApp {
         scaledPickHeight: 0,
         ownerSkinAnchor: null,
       });
+      this.#transKnightSkillEffects?.syncPersistentBuffs(null);
       this.#beastMasterSkillEffects?.syncPersistentBuffs(null);
       return;
     }
@@ -2480,6 +2587,14 @@ export class GameApp {
       -player.classicYaw,
     );
     player.sampleClassicSkinAnchor(this.#playerSkinAnchor);
+    this.#transKnightSkillEffects?.syncPersistentBuffs({
+      ownerFeet: player.object.position,
+      skinAnchor: this.#playerSkinAnchor,
+      classicYaw: player.classicYaw,
+      scale: player.classicScale,
+      mounted: player.mounted,
+      possessed: this.#activeClassKey === "transknight" && activeIndices.has(13),
+    });
     const magicWeapon = this.#activeClassKey === "foema" && activeIndices.has(44);
     const weaponSegmentCount = magicWeapon
       ? player.sampleWeaponEffectSegments(this.#weaponEffectSegments)
@@ -2516,7 +2631,12 @@ export class GameApp {
           || buff.classicIndex === 46
         );
       const hasDedicatedTransKnightVisual = buff.classKey === "transknight"
-        && (buff.classicIndex === 3 || buff.classicIndex === 5);
+        && (
+          buff.classicIndex === 3
+          || buff.classicIndex === 5
+          || buff.classicIndex === 11
+          || buff.classicIndex === 13
+        );
       const hasDedicatedBeastMasterVisual = buff.classKey === "beastmaster"
         && (buff.classicIndex === 53 || buff.classicIndex === 54);
       const interval = hasDedicatedFoemaVisual
@@ -2736,6 +2856,7 @@ export class GameApp {
     this.#weakenedMonsters.clear();
     this.#queuedSkillSlot = null;
     this.#queuedSkillOrigin = null;
+    this.#queuedGroundSkillSlot = null;
     this.#skills.clearBuffs();
     this.clearBeastMasterSummons();
     this.#buffVisualPulseRemaining.clear();
@@ -2817,6 +2938,7 @@ export class GameApp {
     this.#weakenedMonsters.clear();
     this.#queuedSkillSlot = null;
     this.#queuedSkillOrigin = null;
+    this.#queuedGroundSkillSlot = null;
     this.selectTarget(null);
     this.#skills.clearBuffs();
     this.#buffVisualPulseRemaining.clear();
@@ -2981,6 +3103,7 @@ export class GameApp {
     this.cancelGroundItemPickup();
     this.resetGroundPortalPrompt();
     this.closeNpcInteraction();
+    this.#queuedGroundSkillSlot = null;
     if (this.#queuedSkillOrigin === "macro") {
       this.#queuedSkillSlot = null;
       this.#queuedSkillOrigin = null;
@@ -3018,6 +3141,7 @@ export class GameApp {
       this.#weakenedMonsters.clear();
       this.#queuedSkillSlot = null;
       this.#queuedSkillOrigin = null;
+      this.#queuedGroundSkillSlot = null;
       this.#macroSkillCursor = 0;
       this.#macroDecisionCooldown = 0;
       this.#autoCombatSupportCursor = 0;
@@ -3261,6 +3385,7 @@ export class GameApp {
     this.#weakenedMonsters.clear();
     this.#queuedSkillSlot = null;
     this.#queuedSkillOrigin = null;
+    this.#queuedGroundSkillSlot = null;
     this.cancelGroundItemPickup();
     this.clearNpcHover();
     this.resetGroundPortalPrompt();
