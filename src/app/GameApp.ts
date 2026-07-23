@@ -2047,6 +2047,14 @@ export class GameApp {
       this.#attackCooldown,
       Math.max(0.42, (timing?.animationDurationSeconds ?? 0.54) - 0.12),
     );
+    // TMFieldScene creates Flash/Judgement from the local packet echo rather
+    // than waiting for TMHuman's shared effect-event delay.
+    const immediateFoemaPacketEffect = skill.classKey === "foema"
+      && (skill.classicIndex === 26 || skill.classicIndex === 30)
+      && this.#foemaSkillEffects?.playCast(
+        skill.classicIndex,
+        this.#player.object.position,
+      );
     const spawns = this.#boundSpawns;
     const delay = timing?.effectDelaySeconds ?? 0.5;
     this.scheduleSkillEvent(delay, () => {
@@ -2058,14 +2066,28 @@ export class GameApp {
       const casterBase = this.#player.object.position.clone();
       const handled = skill.classKey === "transknight"
         && this.#transKnightSkillEffects?.playAttack(skill.classicIndex, casterBase, casterBase);
-      if (!handled) {
+      const handledFoema = skill.classKey === "foema" && (
+        immediateFoemaPacketEffect
+        || this.#foemaSkillEffects?.playCast(skill.classicIndex, casterBase)
+      );
+      if (!handled && !handledFoema) {
         this.#combatEffects.burst(
           casterBase,
           skill.color,
           Math.max(0.9, Math.min(2.5, skill.radius || 0.9)),
         );
       }
-      this.applySelfAreaSkillImpact(skill);
+      if (
+        skill.classKey === "foema"
+        && (skill.classicIndex === 27 || skill.classicIndex === 29)
+      ) {
+        const healed = this.#playerState.heal(skill.instanceValue);
+        this.#hud.addLog(
+          healed > 0 ? `${skill.name}: +${healed} HP.` : `${skill.name}: HP já está cheio.`,
+          "system",
+        );
+      }
+      if (skill.damageCoefficient > 0) this.applySelfAreaSkillImpact(skill);
     });
     this.#hud.addLog(`${skill.name} · ${skill.mana} MP.`, "system");
   }
@@ -2374,9 +2396,30 @@ export class GameApp {
         return;
       }
 
+      if (skill.classKey === "transknight" && skill.classicIndex === 22) {
+        this.#transKnightSkillEffects?.playBash(
+          targetBase,
+          () => void this.#audio.playSound(154, 0.3),
+          () => void this.#audio.playSound(155, 0.3),
+        );
+        this.applySkillImpact(skill, targetId, targetBase, false);
+        return;
+      }
+
       if (
         skill.classKey === "transknight"
-        && this.#transKnightSkillEffects?.playAttack(skill.classicIndex, casterBase, targetBase)
+        && this.#transKnightSkillEffects?.playAttack(
+          skill.classicIndex,
+          casterBase,
+          targetBase,
+          skill.classicIndex === 16
+            ? () => {
+                if (spawns !== this.#boundSpawns) return null;
+                const liveTarget = spawns.snapshot(targetId);
+                return liveTarget ? this.combatPoint(liveTarget.position, 0) : null;
+              }
+            : undefined,
+        )
       ) {
         if (
           this.#effectsEnabled
@@ -2597,6 +2640,26 @@ export class GameApp {
     primary: ClassicMonsterSnapshot,
   ): ClassicMonsterSnapshot[] {
     if (!this.#boundSpawns || !this.#player) return [];
+    if (skill.classKey === "transknight" && skill.classicIndex === 16) {
+      // TMFieldScene truncates the caster->target direction to {-1,0,1} and
+      // appends only the first actor occupying the exact cell beyond target.
+      const origin = this.#player.position;
+      const targetCellX = Math.trunc(primary.position.x);
+      const targetCellY = Math.trunc(primary.position.y);
+      const directionX = Math.sign(targetCellX - Math.trunc(origin.x));
+      const directionY = Math.sign(targetCellY - Math.trunc(origin.y));
+      if (directionX === 0 && directionY === 0) return [primary];
+      const behind = this.#boundSpawns.snapshots()
+        .filter((candidate) => (
+          candidate.id !== primary.id
+          && candidate.alive
+          && candidate.hostile
+          && Math.trunc(candidate.position.x) === targetCellX + directionX
+          && Math.trunc(candidate.position.y) === targetCellY + directionY
+        ))
+        .sort((left, right) => left.id.localeCompare(right.id))[0];
+      return behind ? [primary, behind] : [primary];
+    }
     if (skill.kind === "volley" || skill.kind === "area") {
       return this.#boundSpawns.snapshots()
         .filter((candidate) => candidate.alive && candidate.hostile && (

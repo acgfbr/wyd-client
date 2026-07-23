@@ -130,8 +130,21 @@ decodificar DDS para RGBA na CPU.
 
 O build separa Three.js em vendor cacheavel. Renderers de Foema, TransKnight e
 BeastMaster sao chunks lazy carregados no primeiro switch; Huntress permanece
-no boot por ser a classe inicial. Medicao de 22/07/2026: app ~460 KiB, Three.js
-~518 KiB e chunks de classe ~20/54/96 KiB, todos minificados.
+no boot por ser a classe inicial. Medicao de 23/07/2026: app ~504 KiB, Three.js
+~518 KiB e chunks de classe na faixa de ~37–124 KiB, todos minificados.
+
+O plano do servidor autoritativo está em
+`docs/guia-servidor-multiplayer.md`. A fonte de servidor informada pelo usuário
+não foi localizada no acervo disponível em 23/07/2026; o contrato clássico
+comprovável vem de `Basedef.h`, `CPSock.cpp`, `TMSelectServerScene.cpp` e
+`TMFieldScene.cpp`. O cliente antigo usa TCP 8281 e `INIT_CODE=521270033`; o
+frontend web deverá usar HTTPS/WSS e manter um eventual gateway TCP legado
+isolado do domínio.
+
+A estimativa de abandono integral dos assets está em
+`docs/estimativa-substituicao-assets.md`: 80–135 pessoa-mês para substituição
+1:1, 120–200 para remaster fiel e 165–275 para redesign, com incerteza atual de
+aproximadamente 35% até deduplicação e vertical slice.
 
 ## Personagem, equipamento e montarias
 
@@ -232,6 +245,9 @@ refinamento, Ancient e preco estatico quando aplicavel.
 - Offsets finais errados de `ItemList.bin`, que corrompiam adicionais/Ancient.
 - Assets e renderers de todas as classes residentes no boot mobile.
 - Listeners/caches sem shutdown central em unload real.
+- Preview 3D do inventário acumulando uma instância/material por item
+  selecionado; agora usa LRU de 12 entradas e devolve protótipos sem uso ao
+  `ModelLibrary`.
 
 ## Limitacoes e riscos conhecidos
 
@@ -330,8 +346,29 @@ atualizado para remover a divergencia.
   a matriz viva da arma e porta o `m_cFireEffect` azul; Ataque da Alma `#20`
   clona o rig/LOOK real do alvo, sobe e desvanece por `3 s`. Na Foema, Flecha
   Magica `#24` porta o controller type `0`, modelo `701`, frames `20-25`,
-  particulas, shades, impacto e sons. A lacuna total caiu de 97 para 79
-  registros.
+  particulas, shades, impacto e sons; Choque Divino `#28` porta o
+  `TMSkillDoubleSwing` nivel `2`, modelo `12`, textura `91`, nucleos
+  `56/2/60`, shade `7` e trail `0`; Flash `#26` porta os quatro pilares `58`,
+  planos `93/2`, shade `7` e o despacho imediato; Recuperar `#29` porta as
+  doze particulas azuis `56`, shade `7`, som `158` e aplica somente o
+  `InstanceValue=150` ao jogador no mock offline; Julgamento Divino `#30`
+  porta o `TMSkillJudgement` type `0`, modelo `10`, aneis `124`, som `38` e
+  despacho imediato; Cura `#27` reutiliza o `TMSkillHeal` e cura
+  `InstanceValue=100` no alvo self aceito pelo `TargetType 2`; Desintoxicar
+  `#25` porta as 21 partículas, shade e som do `TMSkillCure`, sem inventar
+  estado negativo no player. A auditoria agora separa corretamente os 144
+  registros por semântica: 79 estão no runtime, 49 são passivos de catálogo e
+  16 são casts/buffs realmente pendentes. Perseguição `#16` porta
+  `TMSkillSlowSlash` tipo `0`, textura `2` e som `167`; Exterminar `#22` porta
+  `TMSkillBash`, os pulsos `TMSkillSpeedUp`, a explosão radial e o fogo
+  `texture 33`, com pools limitados. Proteção Divina `#200` completa os casts
+  do TransKnight como buff de estado `Affect 6 / m_bShield2`; o cliente não
+  despacha VFX para índices master, portanto nenhum efeito genérico foi
+  inventado. A mesma regra recuperada promoveu Proteção Absoluta `#213`
+  (`Affect 6`) e Magia Misteriosa `#216` (`Affect 42`) da Foema como buffs de
+  estado sem VFX fictício. Anti Magia `#224`, Chama Resistente `#225` e Last
+  Resistance `#235` seguem o mesmo contrato master no BeastMaster: estado,
+  tick e fórmula autoritativa permanecem separados da apresentação.
 - Backend futuro: a ultima tarefa da fila deve inventariar o servidor-base e
   produzir o guia de um multiplayer autoritativo, sem ativar rede durante o
   escopo frontend atual.

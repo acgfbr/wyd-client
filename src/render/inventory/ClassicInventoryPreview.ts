@@ -7,6 +7,10 @@ import { ClassicDdsTextureLoader } from "../textures/ClassicDdsTextureLoader";
 // S3DObj::FrameMove2: uma volta completa a cada três segundos.
 const PREVIEW_TURN_RADIANS_PER_SECOND = (Math.PI * 2) / 3;
 const PREVIEW_MODEL_SPAN = 2.7;
+// A bolsa pode referenciar milhares de itens. Manter uma cópia materializada
+// de cada preview transformava a navegação pelo inventário em crescimento de
+// memória GPU sem limite, especialmente caro no Safari/iOS.
+const MAX_CACHED_PREVIEW_INSTANCES = 12;
 
 interface PreviewRefinementState {
   readonly enabled: { value: number };
@@ -30,6 +34,7 @@ export class ClassicInventoryPreview {
   #active: THREE.Group | null = null;
   #activeRefinement: PreviewRefinementState | null = null;
   #selectedKey: string | null = null;
+  #selectedModelType: number | null = null;
   #selectionGeneration = 0;
   #disposed = false;
   #effectsEnabled = true;
@@ -86,6 +91,7 @@ export class ClassicInventoryPreview {
       : null;
     if (selectedKey === this.#selectedKey) return;
     this.#selectedKey = selectedKey;
+    this.#selectedModelType = item?.previewModelType ?? null;
     const generation = ++this.#selectionGeneration;
     this.setActive(null);
     this.root.classList.remove("is-model", "is-loading", "is-fallback");
@@ -99,12 +105,18 @@ export class ClassicInventoryPreview {
     }
     const cachedInstance = this.#instances.get(cacheKey);
     if (cachedInstance) {
+      // A ordem de inserção do Map funciona como um LRU compacto.
+      this.#instances.delete(cacheKey);
+      this.#instances.set(cacheKey, cachedInstance);
       this.setActive(cachedInstance);
       return;
     }
     this.root.classList.add("is-loading");
     void this.retain(type).then(async (prototype) => {
-      if (this.#disposed || generation !== this.#selectionGeneration) return;
+      if (this.#disposed || generation !== this.#selectionGeneration) {
+        this.releaseRetainedIfUnused(type);
+        return;
+      }
       this.root.classList.remove("is-loading");
       if (!prototype) {
         this.root.classList.add("is-fallback");
@@ -128,8 +140,10 @@ export class ClassicInventoryPreview {
       instance.name = `inventory-preview-model-${type}`;
       instance.add(model);
       instance.userData.refinement = model.userData.refinement;
+      instance.userData.previewModelType = type;
       this.#instances.set(cacheKey, instance);
       this.setActive(instance);
+      this.trimInstanceCache();
     });
   }
 
@@ -223,6 +237,42 @@ export class ClassicInventoryPreview {
     } else {
       this.root.classList.remove("is-model");
     }
+  }
+
+  private trimInstanceCache(): void {
+    while (this.#instances.size > MAX_CACHED_PREVIEW_INSTANCES) {
+      const oldest = this.#instances.entries().next().value as
+        | [string, THREE.Group]
+        | undefined;
+      if (!oldest) return;
+      const [key, instance] = oldest;
+      // O item ativo normalmente é o mais novo. Esta guarda evita remover o
+      // objeto visível caso a ordem seja alterada por uma chamada futura.
+      if (instance === this.#active) {
+        this.#instances.delete(key);
+        this.#instances.set(key, instance);
+        continue;
+      }
+      this.#instances.delete(key);
+      this.releaseInstance(instance);
+    }
+  }
+
+  private releaseInstance(instance: THREE.Group): void {
+    instance.removeFromParent();
+    this.releaseOwnedMaterials(instance);
+    const type = instance.userData.previewModelType;
+    if (typeof type === "number") this.releaseRetainedIfUnused(type);
+    instance.clear();
+  }
+
+  private releaseRetainedIfUnused(type: number): void {
+    if (this.#selectedModelType === type) return;
+    for (const instance of this.#instances.values()) {
+      if (instance.userData.previewModelType === type) return;
+    }
+    if (!this.#retained.delete(type)) return;
+    this.models.release(type);
   }
 
   private async applyClassicUiMaterial(model: THREE.Group, item: InventoryItem): Promise<void> {

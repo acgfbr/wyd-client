@@ -84,6 +84,13 @@ const skillsByClass = skillCatalog.classes.map((classEntry) => {
   const imported = skillCatalog.skills.filter((skill) => importedIndices.has(skill.index));
   const runtime = CLASS_SKILL_LOADOUTS[classEntry.key] ?? [];
   const runtimeIndices = new Set(runtime.map((skill) => skill.classicIndex));
+  const catalogOnly = imported.filter((skill) => !runtimeIndices.has(skill.index));
+  const passiveCatalogIndices = catalogOnly
+    .filter((skill) => skill.passive === 1)
+    .map((skill) => skill.index);
+  const castablePendingIndices = catalogOnly
+    .filter((skill) => skill.passive !== 1)
+    .map((skill) => skill.index);
   return {
     key: classEntry.key,
     name: classEntry.name,
@@ -92,9 +99,11 @@ const skillsByClass = skillCatalog.classes.map((classEntry) => {
     master: classEntry.masterSkills.length,
     runtime: runtime.length,
     runtimeIndices: [...runtimeIndices].sort((a, b) => a - b),
-    pendingIndices: imported
-      .map((skill) => skill.index)
-      .filter((index) => !runtimeIndices.has(index)),
+    passiveCatalogIndices,
+    castablePendingIndices,
+    // Compatibility key for consumers of the first report version. It now
+    // tracks actionable casts/buffs instead of passive catalog records.
+    pendingIndices: castablePendingIndices,
   };
 });
 
@@ -200,7 +209,7 @@ function renderMarkdown(report) {
   ).join("\n");
 
   const skillRows = report.skills.classes.map((entry) =>
-    `| ${entry.name} | ${entry.imported} (${entry.regular} normais + ${entry.master} master) | ${entry.runtime} | ${entry.runtimeIndices.join(", ") || "-"} | ${entry.pendingIndices.length} |`,
+    `| ${entry.name} | ${entry.imported} (${entry.regular} normais + ${entry.master} master) | ${entry.runtime} | ${entry.runtimeIndices.join(", ") || "-"} | ${entry.passiveCatalogIndices.length} | ${entry.castablePendingIndices.length} |`,
   ).join("\n");
 
   const classRows = report.player.classes.map((entry) =>
@@ -275,12 +284,14 @@ ${classRows}
 
 ## Skills: import binario x promocao no runtime
 
-Uma skill promovida possui definicao jogavel em \`CLASS_SKILL_LOADOUTS\`. Isso
-nao prova por si so fidelidade visual; a homologacao do renderer continua
-manual e rastreada em \`PENDENCIAS.md\`.
+Uma skill promovida possui definicao jogavel em \`CLASS_SKILL_LOADOUTS\`.
+Registros marcados como passivos pelo proprio \`SkillData.bin\` ficam no
+catalogo e nunca devem ocupar a barra. Isso nao prova por si so fidelidade
+visual; a homologacao do renderer continua manual e rastreada em
+\`PENDENCIAS.md\`.
 
-| Classe | Importadas | Runtime | Indices ativos | Ainda nao promovidas |
-| --- | ---: | ---: | --- | ---: |
+| Classe | Importadas | Runtime | Indices ativos | Passivas fora da barra | Casts/buffs pendentes |
+| --- | ---: | ---: | --- | ---: | ---: |
 ${skillRows}
 
 ## Lacunas objetivas

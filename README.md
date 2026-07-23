@@ -9,6 +9,13 @@ reutilizado.
 > fazem parte deste recorte. Consulte a [fila canônica](PENDENCIAS.md) para ver o
 > que está homologado e o que ainda é provisório.
 
+Documentação de arquitetura:
+
+- [Auditoria Three.js e cobertura clássica](docs/auditoria-threejs-cobertura.md)
+- [Guia do futuro servidor multiplayer](docs/guia-servidor-multiplayer.md)
+- [Estimativa para substituir os assets clássicos](docs/estimativa-substituicao-assets.md)
+- [Memória técnica do projeto](MEMORIA_PROJETO.md)
+
 ## Estado atual
 
 - 111 Fields importados, nomeados, conectados e carregados dinamicamente.

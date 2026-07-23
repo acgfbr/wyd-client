@@ -35,9 +35,10 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
   persistem por `180 s`, com efeitos suavizados; a passiva `#101` acrescenta
   alcance e acopla o `SForce` clássico aos ataques.
 - Carga `#8`, Golpe Mortal `#10`, Assalto `#11`, Espada da Fênix `#12`,
-  Fanatismo `#4`, Fúria Divina `#6`, Destino `#7`, Possuído `#13`, Espada
+  Fanatismo `#4`, Fúria Divina `#6`, Destino `#7`, Possuído `#13`, Perseguição
+  `#16`, Espada
   Flamejante `#17`, Contra Ataque `#18`, Ataque da Alma `#20` e Punhalada
-  Venenosa `#21` do
+  Venenosa `#21`, Exterminar `#22` e a master Proteção Divina `#200` do
   TransKnight estão jogáveis com os
   registros exatos de `SkillData.bin`. `#8/#10/#18` preservam o branch sem
   projétil do cliente: animação do registro, som `160` e `EarthQuake(2)`.
@@ -366,9 +367,15 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
     skills binárias, 14 montarias e oito evocacoes; tambem explicita por classe
     quais skills ja foram promovidas ao runtime. O code splitting tambem foi
     aplicado: Three.js ocupa um chunk vendor cacheavel, a entrada da aplicacao
-    ficou em cerca de 460 KiB minificados e os renderers de Foema, TransKnight
-    e BeastMaster viraram chunks lazy de aproximadamente 20/54/96 KiB,
+    ficou em cerca de 504 KiB minificados e os renderers de Foema, TransKnight
+    e BeastMaster viraram chunks lazy na faixa de aproximadamente 37–124 KiB,
     carregados somente no primeiro switch para cada classe.
+    O preview 3D do inventário também deixou de crescer com cada item
+    selecionado: usa LRU de 12 instâncias, descarta os materiais próprios na
+    expulsão e libera o protótipo compartilhado quando nenhum outro preview do
+    mesmo tipo continua residente. A auditoria estática e o inventário objetivo
+    de lacunas estão consolidados; baseline e bfcache permanecem homologação
+    manual, não pendência de implementação.
     As verificações que exigem navegador/dispositivo estão isoladas em
     `docs/checklist-homologacao-manual.md`, com cenário, duração, coordenadas e
     critério de evidência; elas não são marcadas como aprovadas pelo build.
@@ -446,8 +453,9 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
    Fúria `#0`, Toque Sagrado `#1`, Golpe Duplo `#2`, Samaritano `#3`,
    Fanatismo `#4`, Aura da Vida `#5`, Fúria Divina `#6`, Destino `#7`, Carga
    `#8`, Golpe Mortal `#10`, Assalto `#11`, Espada da Fênix `#12`, Possuído
-   `#13`, Espada Flamejante `#17`, Contra Ataque `#18`, Lâmina Congelada `#19`,
-   Ataque da Alma `#20`, Punhalada Venenosa `#21` e Tempestade de Gelo `#23`,
+   `#13`, Perseguição `#16`, Espada Flamejante `#17`, Contra Ataque `#18`,
+   Lâmina Congelada `#19`, Ataque da Alma `#20`, Punhalada Venenosa `#21`,
+   Exterminar `#22`, Tempestade de Gelo `#23` e Proteção Divina `#200`,
    usando as malhas
    `10/702/703/706/707/2838/2840`, DDS, alpha DWORD, offsets, tempos e pools
    derivados do cliente. Carga, Golpe Mortal e Contra Ataque compartilham o
@@ -474,12 +482,35 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
    alvo, compartilha geometria/textura, toca `STAND01`, sobe uma unidade por
    segundo e some em `3 s`, sem projétil genérico. O primeiro lote
    dedicado de Foema cobre
-   Flecha Mágica `#24`, Ataque de Fogo `#32`,
+   Flecha Mágica `#24`, Desintoxicar `#25`, Flash `#26`, Cura `#27`,
+   Choque Divino `#28`,
+   Recuperar `#29`,
+   Julgamento Divino `#30`, Ataque de Fogo `#32`,
    Relâmpago `#33`, Trovão `#37`, Névoa Venenosa `#40` e Velocidade `#41`; o
    Trovão separa o cast transitório de dois segundos dos anéis persistentes do
    estado do buff. Flecha Mágica usa o `TMSkillMagicArrow` type `0`: malha `701`, frames
    `20–25`, voo de `50 ms` por unidade, três partículas `0` por emissão, shade
-   móvel `7`, impacto `71/7` e sons `161/154`.
+   móvel `7`, impacto `71/7` e sons `161/154`. Choque Divino porta o
+   `TMSkillDoubleSwing` nível `2`: modelo `12`/textura `91`, shade móvel `7`,
+   núcleos `56/2/60`, fumaça `0` a cada `100 ms`, giro de uma volta por segundo
+   e o percurso clássico que atravessa o alvo. Flash preserva o despacho
+   imediato de `TMFieldScene`, os quatro pilares `58`, os planos expansivos
+   `93/2`, shade `7` e som `159`; o escurecimento da tela só existe quando
+   outro jogador acerta o cliente local e, portanto, não é falsificado no mock.
+   Recuperar usa as doze partículas azuis `56`, movimentos/lifetimes individuais,
+   shade `7` e som `158`; no offline aplica ao jogador local apenas o
+   `InstanceValue=150`, enquanto cura dos demais membros continua pertencendo
+   ao futuro servidor de party. Cura `#27` reutiliza exatamente o mesmo
+   `TMSkillHeal`/som e aplica `InstanceValue=100`; como `TargetType 2` aceita
+   a própria personagem, ela já é jogável em self, enquanto selecionar outro
+   aliado continua pendente da UI multiplayer. Desintoxicar `#25` porta o
+   `TMSkillCure`: 16 partículas multicoloridas mais cinco órbitas brancas,
+   lifetimes individuais, shade `7` e som `4`; a remoção de affects negativos
+   fica neutra enquanto o player offline ainda não possui esse estado.
+   Julgamento Divino porta o
+   `TMSkillJudgement` type `0`: modelo `10` com expansão vertical/rotação type
+   `2`, anéis `124`, cores e janela curta de ownership de `300 ms`, som `38`
+   e despacho imediato do pacote.
    O segundo lote da Foema também está implementado: Lança de Gelo `#34` usa
    os modelos `708/707`, sombra móvel, flare e partículas do
    FreezeBlade; Fênix de Fogo `#38` combina simultaneamente o pássaro `8` e a
@@ -518,6 +549,11 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
    na textura `202`. As alegações de converter `80%` do dano em MP, preservar
    `300 MP` ou falhar em `25%` não aparecem no cliente/SkillData e permanecem
    fora do frontend até existir código autoritativo do servidor.
+   Proteção Absoluta `#213` e Magia Misteriosa `#216` também foram promovidas
+   com os registros master exatos. Como índices acima de `199` não entram no
+   dispatcher visual de `TMHuman` e os affects `6/42` são estados sem objeto
+   visual em `CheckAffect`, ambas aparecem na barra/catálogo e duram `180 s`
+   no mock sem receber um brilho inventado.
    Teleporte `#42` fica por último porque exige party, consentimento, restrições
    de mapa/inventário e rede; não deve virar teleporte livre no mock. O primeiro
    lote visual ativo do BeastMaster também deixou de usar projéteis e pulsos
@@ -540,7 +576,10 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
    Espírito Vingador também é imediato, combina Judgement `418/419` e
    EffectStart `703/152` nos mesmos cinco alvos usados pelo dano offline. Os
    novos modelos e a textura indireta fazem parte do importador e do manifesto
-   reprodutível. Skills ainda não citadas continuam abertas e não devem cair
+   reprodutível. Os masters Anti Magia `#224`, Chama Resistente `#225` e Last
+   Resistance `#235` também estão na barra/catálogo com os campos binários e
+   duração offline de `180 s`; como o dispatcher não processa índices master,
+   não receberam partículas genéricas. Skills ainda não citadas continuam abertas e não devem cair
    silenciosamente em um efeito genérico ao serem promovidas.
    O lote seguinte da Huntress promoveu Meditação `#77` e Escudo Dourado
    `#85`. Meditação porta os cinco pares roxo/branco da textura `101`, com
@@ -577,8 +616,8 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
    cliente; enquanto rede está fora do escopo, a formação de 10 e sua IA são
    uma política explícita do frontend. No futuro, a simulação local deverá ser
    substituída pelos packets autoritativos do servidor.
-16. Estimativa final para substituição integral dos assets originais — **fazer
-    somente no encerramento das demais pendências e apenas como estimativa**.
+16. Estimativa final para substituição integral dos assets originais —
+    **concluída como estimativa, sem iniciar migração**.
     Usar a matriz de cobertura produzida pela auditoria técnica para dimensionar
     uma reconstrução visual do zero, sem executar a migração: separar mapas e
     terreno, arquitetura/props, personagens/classes, monstros/NPCs, montarias,
@@ -587,9 +626,12 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
     riscos e margem de incerteza. Comparar caminhos 1:1, remaster e redesign,
     incluindo pipeline de arte, validação e impacto no runtime, para que a decisão
     de abandonar todos os assets clássicos seja tomada sobre o inventário real do
-    projeto e não sobre um chute prematuro.
-17. Guia final para criação do servidor multiplayer — **documentação somente,
-    executar depois das demais pendências**. Localizar e inventariar o
+    projeto e não sobre um chute prematuro. O resultado está em
+    `docs/estimativa-substituicao-assets.md`, com inventário real, faixas por
+    caminho/disciplina, equipe, calendário, pipeline, clean room e margem de
+    incerteza.
+17. Guia final para criação do servidor multiplayer — **documentação
+    concluída; auditoria do servidor-base aguarda a fonte**. Localizar e inventariar o
     servidor-base informado pelo projeto, confrontar seus packets, estados e
     regras com o cliente clássico e produzir um guia reproduzível para ligar
     este frontend a um backend autoritativo. O documento deve cobrir login e
@@ -603,7 +645,12 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
     protocolo do cliente e o que será uma decisão moderna; não copiar
     vulnerabilidades, credenciais ou regras desconhecidas por suposição. Como
     rede continua fora do escopo atual, esta tarefa gera arquitetura, roteiro e
-    instruções, não ativa multiplayer silenciosamente no frontend.
+    instruções, não ativa multiplayer silenciosamente no frontend. O guia está
+    em `docs/guia-servidor-multiplayer.md`. A busca local não encontrou fonte
+    de servidor; `Myth64.rar`, `serverlist.rar` e `Config.rar` contêm somente
+    executável/configurações do cliente. O documento separa o que foi
+    comprovado em `Basedef.h`/`CPSock.cpp`, o que é decisão moderna e tudo que
+    precisa ser confirmado quando o servidor-base for disponibilizado.
 
 ## Convenções do projeto
 

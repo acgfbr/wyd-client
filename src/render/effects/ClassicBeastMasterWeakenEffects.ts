@@ -10,14 +10,13 @@ const OWNER_FOLLOW_SECONDS = CONTROLLER_LIFETIME_SECONDS * 0.5;
 const EMISSION_INTERVAL_SECONDS = 0.5;
 const PARTICLE_LIFETIME_SECONDS = 2;
 const PARTICLE_VISIBLE_FRACTION = 0.05;
-const PARTICLE_COLOR = 0x5599aa;
-const PARTICLE_BASE_SCALE = 0.05;
 const PARTICLE_SCALE_PER_SECOND = 0.1;
 const PARTICLE_VERTICAL_DISTANCE = 1.5;
-const PARTICLE_HORIZONTAL_DISTANCE = 0.6;
 const PARTICLE_CIRCLE_SPEED = 3;
 
-export type BeastMasterWeakenFollowTarget = () => THREE.Vector3 | null;
+export type ClassicSlowSlashType = 0 | 1 | 2;
+export type ClassicSlowSlashFollowTarget = () => THREE.Vector3 | null;
+export type BeastMasterWeakenFollowTarget = ClassicSlowSlashFollowTarget;
 
 interface WeakenResources {
   readonly slowTexture: THREE.Texture;
@@ -30,7 +29,8 @@ interface SlowSlashController {
   elapsed: number;
   nextEmission: number;
   serial: number;
-  followTarget: BeastMasterWeakenFollowTarget | null;
+  type: ClassicSlowSlashType;
+  followTarget: ClassicSlowSlashFollowTarget | null;
 }
 
 interface SlowSlashParticle {
@@ -40,18 +40,21 @@ interface SlowSlashParticle {
   elapsed: number;
   serial: number;
   motion: 1 | 2 | 3;
+  color: number;
+  baseScale: number;
+  horizontalDistance: number;
 }
 
 /**
- * Presentation-only port of BeastMaster #51, Enfraquecer.
+ * Shared presentation port of TMSkillSlowSlash.
  *
- * The caller owns the retail +500 ms dispatch delay, targeting, sound 157 and
- * every gameplay/debuff decision. `play` copies both positions immediately.
- * For the first second the type-1 SlowSlash follows the primary target; after
- * that it intentionally snaps back to the caster snapshot passed as both
- * `vecStart` and `vecTarget` by TMHuman.cpp.
+ * Type 0 belongs to TransKnight #16 Perseguição, type 1 to BeastMaster #51
+ * Enfraquecer and type 2 remains available for the other recovered callsites.
+ * Sound and gameplay stay with the caller. `play` copies both positions
+ * immediately; the first half follows the owner and the second resolves the
+ * constructor target exactly like the original controller.
  */
-export class ClassicBeastMasterWeakenEffects {
+export class ClassicSlowSlashEffects {
   readonly object = new THREE.Group();
   readonly #dds = new ClassicDdsTextureLoader();
   readonly #controllers: SlowSlashController[] = [];
@@ -64,7 +67,7 @@ export class ClassicBeastMasterWeakenEffects {
   #disposed = false;
 
   constructor(parent: THREE.Object3D) {
-    this.object.name = "classic-beastmaster-weaken-effects";
+    this.object.name = "classic-slow-slash-effects";
     parent.add(this.object);
   }
 
@@ -82,7 +85,7 @@ export class ClassicBeastMasterWeakenEffects {
         this.#resources = resources;
       })
       .catch((error: unknown) => {
-        console.warn("Efeito clássico #51 Enfraquecer indisponível.", error);
+        console.warn("Efeito clássico TMSkillSlowSlash indisponível.", error);
       })
       .finally(() => {
         this.#preload = null;
@@ -98,7 +101,8 @@ export class ClassicBeastMasterWeakenEffects {
   play(
     casterFeet: THREE.Vector3,
     primaryTargetFeet: THREE.Vector3,
-    followTarget?: BeastMasterWeakenFollowTarget,
+    followTarget?: ClassicSlowSlashFollowTarget,
+    type: ClassicSlowSlashType = 1,
   ): boolean {
     if (
       this.#disposed
@@ -115,12 +119,13 @@ export class ClassicBeastMasterWeakenEffects {
     controller.elapsed = 0;
     controller.nextEmission = EMISSION_INTERVAL_SECONDS;
     controller.serial = ++this.#serial;
+    controller.type = type;
     controller.followTarget = followTarget ?? null;
     controller.casterSnapshot.copy(casterFeet);
     controller.emissionCenter.copy(primaryTargetFeet);
 
     // m_dwLastTime starts at zero, so retail emits on the first FrameMove.
-    this.spawnParticle(controller.emissionCenter);
+    this.spawnParticle(controller.emissionCenter, controller.type);
     return true;
   }
 
@@ -170,6 +175,7 @@ export class ClassicBeastMasterWeakenEffects {
         elapsed: 0,
         nextEmission: 0,
         serial: 0,
+        type: 1,
         followTarget: null,
       };
       this.#controllers.push(controller);
@@ -199,7 +205,7 @@ export class ClassicBeastMasterWeakenEffects {
       }
 
       if (controller.elapsed > controller.nextEmission) {
-        this.spawnParticle(controller.emissionCenter);
+        this.spawnParticle(controller.emissionCenter, controller.type);
         // TMSkillSlowSlash stores the current tick instead of catching up all
         // missed 500 ms emissions after a suspended/background frame.
         controller.nextEmission = controller.elapsed + EMISSION_INTERVAL_SECONDS;
@@ -224,7 +230,7 @@ export class ClassicBeastMasterWeakenEffects {
     }
   }
 
-  private spawnParticle(center: THREE.Vector3): void {
+  private spawnParticle(center: THREE.Vector3, type: ClassicSlowSlashType): void {
     const resources = this.#resources;
     if (!resources) return;
     const particle = this.acquireParticle(resources.slowTexture);
@@ -233,6 +239,9 @@ export class ClassicBeastMasterWeakenEffects {
     particle.elapsed = 0;
     particle.serial = ++this.#serial;
     particle.motion = (nRand % 3 + 1) as 1 | 2 | 3;
+    particle.color = type === 0 ? 0xaaaa00 : type === 1 ? 0x5599aa : 0xffeeff;
+    particle.baseScale = type === 2 ? 0.02 : 0.05;
+    particle.horizontalDistance = type === 0 ? 0.2 : type === 1 ? 0.6 : 1.2;
     particle.start.set(
       center.x + (nRand % 5 + 1) * 0.1,
       center.y,
@@ -240,8 +249,8 @@ export class ClassicBeastMasterWeakenEffects {
       center.z - (nRand % 5) * 0.1,
     );
     particle.sprite.position.copy(particle.start);
-    particle.sprite.scale.set(PARTICLE_BASE_SCALE, PARTICLE_BASE_SCALE, 1);
-    particle.sprite.material.color.setHex(PARTICLE_COLOR).multiplyScalar(0);
+    particle.sprite.scale.set(particle.baseScale, particle.baseScale, 1);
+    particle.sprite.material.color.setHex(particle.color).multiplyScalar(0);
     particle.sprite.material.opacity = 1;
     particle.sprite.visible = false;
   }
@@ -252,7 +261,7 @@ export class ClassicBeastMasterWeakenEffects {
     if (this.#particles.length < PARTICLE_POOL_LIMIT) {
       const sprite = createBrightSprite(
         texture,
-        `classic-beastmaster-weaken-slow-slash-${this.#particles.length}`,
+        `classic-slow-slash-${this.#particles.length}`,
       );
       const particle: SlowSlashParticle = {
         sprite,
@@ -261,6 +270,9 @@ export class ClassicBeastMasterWeakenEffects {
         elapsed: 0,
         serial: 0,
         motion: 1,
+        color: 0xffffff,
+        baseScale: 0.05,
+        horizontalDistance: 0.6,
       };
       this.#particles.push(particle);
       this.object.add(sprite);
@@ -285,15 +297,15 @@ export class ClassicBeastMasterWeakenEffects {
       particle.sprite.position.copy(particle.start);
       particle.sprite.position.y += progress * PARTICLE_VERTICAL_DISTANCE;
       if (particle.motion >= 2) {
-        particle.sprite.position.x += Math.sin(phase) * PARTICLE_HORIZONTAL_DISTANCE;
+        particle.sprite.position.x += Math.sin(phase) * particle.horizontalDistance;
       }
       if (particle.motion >= 3) {
-        particle.sprite.position.z -= Math.cos(phase) * PARTICLE_HORIZONTAL_DISTANCE;
+        particle.sprite.position.z -= Math.cos(phase) * particle.horizontalDistance;
       }
-      const scale = PARTICLE_BASE_SCALE + particle.elapsed * PARTICLE_SCALE_PER_SECOND;
+      const scale = particle.baseScale + particle.elapsed * PARTICLE_SCALE_PER_SECOND;
       particle.sprite.scale.set(scale, scale, 1);
       particle.sprite.material.color
-        .setHex(PARTICLE_COLOR)
+        .setHex(particle.color)
         .multiplyScalar(Math.max(0, Math.sin(progress * Math.PI)));
       // EF_BRIGHT keeps texture alpha; RGB carries the retail fade.
       particle.sprite.material.opacity = 1;
@@ -317,7 +329,7 @@ export class ClassicBeastMasterWeakenEffects {
 function createBrightSprite(texture: THREE.Texture, name: string): THREE.Sprite {
   const material = new THREE.SpriteMaterial({
     map: texture,
-    color: PARTICLE_COLOR,
+    color: 0xffffff,
     transparent: true,
     opacity: 1,
     depthTest: true,
@@ -344,6 +356,7 @@ function deactivateController(controller: SlowSlashController): void {
   controller.active = false;
   controller.elapsed = 0;
   controller.nextEmission = 0;
+  controller.type = 1;
   controller.followTarget = null;
 }
 
@@ -379,3 +392,6 @@ function isFiniteVector(position: THREE.Vector3): boolean {
 function disposeResources(resources: WeakenResources): void {
   resources.slowTexture.dispose();
 }
+
+/** Backwards-compatible semantic name for BeastMaster #51. */
+export { ClassicSlowSlashEffects as ClassicBeastMasterWeakenEffects };

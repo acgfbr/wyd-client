@@ -43,6 +43,11 @@ com vários drops, com NPC shop/cargo/inventário aberto e no iPhone.
   real.
 - Dados clássicos pesados carregam lazy: comércio, skills, ícones e modelos
   só são resolvidos quando necessários.
+- O preview 3D do inventário usa LRU de no máximo 12 instâncias. Materiais
+  clonados são descartados na expulsão e o protótipo do `ModelLibrary` é
+  liberado quando nenhum outro preview daquele tipo continua residente. Assim,
+  percorrer o catálogo de 6.500 itens não transforma a sessão em um cache GPU
+  sem limite.
 - `WebGLRenderer.info` agora está exposto na HUD para acompanhar geometria,
   textura, draw calls e triângulos em tempo real.
 - Mobile/iPhone reduz pixel ratio, sombras e antialias, e usa fallback de DDS
@@ -66,14 +71,19 @@ com vários drops, com NPC shop/cargo/inventário aberto e no iPhone.
 - O runtime principal agora fica separado do vendor Three.js. Foema,
   TransKnight e BeastMaster possuem chunks de renderer próprios carregados
   apenas no primeiro switch para a classe; o build medido gerou chunks de
-  aproximadamente 20, 54 e 96 KiB minificados. A entrada da aplicação ficou em
-  aproximadamente 460 KiB e o vendor Three.js em 518 KiB. Huntress permanece
+  aproximadamente 37–124 KiB minificados. A entrada da aplicação ficou em
+  aproximadamente 504 KiB e o vendor Three.js em 518 KiB. Huntress permanece
   no boot porque é a classe inicial; catálogos grandes já usam fetch lazy.
 - `performance.memory` não existe no Safari/iPhone, então RAM JS aparece como
   `—`; para iOS, usar GEO/TEX/CALLS/TRIS e inspeção remota.
 - WebGPU não é alternativa atual: o runtime depende de materiais Three.js
   customizados via WebGL e shaders `onBeforeCompile`; migrar exigiria portar
   esses caminhos para outro pipeline.
+- O chunk `vendor-three` fica em aproximadamente 518 KiB minificados. Esse
+  tamanho é da biblioteca compartilhada, não de assets dos mapas, e não cresce
+  ao caminhar. Dividi-lo artificialmente não reduz bytes nem memória de
+  execução; a métrica útil para regressão continua sendo o chunk da aplicação,
+  os chunks lazy por classe e os contadores em runtime.
 
 ## Matriz de cobertura
 
@@ -92,7 +102,7 @@ nos demais Fields fazem parte do proprio manifesto, nao sao links quebrados.
 | Terreno/colisão | TRN, AttributeMap, object.bin, pontes/altura, pathfinding | `ClassicWorld`, `ClassicNavigation` | Casos isolados de máscara/altura que aparecerem em teste |
 | Objetos/props | DAT/WYS/MSH, água, folhas, fogueiras, fontes, floats | `MapObjects`, `MapWater`, `ClassicEnvironmentObjects` | Homologar pontos de grama e objetos raros |
 | Personagem | Quatro classes jogáveis, rigs, traje base, arma, montaria/familiar | `PlayerClasses`, `ClassicPlayerAvatar` | Cobertura completa de equipamentos visuais por classe |
-| Huntress | Mulher Kalintz, Skytalos Ancient +15, Griupan, 12 skills promovidas | `HuntressLooks`, `ClassicHuntressSkillEffects`, `ClassicLevelUpEffects` | 24 registros ainda não promovidos |
+| Huntress | Mulher Kalintz, Skytalos Ancient +15, Griupan, 14 skills promovidas | `HuntressLooks`, `ClassicHuntressSkillEffects`, `ClassicLevelUpEffects` | 17 passivas e 5 casts ainda fora do runtime |
 | Montarias | 14 montarias nível 120, Unicórnio padrão, sela/bones | `MountLooks`, `ClassicMount` | Homologação visual de todas as variações |
 | NPCs/monstros | Spawn por Field, animação, hover/seleção, IA offline, drops | `MonsterCatalog`, `ClassicSpawnManager` | Cobertura de todos skins/itens/ações especiais |
 | BeastMaster summons | 8 evocações, 10 por cast, IA offline | `BeastMasterSummons`, `ClassicBeastMasterSummon` | Trocar IA local por packets autoritativos no futuro |
@@ -103,6 +113,45 @@ nos demais Fields fazem parte do proprio manifesto, nao sao links quebrados.
 | Áudio | 333 SFX, 13 músicas, BGM opcional, combate/coleta, passos por piso, 82 IDs AniSound de atores e loops ambientais próximos | `audio/catalog.json`, `ClassicAudio`, `ClassicSpawnManager`, `MapObjects` | Quatro referências órfãs dos corpora desktop/mobile; clima global depende do futuro weather |
 | Rede/servidor | Deliberadamente fora do escopo atual | n/a | Sessão, economia, dano autoritativo, drops reais |
 
+## Inventário objetivo das lacunas
+
+- Skills: 79 de 144 registros de classe/master já estão no runtime. Dos 65
+  restantes, 49 são passivos no próprio `SkillData.bin`; apenas 16 são
+  casts/buffs ainda não promovidos. Alguns destes 16 dependem de estado
+  autoritativo, transformação do rig, party, item ou servidor; “pendente” não
+  significa automaticamente “falta um efeito”.
+- Classes/equipamentos: as quatro classes e seus looks base são jogáveis, mas
+  a cobertura visual 1:1 de todos os `LOOK_INFO` e combinações dos 6.500 itens
+  ainda não existe. O próximo import deve partir de `ItemList.bin` e das regras
+  de slot/mesh do cliente, não de uma lista manual de skins.
+- Monstros/NPCs: os 377 templates e 3.937 geradores estão catalogados e entram
+  no streaming. A lacuna é validar famílias visuais e ações especiais por
+  template; não faltam apenas arquivos. Casos com skin incorreta devem ser
+  corrigidos no catálogo/importador para beneficiar todos os spawns.
+- Itens: os 6.500 registros, preços, carries e ícones estão importados. Ainda
+  são sistemas de servidor: propriedade real do drop, compra/venda, economia,
+  persistência e validação. `EF_GRID` multicélula permanece uma lacuna de UI.
+- Mapas: os 111 TRN existem; 108 DAT e 103 minimapas são exatamente os
+  declarados pela fonte. O aberto é homologação visual dos mapas e dos raros
+  objetos com comportamento próprio, não uma importação em lote ausente.
+- Áudio: 333 SFX e 13 músicas estão no catálogo. Quatro referências não existem
+  nos corpora usados e não devem receber substituto arbitrário.
+
+## Procedimento seguro para novos imports
+
+1. Identificar no binário/código clássico o índice, arquivo e regra de
+   despacho; registrar a fonte no catálogo gerado.
+2. Importar por script em `tools/`, com saída determinística no
+   `public/game-data/classic` e referência no manifesto.
+3. Carregar sob demanda. Geometrias/texturas compartilhadas pertencem à
+   biblioteca; materiais mutáveis pertencem à instância.
+4. Definir teto de pool/cache e `dispose()` antes de conectar o recurso ao
+   loop. Cancelar resultados assíncronos obsoletos por geração.
+5. Implementar estado local apenas quando ele é observável no cliente. Regras
+   de dano, economia, party e autoridade permanecem no futuro servidor.
+6. Rodar `bun run audit:coverage`, `bunx tsc --noEmit`, `bun run build` e a
+   inspeção manual curta do cenário afetado.
+
 ## Ordem segura para continuar
 
 1. Homologar visualmente a telemetria nova e coletar baseline de Armia:
@@ -110,5 +159,8 @@ nos demais Fields fazem parte do proprio manifesto, nao sao links quebrados.
 2. Testar o shutdown central em reload/pagehide real e bfcache Safari.
 3. Medir o boot e a troca das quatro classes em desktop/iPhone para homologar
    os novos chunks e registrar a baseline real.
-4. Voltar ao épico de skills somente com uma lista curta por lote, mantendo a
-   regra de não cair em efeito genérico silencioso.
+4. Homologar por amostragem as famílias de monstros/NPCs e as 14 montarias, em
+   vez de manter todos residentes.
+5. Voltar ao épico de skills somente com uma lista curta por lote, mantendo a
+   regra de não cair em efeito genérico silencioso e separando passivas/regras
+   de servidor de VFX realmente ausentes.

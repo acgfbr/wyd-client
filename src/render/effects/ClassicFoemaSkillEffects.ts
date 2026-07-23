@@ -9,12 +9,16 @@ import {
   ClassicFoemaCancellationEffects,
   type FoemaCancellationTargetContext,
 } from "./ClassicFoemaCancellationEffects";
+import { ClassicFoemaDivineShockEffects } from "./ClassicFoemaDivineShockEffects";
+import { ClassicFoemaDivineJudgementEffects } from "./ClassicFoemaDivineJudgementEffects";
+import { ClassicFoemaFlashEffects } from "./ClassicFoemaFlashEffects";
 import { ClassicFoemaIceSpearEffects } from "./ClassicFoemaIceSpearEffects";
 import { ClassicFoemaManaControlEffects } from "./ClassicFoemaManaControlEffects";
 import { ClassicFoemaMagicShieldEffects } from "./ClassicFoemaMagicShieldEffects";
 import { ClassicFoemaMagicArrowEffects } from "./ClassicFoemaMagicArrowEffects";
 import { ClassicFoemaMagicWeaponEffects } from "./ClassicFoemaMagicWeaponEffects";
 import { ClassicFoemaMeteorEffects } from "./ClassicFoemaMeteorEffects";
+import { ClassicFoemaRecoveryEffects } from "./ClassicFoemaRecoveryEffects";
 
 export type FoemaPoisonEffectLevel = 0 | 1 | 2 | 3;
 
@@ -158,7 +162,7 @@ interface ThunderCastVisual {
 }
 
 /**
- * Retail presentation facade for Foema #24/#32/#33/#34/#35/#36/#37/#38/#39/
+ * Retail presentation facade for Foema #24/#25/#26/#27/#28/#29/#30/#32/#33/#34/#35/#36/#37/#38/#39/
  * #40/#41/#43/#44/#45/#46/#47, including the dedicated meteor and skinned
  * controllers. #47 is state-only because retail has no cast-event branch.
  *
@@ -194,6 +198,10 @@ export class ClassicFoemaSkillEffects {
   readonly #manaControlEffects: ClassicFoemaManaControlEffects;
   readonly #cancellationEffects: ClassicFoemaCancellationEffects;
   readonly #magicArrowEffects: ClassicFoemaMagicArrowEffects;
+  readonly #divineShockEffects: ClassicFoemaDivineShockEffects;
+  readonly #flashEffects: ClassicFoemaFlashEffects;
+  readonly #recoveryEffects: ClassicFoemaRecoveryEffects;
+  readonly #divineJudgementEffects: ClassicFoemaDivineJudgementEffects;
   #resources: ClassicFoemaResources | null = null;
   #preload: Promise<void> | null = null;
   #serial = 0;
@@ -217,6 +225,10 @@ export class ClassicFoemaSkillEffects {
     this.#manaControlEffects = new ClassicFoemaManaControlEffects(this.object);
     this.#cancellationEffects = new ClassicFoemaCancellationEffects(this.object);
     this.#magicArrowEffects = new ClassicFoemaMagicArrowEffects(this.object);
+    this.#divineShockEffects = new ClassicFoemaDivineShockEffects(this.object);
+    this.#flashEffects = new ClassicFoemaFlashEffects(this.object);
+    this.#recoveryEffects = new ClassicFoemaRecoveryEffects(this.object);
+    this.#divineJudgementEffects = new ClassicFoemaDivineJudgementEffects(this.object);
     scene.add(this.object);
   }
 
@@ -257,6 +269,10 @@ export class ClassicFoemaSkillEffects {
       this.#manaControlEffects.prepareClassic(assets),
       this.#cancellationEffects.prepareClassic(assets),
       this.#magicArrowEffects.prepareClassic(assets),
+      this.#divineShockEffects.prepareClassic(assets),
+      this.#flashEffects.prepareClassic(assets),
+      this.#recoveryEffects.prepareClassic(assets),
+      this.#divineJudgementEffects.prepareClassic(assets),
     ])
       .then((results) => {
         for (const result of results.slice(1)) {
@@ -286,6 +302,10 @@ export class ClassicFoemaSkillEffects {
     this.#manaControlEffects.setEnabled(enabled);
     this.#cancellationEffects.setEnabled(enabled);
     this.#magicArrowEffects.setEnabled(enabled);
+    this.#divineShockEffects.setEnabled(enabled);
+    this.#flashEffects.setEnabled(enabled);
+    this.#recoveryEffects.setEnabled(enabled);
+    this.#divineJudgementEffects.setEnabled(enabled);
     if (!enabled) this.clear();
   }
 
@@ -304,6 +324,10 @@ export class ClassicFoemaSkillEffects {
     this.#manaControlEffects.update(delta);
     this.#cancellationEffects.update(delta);
     this.#magicArrowEffects.update(delta);
+    this.#divineShockEffects.update(delta);
+    this.#flashEffects.update(delta);
+    this.#recoveryEffects.update(delta);
+    this.#divineJudgementEffects.update(delta);
 
     // Existing independent children advance before their parent controllers
     // emit this frame, so a newly emitted classic billboard starts at t=0.
@@ -349,6 +373,19 @@ export class ClassicFoemaSkillEffects {
       case 32:
         this.playFireAttack(worldPosition);
         return true;
+      case 26:
+        this.#flashEffects.play(worldPosition);
+        return true;
+      case 25:
+        this.#recoveryEffects.playCure(worldPosition);
+        return true;
+      case 29:
+      case 27:
+        this.#recoveryEffects.play(worldPosition);
+        return true;
+      case 30:
+        this.#divineJudgementEffects.play(worldPosition);
+        return true;
       case 33:
         this.playLightningStrike(worldPosition);
         return true;
@@ -370,6 +407,11 @@ export class ClassicFoemaSkillEffects {
       case 46:
         this.#manaControlEffects.play(worldPosition);
         return true;
+      case 213:
+      case 216:
+        // Master indices do not enter TMHuman's <96 visual dispatcher.
+        // Their affects (6/42) are state-only in CheckAffect.
+        return true;
       default:
         return false;
     }
@@ -385,6 +427,9 @@ export class ClassicFoemaSkillEffects {
     switch (classicIndex) {
       case 24:
         this.#magicArrowEffects.play(casterFeet, targetFeet);
+        return true;
+      case 28:
+        this.#divineShockEffects.play(casterFeet, targetFeet);
         return true;
       case 34:
         this.#iceSpearEffects.play(casterFeet, targetFeet);
@@ -589,6 +634,10 @@ export class ClassicFoemaSkillEffects {
     this.#manaControlEffects.clear();
     this.#cancellationEffects.clear();
     this.#magicArrowEffects.clear();
+    this.#divineShockEffects.clear();
+    this.#flashEffects.clear();
+    this.#recoveryEffects.clear();
+    this.#divineJudgementEffects.clear();
   }
 
   /** Terminal cleanup; clear() intentionally leaves every bounded pool reusable. */
@@ -606,6 +655,10 @@ export class ClassicFoemaSkillEffects {
     this.#manaControlEffects.dispose();
     this.#cancellationEffects.dispose();
     this.#magicArrowEffects.dispose();
+    this.#divineShockEffects.dispose();
+    this.#flashEffects.dispose();
+    this.#recoveryEffects.dispose();
+    this.#divineJudgementEffects.dispose();
     this.#owner.remove(this.object);
 
     for (const visual of this.#firePool) visual.shade.material.dispose();

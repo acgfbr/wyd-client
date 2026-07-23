@@ -4,9 +4,10 @@ import { parseMsa } from "../../formats/classic/Msa";
 import type { ClassicWeaponEffectSegmentSample } from "../../game/player/ClassicPlayerAvatar";
 import type { ClassicSkinnedAfterimage } from "../characters/ClassicSkinnedAfterimage";
 import { ClassicDdsTextureLoader } from "../textures/ClassicDdsTextureLoader";
+import { ClassicSlowSlashEffects } from "./ClassicBeastMasterWeakenEffects";
 
-export type ClassicTransKnightAttackIndex = 0 | 1 | 2 | 4 | 6 | 7 | 8 | 10 | 12 | 17 | 18 | 19 | 20 | 21 | 23;
-export type ClassicTransKnightBuffIndex = 3 | 5 | 11 | 13;
+export type ClassicTransKnightAttackIndex = 0 | 1 | 2 | 4 | 6 | 7 | 8 | 10 | 12 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23;
+export type ClassicTransKnightBuffIndex = 3 | 5 | 11 | 13 | 200;
 export type ClassicTransKnightSkillIndex =
   | ClassicTransKnightAttackIndex
   | ClassicTransKnightBuffIndex;
@@ -21,6 +22,9 @@ const CRITICAL_ARMOR_POOL_LIMIT = 16;
 const SPARK_POOL_LIMIT = 16;
 const DESTINY_POOL_LIMIT = 32;
 const FLAMING_SWORD_EMITTER_LIMIT = 8;
+const BASH_POOL_LIMIT = 8;
+const BASH_EXPLOSION_POOL_LIMIT = 8;
+const BASH_FIRE_EMITTER_POOL_LIMIT = 128;
 const BILLBOARD_VISIBLE_FRACTION = 0.05;
 
 const DUST_LIFETIMES_SECONDS = [1.5, 1.9, 2.3, 2.7, 3.1, 3.5, 3.9, 4.3, 4.7, 5.1] as const;
@@ -40,7 +44,7 @@ const FREEZE_PARTICLE_INTERVAL_SECONDS = 0.1;
 const JUDGEMENT_LIFETIME_SECONDS = 1.5;
 const JUDGEMENT_RING_KILL_SECONDS = 0.3;
 
-type EffectTextureIndex = 0 | 2 | 7 | 8 | 11 | 19 | 54 | 55 | 56 | 60 | 91 | 122 | 128 | 416;
+type EffectTextureIndex = 0 | 2 | 7 | 8 | 11 | 19 | 33 | 54 | 55 | 56 | 60 | 91 | 122 | 128 | 416;
 type BillboardMotion = "static" | "rise" | "rise-sine" | "fall-orbit";
 
 interface ClassicTransKnightResources {
@@ -64,6 +68,7 @@ interface ClassicTransKnightResources {
   readonly criticalArmorTexture: THREE.Texture;
   readonly destinyModelTexture: THREE.Texture;
   readonly destinyImpactTexture: THREE.Texture;
+  readonly fireTexture: THREE.Texture;
   readonly destinyBeamTexture: THREE.Texture;
   readonly flamingSwordTexture: THREE.Texture;
   readonly doubleSwingTexture: THREE.Texture;
@@ -211,6 +216,32 @@ interface FlamingSwordEmitter {
   sample: ((out: ClassicWeaponEffectSegmentSample[]) => number) | null;
 }
 
+interface BashVisual {
+  readonly position: THREE.Vector3;
+  active: boolean;
+  elapsed: number;
+  nextEmission: number;
+  serial: number;
+  onPulse: (() => void) | null;
+  onExplosion: (() => void) | null;
+}
+
+interface BashExplosionVisual {
+  readonly position: THREE.Vector3;
+  active: boolean;
+  elapsed: number;
+  nextEmission: number;
+  serial: number;
+}
+
+interface BashFireEmitter {
+  readonly position: THREE.Vector3;
+  active: boolean;
+  elapsed: number;
+  nextEmission: number;
+  serial: number;
+}
+
 interface FanaticismVisual {
   readonly afterimage: ClassicSkinnedAfterimage;
   elapsed: number;
@@ -262,7 +293,7 @@ interface GroundOptions {
 
 /**
  * Bounded Three.js port of the original TransKnight presentation for records
- * #0/#1/#2/#3/#4/#5/#6/#7/#8/#10/#11/#12/#13/#17/#18/#19/#20/#21/#23.
+ * #0/#1/#2/#3/#4/#5/#6/#7/#8/#10/#11/#12/#13/#16/#17/#18/#19/#20/#21/#23.
  *
  * Public positions are actor or target feet in Three.js world space. The
  * retail +0.5/+1.0 attachment offsets are applied internally. Gameplay,
@@ -289,8 +320,12 @@ export class ClassicTransKnightSkillEffects {
   readonly #sparkPool: SparkVisual[] = [];
   readonly #destinyPool: DestinyVisual[] = [];
   readonly #flamingSwordEmitters: FlamingSwordEmitter[] = [];
+  readonly #bashPool: BashVisual[] = [];
+  readonly #bashExplosionPool: BashExplosionVisual[] = [];
+  readonly #bashFireEmitterPool: BashFireEmitter[] = [];
   readonly #fanaticismVisuals: FanaticismVisual[] = [];
   readonly #possessedAura: THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>;
+  readonly #slowSlash: ClassicSlowSlashEffects;
   #resources: ClassicTransKnightResources | null = null;
   #preload: Promise<void> | null = null;
   #serial = 0;
@@ -311,6 +346,7 @@ export class ClassicTransKnightSkillEffects {
     this.#possessedAura.visible = false;
     this.#possessedAura.renderOrder = 8;
     this.object.add(this.#possessedAura);
+    this.#slowSlash = new ClassicSlowSlashEffects(this.object);
     scene.add(this.object);
   }
 
@@ -319,8 +355,11 @@ export class ClassicTransKnightSkillEffects {
     if (this.#disposed || this.#resources) return;
     if (this.#preload) return this.#preload;
 
-    const job = this.loadClassicResources(assets)
-      .then((resources) => {
+    const job = Promise.all([
+      this.loadClassicResources(assets),
+      this.#slowSlash.prepareClassic(assets),
+    ])
+      .then(([resources]) => {
         if (this.#disposed) {
           disposeClassicResources(resources);
           return;
@@ -351,6 +390,7 @@ export class ClassicTransKnightSkillEffects {
     if (this.#disposed || this.#enabled === enabled) return;
     this.#enabled = enabled;
     this.object.visible = enabled;
+    this.#slowSlash.setEnabled(enabled);
     if (!enabled) this.clear();
   }
 
@@ -359,6 +399,7 @@ export class ClassicTransKnightSkillEffects {
     const delta = Number.isFinite(deltaSeconds) ? Math.max(0, deltaSeconds) : 0;
     if (delta === 0) return;
     this.#clockSeconds += delta;
+    this.#slowSlash.update(delta);
 
     // Independent child billboards advance before controllers emit this frame.
     this.updateBillboards(delta);
@@ -404,6 +445,9 @@ export class ClassicTransKnightSkillEffects {
       emitter.elapsed += delta;
       this.updateFlamingSwordEmitter(emitter);
     }
+    this.updateBashVisuals(delta);
+    this.updateBashExplosions(delta);
+    this.updateBashFireEmitters(delta);
     this.updateFanaticismVisuals(delta);
 
     // TMSkillFreezeBlade owns one function-static emission timestamp. Four
@@ -460,6 +504,11 @@ export class ClassicTransKnightSkillEffects {
       case 12:
         this.playDoubleSwing(casterFeet, targetFeet, 1);
         return true;
+      case 16:
+        // TMHuman creates type-0 TMSkillSlowSlash after the server-side chase
+        // has placed the actor on the target cell.
+        this.#slowSlash.play(casterFeet, targetFeet, followTarget, 0);
+        return true;
       case 17:
         // Requires the live weapon matrix and is dispatched explicitly by
         // GameApp through playFlamingSword.
@@ -472,6 +521,9 @@ export class ClassicTransKnightSkillEffects {
         return true;
       case 21:
         this.playPoisonStab(targetFeet);
+        return true;
+      case 22:
+        this.playBash(targetFeet);
         return true;
       case 23:
         this.playIceStorm(targetFeet);
@@ -499,6 +551,11 @@ export class ClassicTransKnightSkillEffects {
         return true;
       case 13:
         this.playPossessedCast(ownerFeet, context);
+        return true;
+      case 200:
+        // Master skill #200 never enters TMHuman's visual event branch.
+        // Affect 6 only toggles m_bShield2; the authoritative mitigation
+        // formula is intentionally reserved for the server.
         return true;
       default:
         return false;
@@ -925,6 +982,27 @@ export class ClassicTransKnightSkillEffects {
     this.playJudgement(targetFeet);
   }
 
+  /**
+   * #22 Exterminar: bounded port of TMSkillBash(type 1), followed by its
+   * TMSkillExplosion2(type 0) destructor effect.
+   */
+  playBash(
+    targetFeet: THREE.Vector3,
+    onPulse?: () => void,
+    onExplosion?: () => void,
+  ): void {
+    if (!this.canPlayAt(targetFeet)) return;
+    const visual = this.acquireBashVisual();
+    visual.active = true;
+    visual.elapsed = 0;
+    visual.nextEmission = 0;
+    visual.serial = ++this.#serial;
+    visual.onPulse = onPulse ?? null;
+    visual.onExplosion = onExplosion ?? null;
+    visual.position.copy(targetFeet);
+    visual.position.y += 1;
+  }
+
   clear(): void {
     for (const visual of this.#billboardPool) deactivateBillboard(visual);
     for (const visual of this.#groundPool) deactivateGround(visual);
@@ -936,7 +1014,11 @@ export class ClassicTransKnightSkillEffects {
     for (const visual of this.#sparkPool) deactivateSpark(visual);
     for (const visual of this.#destinyPool) deactivateDestiny(visual);
     for (const emitter of this.#flamingSwordEmitters) deactivateFlamingSwordEmitter(emitter);
+    for (const visual of this.#bashPool) deactivateBash(visual);
+    for (const visual of this.#bashExplosionPool) deactivateTimedEmitter(visual);
+    for (const visual of this.#bashFireEmitterPool) deactivateTimedEmitter(visual);
     this.clearFanaticismVisuals();
+    this.#slowSlash.clear();
     this.#possessedAura.visible = false;
     this.#lastFreezeParticleAt = Number.NEGATIVE_INFINITY;
   }
@@ -945,6 +1027,7 @@ export class ClassicTransKnightSkillEffects {
     if (this.#disposed) return;
     this.#disposed = true;
     this.clear();
+    this.#slowSlash.dispose();
     this.#owner.remove(this.object);
 
     for (const visual of this.#billboardPool) visual.sprite.material.dispose();
@@ -985,6 +1068,9 @@ export class ClassicTransKnightSkillEffects {
     this.#sparkPool.length = 0;
     this.#destinyPool.length = 0;
     this.#flamingSwordEmitters.length = 0;
+    this.#bashPool.length = 0;
+    this.#bashExplosionPool.length = 0;
+    this.#bashFireEmitterPool.length = 0;
     this.#planeGeometry.dispose();
     this.#fallbackGlow.dispose();
     this.#fallbackDoubleSwingGeometry.dispose();
@@ -1313,6 +1399,206 @@ export class ClassicTransKnightSkillEffects {
   private clearFanaticismVisuals(): void {
     for (const visual of this.#fanaticismVisuals) visual.afterimage.dispose();
     this.#fanaticismVisuals.length = 0;
+  }
+
+  private acquireBashVisual(): BashVisual {
+    const free = this.#bashPool.find((visual) => !visual.active);
+    if (free) return free;
+    if (this.#bashPool.length < BASH_POOL_LIMIT) {
+      const visual: BashVisual = {
+        position: new THREE.Vector3(),
+        active: false,
+        elapsed: 0,
+        nextEmission: 0,
+        serial: 0,
+        onPulse: null,
+        onExplosion: null,
+      };
+      this.#bashPool.push(visual);
+      return visual;
+    }
+    const oldest = oldestBySerial(this.#bashPool);
+    deactivateBash(oldest);
+    return oldest;
+  }
+
+  private acquireBashExplosion(): BashExplosionVisual {
+    const free = this.#bashExplosionPool.find((visual) => !visual.active);
+    if (free) return free;
+    if (this.#bashExplosionPool.length < BASH_EXPLOSION_POOL_LIMIT) {
+      const visual: BashExplosionVisual = {
+        position: new THREE.Vector3(),
+        active: false,
+        elapsed: 0,
+        nextEmission: 0,
+        serial: 0,
+      };
+      this.#bashExplosionPool.push(visual);
+      return visual;
+    }
+    const oldest = oldestBySerial(this.#bashExplosionPool);
+    deactivateTimedEmitter(oldest);
+    return oldest;
+  }
+
+  private acquireBashFireEmitter(): BashFireEmitter {
+    const free = this.#bashFireEmitterPool.find((visual) => !visual.active);
+    if (free) return free;
+    if (this.#bashFireEmitterPool.length < BASH_FIRE_EMITTER_POOL_LIMIT) {
+      const visual: BashFireEmitter = {
+        position: new THREE.Vector3(),
+        active: false,
+        elapsed: 0,
+        nextEmission: 0.01,
+        serial: 0,
+      };
+      this.#bashFireEmitterPool.push(visual);
+      return visual;
+    }
+    const oldest = oldestBySerial(this.#bashFireEmitterPool);
+    deactivateTimedEmitter(oldest);
+    return oldest;
+  }
+
+  private updateBashVisuals(deltaSeconds: number): void {
+    for (const visual of this.#bashPool) {
+      if (!visual.active) continue;
+      visual.elapsed += deltaSeconds;
+      const emissionEnd = Math.min(visual.elapsed, 0.7);
+      while (visual.nextEmission <= emissionEnd) {
+        this.spawnBashSpeedUp(visual);
+        visual.nextEmission += 0.25;
+      }
+      if (visual.elapsed < 0.7) continue;
+
+      const explosion = this.acquireBashExplosion();
+      explosion.active = true;
+      explosion.elapsed = 0;
+      explosion.nextEmission = 0;
+      explosion.serial = ++this.#serial;
+      explosion.position.copy(visual.position);
+      const shadePosition = visual.position.clone();
+      shadePosition.y -= 0.995;
+      this.spawnGround({
+        position: shadePosition,
+        textureIndex: 7,
+        lifetime: 1.8,
+        baseScale: 4,
+        color: 0x77775511,
+      });
+      visual.onExplosion?.();
+      deactivateBash(visual);
+    }
+  }
+
+  private spawnBashSpeedUp(visual: BashVisual): void {
+    const progress = Math.min(1, visual.elapsed / 0.7);
+    const serial = ++this.#randomSerial;
+    const position = visual.position.clone();
+    position.x += (classicRandomStep(serial, 0, 3) - progress * 10) * 0.2;
+    position.z -= (classicRandomStep(serial, 1, 3) - progress * 10) * 0.2;
+
+    const glowPosition = position.clone();
+    glowPosition.y -= 0.6;
+    this.spawnBillboard({
+      position: glowPosition,
+      textureIndex: 8,
+      lifetime: 1,
+      baseScaleX: 1.51,
+      scaleVelocityX: 3,
+      color: 0xffffffff,
+      fade: false,
+    });
+    const firePosition = position.clone();
+    firePosition.y -= 0.5;
+    this.spawnBillboard({
+      position: firePosition,
+      textureIndex: 33,
+      lifetime: 1,
+      baseScaleX: 3,
+      color: 0xffffffff,
+      fade: false,
+    });
+    const shadePosition = position.clone();
+    shadePosition.y -= 0.995;
+    this.spawnGround({
+      position: shadePosition,
+      textureIndex: 7,
+      lifetime: 1.5,
+      baseScale: 4,
+      color: 0x70704000,
+    });
+    visual.onPulse?.();
+  }
+
+  private updateBashExplosions(deltaSeconds: number): void {
+    const directions = [
+      [1, 0],
+      [1, 1],
+      [0, 1],
+      [-1, 1],
+      [-1, 0],
+      [-1, -1],
+      [0, -1],
+      [1, -1],
+    ] as const;
+    for (const explosion of this.#bashExplosionPool) {
+      if (!explosion.active) continue;
+      explosion.elapsed += deltaSeconds;
+      const emissionEnd = Math.min(explosion.elapsed, 0.8);
+      while (explosion.nextEmission <= emissionEnd) {
+        const progress = explosion.nextEmission / 0.8;
+        for (const [directionX, directionZ] of directions) {
+          const emitter = this.acquireBashFireEmitter();
+          emitter.active = true;
+          emitter.elapsed = 0;
+          emitter.nextEmission = 0.01;
+          emitter.serial = ++this.#serial;
+          emitter.position.copy(explosion.position);
+          emitter.position.x += directionX * progress * 0.5;
+          emitter.position.z -= directionZ * progress * 0.5;
+          emitter.position.y -= 1;
+          const shadePosition = emitter.position.clone();
+          shadePosition.y += 0.005;
+          this.spawnGround({
+            position: shadePosition,
+            textureIndex: 7,
+            lifetime: 1.8,
+            baseScale: 2,
+            color: 0x22331100,
+          });
+        }
+        explosion.nextEmission += 0.25;
+      }
+      if (explosion.elapsed >= 0.8) deactivateTimedEmitter(explosion);
+    }
+  }
+
+  private updateBashFireEmitters(deltaSeconds: number): void {
+    for (const emitter of this.#bashFireEmitterPool) {
+      if (!emitter.active) continue;
+      emitter.elapsed += deltaSeconds;
+      const emissionEnd = Math.min(emitter.elapsed, 0.8);
+      while (emitter.nextEmission <= emissionEnd) {
+        const serial = ++this.#randomSerial;
+        const offset = classicRandomStep(serial, 0, 5) * 0.01;
+        const position = emitter.position.clone();
+        position.x += offset;
+        position.z -= offset;
+        this.spawnBillboard({
+          position,
+          textureIndex: 33,
+          lifetime: 1,
+          baseScaleX: 0.4,
+          scaleVelocityX: 1,
+          color: 0xffffffff,
+          motion: "rise",
+          motionDistance: 4,
+        });
+        emitter.nextEmission += 0.18;
+      }
+      if (emitter.elapsed >= 0.8) deactivateTimedEmitter(emitter);
+    }
   }
 
   private spawnSamaritanHaste(ownerFeet: THREE.Vector3): void {
@@ -1949,6 +2235,8 @@ export class ClassicTransKnightSkillEffects {
         return resources.flamingSwordTexture;
       case 19:
         return resources.iceTexture;
+      case 33:
+        return resources.fireTexture;
       case 54:
         return resources.holyColumnTexture;
       case 55:
@@ -2017,6 +2305,7 @@ export class ClassicTransKnightSkillEffects {
         this.loadEffectTexture(assets, 8),
         this.loadEffectTexture(assets, 11),
         this.loadEffectTexture(assets, 19),
+        this.loadEffectTexture(assets, 33),
         this.loadEffectTexture(assets, 54),
         this.loadEffectTexture(assets, 54),
         this.loadEffectTexture(assets, 55),
@@ -2049,6 +2338,7 @@ export class ClassicTransKnightSkillEffects {
         destinyImpactTexture,
         flamingSwordTexture,
         iceTexture,
+        fireTexture,
         holyColumnTexture,
         startTexture,
         holyRingTexture,
@@ -2063,6 +2353,7 @@ export class ClassicTransKnightSkillEffects {
         judgementModelTexture,
         destinyModelTexture,
       ] = loadedTextures as [
+        THREE.Texture,
         THREE.Texture,
         THREE.Texture,
         THREE.Texture,
@@ -2103,6 +2394,8 @@ export class ClassicTransKnightSkillEffects {
       configureClassicGroundPlaneUvs(slopeTexture);
       configureClassicBillboardUvs(destinyImpactTexture);
       configureClassicBillboardUvs(flamingSwordTexture);
+      // Texture 33 deliberately samples the full DDS frame in
+      // TMEffectBillBoard; do not apply the usual 2% inset.
       configureClassicBillboardUvs(holyColumnTexture);
       configureClassicBillboardUvs(holyRingTexture);
       configureClassicBillboardUvs(magicParticleTexture);
@@ -2126,6 +2419,7 @@ export class ClassicTransKnightSkillEffects {
         slopeTexture,
         shadeTexture,
         iceTexture,
+        fireTexture,
         holyColumnTexture,
         startTexture,
         holyRingTexture,
@@ -2334,6 +2628,20 @@ function deactivateFlamingSwordEmitter(emitter: FlamingSwordEmitter): void {
   emitter.sample = null;
 }
 
+function deactivateTimedEmitter(
+  emitter: { active: boolean; elapsed: number; nextEmission: number },
+): void {
+  emitter.active = false;
+  emitter.elapsed = 0;
+  emitter.nextEmission = 0;
+}
+
+function deactivateBash(visual: BashVisual): void {
+  deactivateTimedEmitter(visual);
+  visual.onPulse = null;
+  visual.onExplosion = null;
+}
+
 function oldestBySerial<T extends { serial: number }>(visuals: readonly T[]): T {
   let oldest = visuals[0]!;
   for (const visual of visuals) {
@@ -2390,6 +2698,7 @@ function disposeClassicResources(resources: ClassicTransKnightResources): void {
   resources.slopeTexture.dispose();
   resources.shadeTexture.dispose();
   resources.iceTexture.dispose();
+  resources.fireTexture.dispose();
   resources.holyColumnTexture.dispose();
   resources.startTexture.dispose();
   resources.holyRingTexture.dispose();

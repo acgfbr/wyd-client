@@ -108,9 +108,13 @@ export class ClassicBeastMasterSkillEffects {
   }
 
   playBuffCast(classicIndex: number, ownerFeet: THREE.Vector3): boolean {
-    if (classicIndex !== 53 && classicIndex !== 54) return false;
-    this.#buffEffects.playCast(classicIndex, ownerFeet);
-    return true;
+    if (classicIndex === 53 || classicIndex === 54) {
+      this.#buffEffects.playCast(classicIndex, ownerFeet);
+      return true;
+    }
+    // Master indices never enter TMHuman's classic VFX event dispatcher.
+    // These are server-owned state/tick buffs, not missing particles.
+    return classicIndex === 224 || classicIndex === 225 || classicIndex === 235;
   }
 
   syncPersistentBuffs(context: BeastMasterBuffVisualContext | null): void {

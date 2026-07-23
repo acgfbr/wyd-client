@@ -1,6 +1,6 @@
 # Matriz automatica de cobertura do cliente classico
 
-Gerado por `bun run audit:coverage` em 2026-07-23T16:04:48.821Z. Este arquivo e
+Gerado por `bun run audit:coverage` em 2026-07-23T17:46:19.607Z. Este arquivo e
 derivado dos artefatos importados e do runtime; nao deve ser editado
 manualmente. A analise e as decisoes ficam em `auditoria-threejs-cobertura.md`.
 
@@ -55,7 +55,7 @@ Nenhum arquivo referenciado pelo manifesto esta ausente.
 | Mapeamentos de icone | 6500 |
 | Atlas de icones | 14 |
 | Registros de skill | 248 |
-| Arquivos TS dedicados a efeitos | 28 |
+| Arquivos TS dedicados a efeitos | 32 |
 | Arquivos de audio importados | 336 |
 | Entradas SFX no catalogo de audio | 333 |
 | Musicas no catalogo de audio | 13 |
@@ -81,16 +81,18 @@ Templates comerciais nao resolvidos: 1.
 
 ## Skills: import binario x promocao no runtime
 
-Uma skill promovida possui definicao jogavel em `CLASS_SKILL_LOADOUTS`. Isso
-nao prova por si so fidelidade visual; a homologacao do renderer continua
-manual e rastreada em `PENDENCIAS.md`.
+Uma skill promovida possui definicao jogavel em `CLASS_SKILL_LOADOUTS`.
+Registros marcados como passivos pelo proprio `SkillData.bin` ficam no
+catalogo e nunca devem ocupar a barra. Isso nao prova por si so fidelidade
+visual; a homologacao do renderer continua manual e rastreada em
+`PENDENCIAS.md`.
 
-| Classe | Importadas | Runtime | Indices ativos | Ainda nao promovidas |
-| --- | ---: | ---: | --- | ---: |
-| TransKnight | 36 (24 normais + 12 master) | 19 | 0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 17, 18, 19, 20, 21, 23 | 17 |
-| Foema | 36 (24 normais + 12 master) | 16 | 24, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 43, 44, 45, 46, 47 | 20 |
-| BeastMaster | 36 (24 normais + 12 master) | 16 | 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63 | 20 |
-| Huntress | 36 (24 normais + 12 master) | 14 | 72, 73, 75, 76, 77, 79, 80, 81, 85, 86, 87, 88, 89, 95 | 22 |
+| Classe | Importadas | Runtime | Indices ativos | Passivas fora da barra | Casts/buffs pendentes |
+| --- | ---: | ---: | --- | ---: | ---: |
+| TransKnight | 36 (24 normais + 12 master) | 22 | 0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 16, 17, 18, 19, 20, 21, 22, 23, 200 | 14 | 0 |
+| Foema | 36 (24 normais + 12 master) | 24 | 24, 25, 26, 27, 28, 29, 30, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 43, 44, 45, 46, 47, 213, 216 | 8 | 4 |
+| BeastMaster | 36 (24 normais + 12 master) | 19 | 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 224, 225, 235 | 10 | 7 |
+| Huntress | 36 (24 normais + 12 master) | 14 | 72, 73, 75, 76, 77, 79, 80, 81, 85, 86, 87, 88, 89, 95 | 17 | 5 |
 
 ## Lacunas objetivas
 
