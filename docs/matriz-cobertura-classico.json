@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-23T03:42:56.924Z",
+  "generatedAt": "2026-07-23T12:31:47.683Z",
   "command": "bun run audit:coverage",
   "source": "WYD classic",
   "referencedFiles": {
@@ -25,7 +25,7 @@
     "templates": 377,
     "generators": 3937,
     "itemRecords": 369,
-    "visualFamilies": 46,
+    "visualFamilies": 47,
     "skinnedObjects": 49,
     "unresolvedTemplates": [
       "Tower_de_Thor"
@@ -230,7 +230,7 @@
         "imported": 36,
         "regular": 24,
         "master": 12,
-        "runtime": 12,
+        "runtime": 13,
         "runtimeIndices": [
           72,
           75,
@@ -241,6 +241,7 @@
           81,
           85,
           86,
+          87,
           88,
           89,
           95
@@ -252,7 +253,6 @@
           82,
           83,
           84,
-          87,
           90,
           91,
           92,
@@ -376,14 +376,14 @@
     {
       "label": "Monstros/NPCs",
       "directory": "monsters",
-      "files": 1334,
-      "bytes": 38901163,
+      "files": 1340,
+      "bytes": 38973074,
       "extensions": {
-        ".ani": 554,
-        ".bon": 46,
-        ".dds": 335,
+        ".ani": 555,
+        ".bon": 47,
+        ".dds": 337,
         ".json": 1,
-        ".msh": 398
+        ".msh": 400
       }
     },
     {

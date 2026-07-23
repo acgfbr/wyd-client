@@ -47,6 +47,7 @@ export const HUNTRESS_SKILLS: readonly HuntressSkill[] = [
   { slot: 10, classicIndex: 77, name: "Meditação", shortName: "Meditação", mana: 90, cooldownSeconds: 6, range: 0, kind: "buff", target: "self", maxTargets: 1, affectType: 21, affectValue: 10, affectTimeSeconds: 12, runtimeDurationSeconds: 180, damageCoefficient: 0, radius: 0, color: 0x5500ff },
   { slot: 11, classicIndex: 85, name: "Escudo Dourado", shortName: "Escudo", mana: 120, cooldownSeconds: 5, range: 0, kind: "buff", target: "self", maxTargets: 1, affectType: 31, affectValue: 150, affectTimeSeconds: 30, runtimeDurationSeconds: 180, damageCoefficient: 0, radius: 0, color: 0xffff55 },
   { slot: 12, classicIndex: 89, name: "Evasão Aprimorada", shortName: "Evasão", mana: 24, cooldownSeconds: 6, range: 0, kind: "buff", target: "self", maxTargets: 1, affectType: 26, affectValue: 1, affectTimeSeconds: 12, runtimeDurationSeconds: 180, damageCoefficient: 0, radius: 0, color: 0x4d4d4d },
+  { slot: 13, classicIndex: 87, name: "Troca de Espírito", shortName: "Espírito", mana: 90, cooldownSeconds: 10, range: 0, kind: "buff", target: "self", maxTargets: 1, affectType: 38, affectValue: 0, affectTimeSeconds: 14, runtimeDurationSeconds: 180, damageCoefficient: 0, radius: 0, color: 0xff7777 },
 ] as const;
 
 export interface ActiveHuntressBuff {

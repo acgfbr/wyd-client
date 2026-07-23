@@ -1,7 +1,11 @@
 import * as THREE from "three";
 import type { ClassicAssetSource } from "../../assets/ClassicAssetSource";
+import { parseAni, type AniAnimation } from "../../formats/classic/Ani";
+import { parseBon, type BonSkeleton } from "../../formats/classic/Bon";
+import { parseMsh, type MshModel } from "../../formats/classic/Msh";
 import { parseMsa } from "../../formats/classic/Msa";
 import type { ClassicSkinnedAfterimage } from "../characters/ClassicSkinnedAfterimage";
+import { ClassicSkinnedModel } from "../characters/ClassicSkinnedModel";
 import { ClassicDdsTextureLoader } from "../textures/ClassicDdsTextureLoader";
 
 export type ClassicHuntressAttackBurstIndex = 72 | 80;
@@ -31,6 +35,26 @@ const IMMUNITY_PERSISTENT_OPACITY = 0.18;
 const MEDITATION_POOL_LIMIT = 12;
 const MEDITATION_LAYER_COUNT = 5;
 const MEDITATION_COLOR = 0x5500ff;
+const SPIRIT_CHANGE_POOL_LIMIT = 2;
+const SPIRIT_CHANGE_PARENT_LIFETIME_SECONDS = 2;
+const SPIRIT_CHANGE_TOTAL_LIFETIME_SECONDS = 2.9;
+const SPIRIT_CHANGE_WING_DELAYS_SECONDS = [0, 0.4, 0.8] as const;
+const SPIRIT_CHANGE_WING_LIFETIMES_SECONDS = [2, 1.8, 1.6] as const;
+const SPIRIT_CHANGE_WING_COLORS = [0.2, 0.6, 1] as const;
+const SPIRIT_CHANGE_PARTICLE_COUNT = 20;
+const SPIRIT_CHANGE_PARTICLE_DELAY_SECONDS = 1;
+const SPIRIT_CHANGE_PARTICLE_LIFETIME_SECONDS = 2.4;
+const SPIRIT_ROOT = "monsters";
+const SPIRIT_SKELETON_FILE = `${SPIRIT_ROOT}/skeletons/wg01.bon`;
+const SPIRIT_ANIMATION_FILE = `${SPIRIT_ROOT}/animations/wg010001.ani`;
+const SPIRIT_MESH_FILES = [
+  `${SPIRIT_ROOT}/meshes/wg010101.msh`,
+  `${SPIRIT_ROOT}/meshes/wg010201.msh`,
+] as const;
+const SPIRIT_TEXTURE_FILES = [
+  `${SPIRIT_ROOT}/textures/wg010101.dds`,
+  `${SPIRIT_ROOT}/textures/wg010201.dds`,
+] as const;
 const SOUL_LINK_CAST_POOL_LIMIT = 12;
 const SOUL_LINK_CAST_LIFETIMES_SECONDS = [0.8, 0.85, 0.9, 0.95, 1, 1.05] as const;
 const SOUL_LINK_ROTATION_SECONDS = 2;
@@ -85,6 +109,11 @@ interface ClassicResources {
   readonly attackTextures: Readonly<Record<ClassicHuntressAttackBurstIndex, THREE.Texture>>;
   readonly particleTexture: THREE.Texture;
   readonly meditationTexture: THREE.Texture;
+  readonly spiritSkeleton: BonSkeleton;
+  readonly spiritAnimation: AniAnimation;
+  readonly spiritMeshes: readonly [MshModel, MshModel];
+  readonly spiritTextures: readonly [THREE.Texture, THREE.Texture];
+  readonly spiritParticleTexture: THREE.Texture;
   readonly immunityTexture: THREE.Texture;
   readonly immunityGeometry: THREE.BufferGeometry;
   readonly soulLinkTexture: THREE.Texture;
@@ -135,6 +164,26 @@ interface MeditationVisual {
   active: boolean;
   elapsed: number;
   serial: number;
+}
+
+interface SpiritWingVisual {
+  readonly model: ClassicSkinnedModel;
+  readonly materials: readonly [THREE.MeshLambertMaterial, THREE.MeshLambertMaterial];
+}
+
+interface SpiritChangeVisual {
+  readonly root: THREE.Group;
+  readonly wings: readonly [SpiritWingVisual, SpiritWingVisual, SpiritWingVisual];
+  readonly shade: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
+  readonly particleRoot: THREE.Group;
+  readonly particles: readonly THREE.Sprite[];
+  readonly particleMaterial: THREE.SpriteMaterial;
+  readonly particleDirections: readonly THREE.Vector3[];
+  readonly shadeOrigin: THREE.Vector3;
+  active: boolean;
+  elapsed: number;
+  serial: number;
+  castYaw: number;
 }
 
 interface SoulLinkCastVisual {
@@ -201,7 +250,7 @@ interface ShadowBladeParticleVisual {
 }
 
 /**
- * Exact local presentation for Huntress skills 72/75/76/77/80/81/88/89.
+ * Exact local presentation for Huntress skills 72/75/76/77/80/81/87/88/89.
  *
  * `worldPosition` is the actor/target base position. The original client adds
  * +1.0 to attack billboards. Persistent buffs are anchored to the actor every
@@ -215,6 +264,7 @@ export class ClassicHuntressSkillEffects {
   readonly #enchantIcePool: EnchantIceVisual[] = [];
   readonly #immunityCastPool: ImmunityCastVisual[] = [];
   readonly #meditationPool: MeditationVisual[] = [];
+  readonly #spiritChangePool: SpiritChangeVisual[] = [];
   readonly #soulLinkCastPool: SoulLinkCastVisual[] = [];
   readonly #immunityVisual: ImmunityVisual;
   readonly #soulLinkVisual: SoulLinkVisual;
@@ -232,6 +282,10 @@ export class ClassicHuntressSkillEffects {
   #serial = 0;
   #particleSerial = 0;
   #shadowBladeParticleSerial = 0;
+  readonly #spiritOwnerFeet = new THREE.Vector3();
+  readonly #spiritOwnerAnchor = new THREE.Vector3();
+  #spiritOwnerYaw = 0;
+  #spiritOwnerAvailable = false;
   #enabled = true;
   #disposed = false;
 
@@ -256,6 +310,21 @@ export class ClassicHuntressSkillEffects {
           return;
         }
         this.#resources = resources;
+        if (this.#spiritChangePool.length === 0) {
+          try {
+            for (let index = 0; index < SPIRIT_CHANGE_POOL_LIMIT; index++) {
+              const visual = this.createSpiritChangeVisual(resources, index);
+              this.#spiritChangePool.push(visual);
+              this.object.add(visual.root);
+            }
+          } catch (error) {
+            for (const visual of this.#spiritChangePool) disposeSpiritChange(visual);
+            this.#spiritChangePool.length = 0;
+            this.#resources = null;
+            disposeClassicResources(resources);
+            throw error;
+          }
+        }
         for (const visual of this.#attackPool) this.applyAttackAssets(visual);
         for (const visual of this.#enchantIcePool) this.applyEnchantIceAssets(visual);
         for (const visual of this.#immunityCastPool) this.applyImmunityCastAssets(visual);
@@ -267,7 +336,7 @@ export class ClassicHuntressSkillEffects {
         for (const particle of this.#shadowBladeParticlePool) this.applyShadowBladeParticleAsset(particle);
       })
       .catch((error: unknown) => {
-        console.warn("Efeitos clássicos 72/75/76/77/80/81/88/89 indisponíveis; usando fallback.", error);
+        console.warn("Efeitos clássicos 72/75/76/77/80/81/87/88/89 indisponíveis; usando fallback.", error);
       })
       .finally(() => {
         this.#preload = null;
@@ -307,6 +376,11 @@ export class ClassicHuntressSkillEffects {
       if (!visual.active) continue;
       visual.elapsed += delta;
       this.updateMeditationVisual(visual);
+    }
+    for (const visual of this.#spiritChangePool) {
+      if (!visual.active) continue;
+      visual.elapsed += delta;
+      this.updateSpiritChangeVisual(visual, delta);
     }
     for (const visual of this.#soulLinkCastPool) {
       if (!visual.active) continue;
@@ -385,6 +459,54 @@ export class ClassicHuntressSkillEffects {
     }
     this.applyMeditationAssets(visual);
     this.updateMeditationVisual(visual);
+  }
+
+  /** Updates the live TMHuman owner transform consumed by motion type 10. */
+  syncSpiritChangeOwner(
+    ownerFeet: THREE.Vector3 | null,
+    wingAnchor: THREE.Vector3 | null,
+    ownerYaw: number,
+  ): void {
+    if (
+      ownerFeet === null
+      || wingAnchor === null
+      || !isFiniteVector(ownerFeet)
+      || !isFiniteVector(wingAnchor)
+      || !Number.isFinite(ownerYaw)
+    ) {
+      this.#spiritOwnerAvailable = false;
+      for (const visual of this.#spiritChangePool) deactivateSpiritChange(visual);
+      return;
+    }
+    this.#spiritOwnerAvailable = true;
+    this.#spiritOwnerFeet.copy(ownerFeet);
+    this.#spiritOwnerAnchor.copy(wingAnchor);
+    this.#spiritOwnerYaw = ownerYaw;
+  }
+
+  /** Huntress #87, `TMSkillSpChange(position, 0, owner)`. */
+  playSpiritChangeCast(): boolean {
+    if (
+      this.#disposed
+      || !this.#enabled
+      || !this.#spiritOwnerAvailable
+      || this.#spiritChangePool.length === 0
+    ) return false;
+    const visual = this.acquireSpiritChangeVisual();
+    visual.active = true;
+    visual.elapsed = 0;
+    visual.serial = ++this.#serial;
+    visual.root.visible = true;
+    visual.shade.visible = true;
+    visual.particleRoot.visible = false;
+    visual.particleMaterial.opacity = 0;
+    visual.shadeOrigin.copy(this.#spiritOwnerFeet);
+    visual.shade.position.copy(visual.shadeOrigin);
+    visual.shade.position.y += 0.025;
+    for (const wing of visual.wings) wing.model.object.visible = false;
+    this.seedSpiritParticleDirections(visual);
+    this.updateSpiritChangeVisual(visual, 0);
+    return true;
   }
 
   /** TMHuman.cpp:9276-9294 — the six texture-56 Soul Link cast layers. */
@@ -544,6 +666,7 @@ export class ClassicHuntressSkillEffects {
     for (const visual of this.#enchantIcePool) deactivateEnchantIce(visual);
     for (const visual of this.#immunityCastPool) deactivateImmunityCast(visual);
     for (const visual of this.#meditationPool) deactivateMeditation(visual);
+    for (const visual of this.#spiritChangePool) deactivateSpiritChange(visual);
     for (const visual of this.#soulLinkCastPool) deactivateSoulLinkCast(visual);
     deactivateImmunity(this.#immunityVisual);
     deactivateSoulLink(this.#soulLinkVisual);
@@ -573,6 +696,7 @@ export class ClassicHuntressSkillEffects {
     for (const visual of this.#meditationPool) {
       for (const layer of visual.layers) layer.sprite.material.dispose();
     }
+    for (const visual of this.#spiritChangePool) disposeSpiritChange(visual);
     for (const visual of this.#soulLinkCastPool) {
       for (const billboard of visual.billboards) billboard.material.dispose();
     }
@@ -587,6 +711,7 @@ export class ClassicHuntressSkillEffects {
     this.#enchantIcePool.length = 0;
     this.#immunityCastPool.length = 0;
     this.#meditationPool.length = 0;
+    this.#spiritChangePool.length = 0;
     this.#soulLinkCastPool.length = 0;
     this.#soulParticlePool.length = 0;
     this.#shadowBladeParticlePool.length = 0;
@@ -851,6 +976,225 @@ export class ClassicHuntressSkillEffects {
       layer.sprite.material.opacity = Math.max(0, Math.sin(progress * Math.PI));
     }
     if (!anyVisible) deactivateMeditation(visual);
+  }
+
+  private acquireSpiritChangeVisual(): SpiritChangeVisual {
+    const free = this.#spiritChangePool.find((visual) => !visual.active);
+    if (free) return free;
+    let oldest = this.#spiritChangePool[0]!;
+    for (const visual of this.#spiritChangePool) {
+      if (visual.serial < oldest.serial) oldest = visual;
+    }
+    deactivateSpiritChange(oldest);
+    return oldest;
+  }
+
+  private createSpiritChangeVisual(
+    resources: ClassicResources,
+    poolIndex: number,
+  ): SpiritChangeVisual {
+    const root = new THREE.Group();
+    root.name = `classic-huntress-spirit-change-${poolIndex}`;
+    root.visible = false;
+
+    const wings = SPIRIT_CHANGE_WING_COLORS.map((baseColor, wingIndex) => {
+      const materials = resources.spiritTextures.map((texture, partIndex) => {
+        const color = new THREE.Color(baseColor, baseColor, baseColor);
+        const material = new THREE.MeshLambertMaterial({
+          map: texture,
+          color,
+          emissive: color.clone().multiplyScalar(0.69),
+          transparent: true,
+          opacity: 1,
+          alphaTest: 0,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending,
+          side: THREE.DoubleSide,
+          fog: false,
+          toneMapped: false,
+        });
+        material.name = `spirit-change-wing-${wingIndex}-part-${partIndex + 1}`;
+        material.forceSinglePass = true;
+        return material;
+      }) as unknown as [THREE.MeshLambertMaterial, THREE.MeshLambertMaterial];
+      const model = new ClassicSkinnedModel({
+        skeleton: resources.spiritSkeleton,
+        parts: [
+          { name: "wg010101", model: resources.spiritMeshes[0], material: materials[0] },
+          { name: "wg010201", model: resources.spiritMeshes[1], material: materials[1] },
+        ],
+        clips: [{
+          name: "WING",
+          animation: resources.spiritAnimation,
+          quarterStepMs: SPIRIT_CHANGE_WING_LIFETIMES_SECONDS[wingIndex]! * 15,
+          loop: true,
+        }],
+        initialClip: "WING",
+        mirrorModelZ: true,
+      });
+      model.object.name = `classic-spirit-change-wing-${wingIndex}`;
+      model.object.visible = false;
+      for (const mesh of model.meshes) {
+        mesh.castShadow = false;
+        mesh.receiveShadow = false;
+        mesh.renderOrder = 9 + wingIndex;
+      }
+      root.add(model.object);
+      return { model, materials };
+    }) as unknown as [SpiritWingVisual, SpiritWingVisual, SpiritWingVisual];
+
+    const shade = new THREE.Mesh(
+      this.#planeGeometry,
+      createBrightMaterial(resources.shadeTexture, 0x0000ff),
+    );
+    shade.name = "classic-spirit-change-shade-grid-6-texture-7";
+    shade.rotation.x = -Math.PI / 2;
+    shade.scale.set(12, 12, 1);
+    shade.position.y = 0.025;
+    shade.renderOrder = 5;
+    root.add(shade);
+
+    const particleMaterial = new THREE.SpriteMaterial({
+      map: resources.spiritParticleTexture,
+      color: 0xff7777,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      fog: false,
+      toneMapped: false,
+    });
+    const particleRoot = new THREE.Group();
+    particleRoot.name = "classic-spirit-change-particles-231";
+    particleRoot.visible = false;
+    const particles = Array.from({ length: SPIRIT_CHANGE_PARTICLE_COUNT }, (_, index) => {
+      const sprite = new THREE.Sprite(particleMaterial);
+      const scale = (index % 2) * 0.8 + 0.1;
+      sprite.scale.set(scale, scale, 1);
+      sprite.renderOrder = 11;
+      particleRoot.add(sprite);
+      return sprite;
+    });
+    root.add(particleRoot);
+
+    return {
+      root,
+      wings,
+      shade,
+      particleRoot,
+      particles,
+      particleMaterial,
+      particleDirections: Array.from(
+        { length: SPIRIT_CHANGE_PARTICLE_COUNT },
+        () => new THREE.Vector3(0, 1, 0),
+      ),
+      shadeOrigin: new THREE.Vector3(),
+      active: false,
+      elapsed: 0,
+      serial: 0,
+      castYaw: 0,
+    };
+  }
+
+  private seedSpiritParticleDirections(visual: SpiritChangeVisual): void {
+    visual.castYaw = this.#spiritOwnerYaw;
+    const forward = new THREE.Vector3(
+      Math.cos(visual.castYaw),
+      0,
+      Math.sin(visual.castYaw),
+    ).normalize();
+    const side = new THREE.Vector3(-forward.z, 0, forward.x);
+    const up = new THREE.Vector3(0, 1, 0);
+    for (let index = 0; index < visual.particleDirections.length; index++) {
+      const theta = 0.7 + classicRandomStep(visual.serial, index * 2, 300) * 0.001;
+      const phase = classicRandomStep(visual.serial, index * 2 + 1, 365) / 365 * Math.PI * 2;
+      visual.particleDirections[index]!.copy(forward).multiplyScalar(Math.cos(theta))
+        .addScaledVector(side, Math.sin(theta) * Math.cos(phase))
+        .addScaledVector(up, Math.sin(theta) * Math.sin(phase))
+        .normalize();
+    }
+  }
+
+  private updateSpiritChangeVisual(visual: SpiritChangeVisual, deltaSeconds: number): void {
+    if (visual.elapsed >= SPIRIT_CHANGE_TOTAL_LIFETIME_SECONDS) {
+      deactivateSpiritChange(visual);
+      return;
+    }
+
+    const parentProgress = THREE.MathUtils.clamp(
+      visual.elapsed / SPIRIT_CHANGE_PARENT_LIFETIME_SECONDS,
+      0,
+      1,
+    );
+    const shadeVisible = visual.elapsed < SPIRIT_CHANGE_PARENT_LIFETIME_SECONDS;
+    visual.shade.visible = shadeVisible;
+    if (shadeVisible) {
+      visual.shade.position.copy(visual.shadeOrigin);
+      visual.shade.position.y += 0.025;
+      const fade = parentProgress > 0.7
+        ? 1 - (parentProgress - 0.7) / 0.3
+        : 1;
+      visual.shade.material.color.setRGB(parentProgress, 0, 1 - parentProgress)
+        .multiplyScalar(Math.max(0, fade));
+      visual.shade.material.opacity = Math.max(0, fade);
+    }
+
+    for (let index = 0; index < visual.wings.length; index++) {
+      const wing = visual.wings[index]!;
+      const localElapsed = visual.elapsed - SPIRIT_CHANGE_WING_DELAYS_SECONDS[index]!;
+      const lifetime = SPIRIT_CHANGE_WING_LIFETIMES_SECONDS[index]!;
+      const visible = this.#spiritOwnerAvailable && localElapsed >= 0 && localElapsed < lifetime;
+      wing.model.object.visible = visible;
+      if (!visible) continue;
+      const progress = THREE.MathUtils.clamp(localElapsed / lifetime, 0, 1);
+      const base = SPIRIT_CHANGE_WING_COLORS[index]!;
+      const crossFade = Math.cos(progress * Math.PI / 2)
+        + Math.sin(progress * Math.PI / 2);
+      const motionFade = progress > 0.57
+        ? Math.cos((progress - 0.57) * Math.PI / ((1 - 0.57) * 2))
+        : 1;
+      const intensity = base * crossFade * motionFade;
+      for (const material of wing.materials) {
+        material.opacity = 1;
+        material.color.setRGB(intensity, intensity, intensity);
+        material.emissive.copy(material.color).multiplyScalar(0.69);
+      }
+      wing.model.object.position.copy(this.#spiritOwnerAnchor);
+      wing.model.setClassicTransform({
+        yaw: this.#spiritOwnerYaw,
+        scale: progress > 0.57 ? 1 + progress - 0.57 : 1,
+        mirrorModelZ: true,
+      });
+      wing.model.update(deltaSeconds);
+    }
+
+    const particleElapsed = visual.elapsed - SPIRIT_CHANGE_PARTICLE_DELAY_SECONDS;
+    const particlesVisible = particleElapsed >= 0
+      && particleElapsed < SPIRIT_CHANGE_PARTICLE_LIFETIME_SECONDS;
+    if (particlesVisible && !visual.particleRoot.visible) {
+      visual.particleRoot.position.copy(this.#spiritOwnerFeet);
+      visual.particleRoot.position.y += 2;
+      visual.particleRoot.visible = true;
+    }
+    if (particlesVisible) {
+      const progress = THREE.MathUtils.clamp(
+        particleElapsed / SPIRIT_CHANGE_PARTICLE_LIFETIME_SECONDS,
+        0,
+        1,
+      );
+      const distance = progress < 0.2 ? progress * 10 : 2 + progress * 0.3;
+      for (let index = 0; index < visual.particles.length; index++) {
+        visual.particles[index]!.position.copy(visual.particleDirections[index]!)
+          .multiplyScalar(distance);
+      }
+      const opacity = progress < 0.3
+        ? progress * 3.33
+        : 1 - (progress - 0.3) * 1.428;
+      visual.particleMaterial.opacity = THREE.MathUtils.clamp(opacity, 0, 1);
+    } else {
+      visual.particleRoot.visible = false;
+      visual.particleMaterial.opacity = 0;
+    }
   }
 
   private acquireSoulLinkCastVisual(): SoulLinkCastVisual {
@@ -1218,7 +1562,7 @@ export class ClassicHuntressSkillEffects {
   }
 
   private async loadClassicResources(assets: ClassicAssetSource): Promise<ClassicResources> {
-    const textureIndices = [7, 56, 60, 0, 101] as const;
+    const textureIndices = [7, 56, 60, 0, 101, 231] as const;
     const textureResults = await Promise.allSettled(
       textureIndices.map((index) => this.loadTexture(assets, index)),
     );
@@ -1228,7 +1572,7 @@ export class ClassicHuntressSkillEffects {
     const failure = textureResults.find((result) => result.status === "rejected") as PromiseRejectedResult | undefined;
     if (failure || textures.length !== textureIndices.length) {
       for (const texture of textures) texture.dispose();
-      throw failure?.reason ?? new Error("Texturas de efeito 7/56/60/0/101 ausentes");
+      throw failure?.reason ?? new Error("Texturas de efeito 7/56/60/0/101/231 ausentes");
     }
 
     let immunitySource: Awaited<ReturnType<ClassicAssetSource["loadModel"]>>;
@@ -1274,17 +1618,74 @@ export class ClassicHuntressSkillEffects {
       throw error;
     }
 
-    const [shadeTexture, fatalTexture, felineTexture, particleTexture, meditationTexture] = textures;
+    let spiritSkeleton: BonSkeleton;
+    let spiritAnimation: AniAnimation;
+    let spiritMeshes: readonly [MshModel, MshModel];
+    let spiritTextures: readonly [THREE.Texture, THREE.Texture];
+    try {
+      const [skeletonBuffer, animationBuffer, firstMeshBuffer, secondMeshBuffer] = await Promise.all([
+        loadBuffer(assets.dataUrl(SPIRIT_SKELETON_FILE)),
+        loadBuffer(assets.dataUrl(SPIRIT_ANIMATION_FILE)),
+        loadBuffer(assets.dataUrl(SPIRIT_MESH_FILES[0])),
+        loadBuffer(assets.dataUrl(SPIRIT_MESH_FILES[1])),
+      ]);
+      spiritSkeleton = parseBon(skeletonBuffer);
+      spiritAnimation = parseAni(animationBuffer);
+      spiritMeshes = [parseMsh(firstMeshBuffer), parseMsh(secondMeshBuffer)];
+      const spiritTextureResults = await Promise.allSettled([
+        this.loadDataTexture(assets, SPIRIT_TEXTURE_FILES[0]),
+        this.loadDataTexture(assets, SPIRIT_TEXTURE_FILES[1]),
+      ]);
+      const fulfilledSpiritTextures = spiritTextureResults.flatMap((result) => (
+        result.status === "fulfilled" ? [result.value] : []
+      ));
+      const spiritTextureFailure = spiritTextureResults.find(
+        (result): result is PromiseRejectedResult => result.status === "rejected",
+      );
+      if (spiritTextureFailure || fulfilledSpiritTextures.length !== 2) {
+        for (const texture of fulfilledSpiritTextures) texture.dispose();
+        throw spiritTextureFailure?.reason ?? new Error("Texturas wg01 incompletas");
+      }
+      spiritTextures = [
+        fulfilledSpiritTextures[0]!,
+        fulfilledSpiritTextures[1]!,
+      ];
+    } catch (error) {
+      for (const texture of [...textures, ...modelTextures]) texture.dispose();
+      immunityGeometry.dispose();
+      soulLinkGeometry.dispose();
+      throw error;
+    }
+
+    const [
+      shadeTexture,
+      fatalTexture,
+      felineTexture,
+      particleTexture,
+      meditationTexture,
+      spiritParticleTexture,
+    ] = textures;
     const [immunityTexture, soulLinkTexture] = modelTextures;
     configureClassicBillboardUvs(fatalTexture!);
     configureClassicBillboardUvs(felineTexture!);
     configureClassicBillboardUvs(particleTexture!);
     configureClassicBillboardUvs(meditationTexture!);
+    configureClassicBillboardUvs(spiritParticleTexture!);
+    for (const texture of spiritTextures) {
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.anisotropy = 4;
+      texture.needsUpdate = true;
+    }
     return {
       shadeTexture: shadeTexture!,
       attackTextures: { 72: fatalTexture!, 80: felineTexture! },
       particleTexture: particleTexture!,
       meditationTexture: meditationTexture!,
+      spiritSkeleton,
+      spiritAnimation,
+      spiritMeshes,
+      spiritTextures,
+      spiritParticleTexture: spiritParticleTexture!,
       immunityTexture: immunityTexture!,
       immunityGeometry,
       soulLinkTexture: soulLinkTexture!,
@@ -1395,6 +1796,34 @@ function deactivateMeditation(visual: MeditationVisual): void {
   }
 }
 
+function deactivateSpiritChange(visual: SpiritChangeVisual): void {
+  visual.active = false;
+  visual.elapsed = 0;
+  visual.root.visible = false;
+  visual.shade.visible = false;
+  visual.shade.material.opacity = 0;
+  visual.particleRoot.visible = false;
+  visual.particleMaterial.opacity = 0;
+  for (const wing of visual.wings) {
+    wing.model.object.visible = false;
+    for (const material of wing.materials) material.opacity = 0;
+  }
+}
+
+function disposeSpiritChange(visual: SpiritChangeVisual): void {
+  visual.root.removeFromParent();
+  visual.shade.material.dispose();
+  visual.particleMaterial.dispose();
+  for (const wing of visual.wings) {
+    for (const mesh of wing.model.meshes) {
+      mesh.geometry.dispose();
+      mesh.skeleton.dispose();
+    }
+    for (const material of wing.materials) material.dispose();
+    wing.model.object.removeFromParent();
+  }
+}
+
 function deactivateSoulLinkCast(visual: SoulLinkCastVisual): void {
   visual.active = false;
   visual.elapsed = 0;
@@ -1492,10 +1921,18 @@ function disposeClassicResources(resources: ClassicResources): void {
   resources.attackTextures[80].dispose();
   resources.particleTexture.dispose();
   resources.meditationTexture.dispose();
+  resources.spiritParticleTexture.dispose();
+  for (const texture of resources.spiritTextures) texture.dispose();
   resources.immunityTexture.dispose();
   resources.immunityGeometry.dispose();
   resources.soulLinkTexture.dispose();
   resources.soulLinkGeometry.dispose();
+}
+
+async function loadBuffer(url: string): Promise<ArrayBuffer> {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`Falha ao carregar ${url}: HTTP ${response.status}`);
+  return response.arrayBuffer();
 }
 
 function isFiniteVector(position: THREE.Vector3): boolean {

@@ -631,6 +631,20 @@ async function importMonsterCatalog() {
     };
   }
 
+  // TMSkillSpChange (#87 da Huntress) cria TMSkinMesh skin 86 diretamente.
+  // Esse look wg01 não pertence a nenhum gerador/DAT, portanto precisa entrar
+  // como dependência skinned indireta: duas partes, LOOK_INFO zerado.
+  usedSkins.add(86);
+  for (const part of [1, 2]) {
+    const stem = `wg01${String(part).padStart(2, "0")}01`;
+    const meshSource = meshFiles.get(`${stem}.msh`);
+    if (!meshSource) throw new Error(`Troca de Espírito: ${stem}.msh ausente`);
+    meshCopies.set(meshSource, `${stem}.msh`);
+    const textureSource = meshFiles.get(`${stem}.wys`);
+    if (!textureSource) throw new Error(`Troca de Espírito: ${stem}.wys ausente`);
+    textureCopies.set(textureSource, `${stem}.dds`);
+  }
+
   const visualFamilies = {};
   for (const skin of [...usedSkins].sort((a, b) => a - b)) {
     const boneAnimation = boneAnimations.get(skin);

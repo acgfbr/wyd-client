@@ -29,7 +29,8 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
   montaria, usando `32/ag01`, malha `ag010103`, animação, seguimento flutuante
   tipo `5` e partículas clássicas.
 - O recorte da Huntress formado por Imunidade `#76`, Ligação Espectral `#81`,
-  Explosão Etérea `#86`, Lâmina das Sombras `#88` e Força Espectral `#101`
+  Explosão Etérea `#86`, Troca de Espírito `#87`, Lâmina das Sombras `#88` e
+  Força Espectral `#101`
   está implementado. Os buffs
   persistem por `180 s`, com efeitos suavizados; a passiva `#101` acrescenta
   alcance e acopla o `SForce` clássico aos ataques.
@@ -64,7 +65,7 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
   o modelo do personagem ao equipar/retirar.
 - Abaixo do minimapa, a telemetria agrega FPS, heap JS quando disponível e o
   tempo/ocupação da callback principal como proxy explicitamente não-CPU.
-- Build TypeScript/Vite verde em 22/07/2026.
+- Build TypeScript/Vite verde em 23/07/2026.
 
 ## Implementado, mas ainda não homologado visualmente
 
@@ -80,9 +81,9 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
   `ch01/ch02`, `bExpand`, armaduras da seleção clássica, armas Ancient, bancos
   a pé/montado e attachments de mão já foram derivados do cliente. Cada classe
   possui traje base/armadura no seletor e um primeiro loadout auditado. A
-  Huntress possui nove atalhos visíveis e doze skills promovidas; Meditação
-  `#77`, Escudo Dourado `#85` e Evasão Aprimorada `#89` continuam utilizáveis
-  pelo catálogo `K`.
+  Huntress possui nove atalhos visíveis e treze skills promovidas; Meditação
+  `#77`, Escudo Dourado `#85`, Troca de Espírito `#87` e Evasão Aprimorada
+  `#89` continuam utilizáveis pelo catálogo `K`.
 - BeastMaster possui as oito evocações de Natureza auditadas (`#56–#63`):
   Condor, Javali, Lobo, Urso, Grande Tigre, Gorila, Dragão Negro e Succubus.
   BON/MSH/DDS, variantes LOOK_INFO e ações AniSound/ValidIndex são reais; no
@@ -489,10 +490,16 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
    espiral do particle type `8`, fade, escala e vidas de `500–900 ms`.
    Escudo Dourado reutiliza o caminho real `TMEffectLevelUp(type 1)`, com as
    oito partículas amarelas `56`, colunas `122`, anel `56`, slope `2` e shade
-   `7`; ambos mantêm o override offline de `180 s`. Evasão Aprimorada `#89`
+   `7`; ambos mantêm o override offline de `180 s`. Troca de Espírito `#87`
+   também foi promovida sem efeito genérico: importa indiretamente a família
+   `86/wg01`, cria as três asas skinned nos atrasos `0/400/800 ms`, segue o
+   midpoint dos bones `1/2` do dono com o Y do bone `1`, conserva as vidas
+   `2/1,8/1,6 s`, o crescimento/fade do motion type `10`, o shade `7`
+   vermelho/azul e as vinte partículas `231` disparadas após `1 s`.
+   Evasão Aprimorada `#89`
    cria as cinco cópias cinzas reais da pose corrente, iniciadas a cada
    `100 ms`, com vidas de `400–600 ms`; montada, duplica somente o animal.
-   A matriz agora registra doze skills Huntress no runtime e 24 registros
+   A matriz agora registra treze skills Huntress no runtime e 23 registros
    ainda não promovidos.
    `#76/#81/#86/#101` estão homologadas; `#88` está implementada e aguarda a
    inspeção visual no navegador. O épico só fecha depois da matriz completa das

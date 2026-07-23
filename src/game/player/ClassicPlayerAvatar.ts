@@ -69,6 +69,8 @@ export class ClassicPlayerAvatar {
   readonly look: ClassicPlayerLookDefinition;
   readonly #lease: ClassicSkinnedInstanceLease;
   readonly #weapon: ClassicWeaponVisual | null;
+  readonly #boneSampleA = new THREE.Vector3();
+  readonly #boneSampleB = new THREE.Vector3();
   #weaponVisible = true;
   #mounted = false;
   #released = false;
@@ -187,6 +189,26 @@ export class ClassicPlayerAvatar {
       .set(0, 0, -Math.max(0, weapon.effectLength - 0.1))
       .applyMatrix4(weapon.object.matrixWorld);
     return 1;
+  }
+
+  /**
+   * TMSkillSpChange motion type 10 follows the midpoint of m_vecTempPos[1/2],
+   * but keeps the vertical component of bone 1 (the duplicated source operand
+   * in the retail client is intentional).
+   */
+  sampleSpiritChangeWingAnchor(out: THREE.Vector3): THREE.Vector3 {
+    if (this.#released) return out.copy(this.object.position);
+    const first = this.#lease.model.bones[1];
+    const second = this.#lease.model.bones[2];
+    if (!first || !second) return this.object.getWorldPosition(out);
+    this.object.updateWorldMatrix(true, true);
+    first.getWorldPosition(this.#boneSampleA);
+    second.getWorldPosition(this.#boneSampleB);
+    return out.set(
+      (this.#boneSampleA.x + this.#boneSampleB.x) * 0.5,
+      this.#boneSampleA.y,
+      (this.#boneSampleA.z + this.#boneSampleB.z) * 0.5,
+    );
   }
 
   currentAnimationSnapshot(): ClassicSkinnedAnimationSnapshot | null {

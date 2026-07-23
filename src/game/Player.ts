@@ -139,6 +139,14 @@ export class Player {
     return avatar.object.getWorldPosition(out);
   }
 
+  sampleSpiritChangeWingAnchor(out: THREE.Vector3): THREE.Vector3 {
+    const avatar = this.#avatar;
+    if (avatar) return avatar.sampleSpiritChangeWingAnchor(out);
+    out.copy(this.object.position);
+    out.y += 0.8;
+    return out;
+  }
+
   sampleWeaponEffectSegments(out: ClassicWeaponEffectSegmentSample[]): number {
     return this.#avatar?.sampleWeaponEffectSegments(out) ?? 0;
   }

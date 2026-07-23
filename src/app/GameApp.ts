@@ -200,6 +200,7 @@ export class GameApp {
   readonly #weakenedMonsters = new Map<string, number>();
   readonly #weaponEffectSegments: ClassicWeaponEffectSegmentSample[] = [];
   readonly #playerSkinAnchor = new THREE.Vector3();
+  readonly #spiritChangeAnchor = new THREE.Vector3();
   #foemaCancellationTargetId: string | null = null;
   #targetApproachCooldown = 0;
   #respawnRemaining = 0;
@@ -2252,6 +2253,7 @@ export class GameApp {
       if (skill.classicIndex === 77) this.#skillEffects.playMeditationCast(this.#player.object.position);
       if (skill.classicIndex === 81) this.#skillEffects.playSoulLinkCast(this.#player.object.position);
       if (skill.classicIndex === 85) this.#levelUpEffects.playGoldenShield(this.#player.object.position);
+      if (skill.classicIndex === 87) this.#skillEffects.playSpiritChangeCast();
       if (skill.classicIndex === 89 && this.#effectsEnabled) {
         const selection = this.#player.captureShadowBladeAfterimageSelection();
         this.#skillEffects.playEvasionCast(
@@ -2445,6 +2447,7 @@ export class GameApp {
         mounted: false,
         ownerYaw: 0,
       });
+      this.#skillEffects.syncSpiritChangeOwner(null, null, 0);
       this.#foemaSkillEffects?.syncPersistentBuffs(null, {
         thunder: false,
         magicWeapon: false,
@@ -2470,6 +2473,12 @@ export class GameApp {
       mounted: player.mounted,
       ownerYaw: player.object.rotation.y,
     });
+    player.sampleSpiritChangeWingAnchor(this.#spiritChangeAnchor);
+    this.#skillEffects.syncSpiritChangeOwner(
+      player.object.position,
+      this.#spiritChangeAnchor,
+      -player.classicYaw,
+    );
     player.sampleClassicSkinAnchor(this.#playerSkinAnchor);
     const magicWeapon = this.#activeClassKey === "foema" && activeIndices.has(44);
     const weaponSegmentCount = magicWeapon
