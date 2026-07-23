@@ -1,0 +1,2101 @@
+{
+  "version": 1,
+  "source": {
+    "soundList": "sound/soundlist.txt",
+    "musicOrder": "DirShow.cpp DS_SOUND_MANAGER::m_szMusicPathOrigin",
+    "routing": "TMFieldScene.cpp music selection block"
+  },
+  "counts": {
+    "sounds": 332,
+    "music": 13,
+    "missing": 5
+  },
+  "sounds": [
+    {
+      "index": 1,
+      "channels": 1,
+      "file": "audio/sounds/ambient/amb01.wav",
+      "source": "sound/ambient/amb01.wav"
+    },
+    {
+      "index": 2,
+      "channels": 1,
+      "file": "audio/sounds/ambient/dustdrop.wav",
+      "source": "sound/ambient/dustdrop.wav"
+    },
+    {
+      "index": 3,
+      "channels": 1,
+      "file": "audio/sounds/ambient/amb03.wav",
+      "source": "sound/ambient/amb03.wav"
+    },
+    {
+      "index": 4,
+      "channels": 1,
+      "file": "audio/sounds/ambient/amb04.wav",
+      "source": "sound/ambient/amb04.wav"
+    },
+    {
+      "index": 5,
+      "channels": 1,
+      "file": "audio/sounds/ambient/bat.wav",
+      "source": "sound/ambient/bat.wav"
+    },
+    {
+      "index": 6,
+      "channels": 1,
+      "file": "audio/sounds/ambient/waterfall.wav",
+      "source": "sound/ambient/waterfall.wav"
+    },
+    {
+      "index": 7,
+      "channels": 2,
+      "file": "audio/sounds/ambient/bubble.wav",
+      "source": "sound/ambient/bubble.wav"
+    },
+    {
+      "index": 8,
+      "channels": 1,
+      "file": "audio/sounds/ambient/dropwater.wav",
+      "source": "sound/ambient/dropwater.wav"
+    },
+    {
+      "index": 9,
+      "channels": 1,
+      "file": "audio/sounds/ambient/coalcar.wav",
+      "source": "sound/ambient/coalcar.wav"
+    },
+    {
+      "index": 10,
+      "channels": 1,
+      "file": "audio/sounds/monster/wgolatt.wav",
+      "source": "sound/monster/wgolatt.wav"
+    },
+    {
+      "index": 12,
+      "channels": 1,
+      "file": "audio/sounds/character/char02.wav",
+      "source": "sound/character/char02.wav"
+    },
+    {
+      "index": 13,
+      "channels": 3,
+      "file": "audio/sounds/ambient/dropstoneg.wav",
+      "source": "sound/ambient/dropstoneg.wav"
+    },
+    {
+      "index": 14,
+      "channels": 3,
+      "file": "audio/sounds/ambient/dropstonew.wav",
+      "source": "sound/ambient/dropstonew.wav"
+    },
+    {
+      "index": 15,
+      "channels": 1,
+      "file": "audio/sounds/ambient/orc.wav",
+      "source": "sound/ambient/orc.wav"
+    },
+    {
+      "index": 16,
+      "channels": 1,
+      "file": "audio/sounds/ambient/human.wav",
+      "source": "sound/ambient/human.wav"
+    },
+    {
+      "index": 17,
+      "channels": 1,
+      "file": "audio/sounds/character/char07.wav",
+      "source": "sound/character/char07.wav"
+    },
+    {
+      "index": 21,
+      "channels": 2,
+      "file": "audio/sounds/damage/dmg01.wav",
+      "source": "sound/damage/dmg01.wav"
+    },
+    {
+      "index": 22,
+      "channels": 2,
+      "file": "audio/sounds/damage/dmg02.wav",
+      "source": "sound/damage/dmg02.wav"
+    },
+    {
+      "index": 23,
+      "channels": 2,
+      "file": "audio/sounds/damage/dmg03.wav",
+      "source": "sound/damage/dmg03.wav"
+    },
+    {
+      "index": 24,
+      "channels": 2,
+      "file": "audio/sounds/damage/dmg04.wav",
+      "source": "sound/damage/dmg04.wav"
+    },
+    {
+      "index": 25,
+      "channels": 2,
+      "file": "audio/sounds/damage/dmg05.wav",
+      "source": "sound/damage/dmg05.wav"
+    },
+    {
+      "index": 26,
+      "channels": 2,
+      "file": "audio/sounds/damage/dmg06.wav",
+      "source": "sound/damage/dmg06.wav"
+    },
+    {
+      "index": 27,
+      "channels": 2,
+      "file": "audio/sounds/damage/dmg07.wav",
+      "source": "sound/damage/dmg07.wav"
+    },
+    {
+      "index": 28,
+      "channels": 2,
+      "file": "audio/sounds/damage/dmg08.wav",
+      "source": "sound/damage/dmg08.wav"
+    },
+    {
+      "index": 31,
+      "channels": 1,
+      "file": "audio/sounds/inventory/inven01.wav",
+      "source": "sound/inventory/inven01.wav"
+    },
+    {
+      "index": 32,
+      "channels": 1,
+      "file": "audio/sounds/inventory/inven02.wav",
+      "source": "sound/inventory/inven02.wav"
+    },
+    {
+      "index": 33,
+      "channels": 1,
+      "file": "audio/sounds/inventory/inven03.wav",
+      "source": "sound/inventory/inven03.wav"
+    },
+    {
+      "index": 34,
+      "channels": 2,
+      "file": "audio/sounds/effect/effect23.wav",
+      "source": "sound/effect/effect23.wav"
+    },
+    {
+      "index": 35,
+      "channels": 2,
+      "file": "audio/sounds/effect/effect24.wav",
+      "source": "sound/effect/effect24.wav"
+    },
+    {
+      "index": 36,
+      "channels": 2,
+      "file": "audio/sounds/effect/effect25.wav",
+      "source": "sound/effect/effect25.wav"
+    },
+    {
+      "index": 37,
+      "channels": 2,
+      "file": "audio/sounds/effect/effect26.wav",
+      "source": "sound/effect/effect26.wav"
+    },
+    {
+      "index": 38,
+      "channels": 2,
+      "file": "audio/sounds/effect/effect27.wav",
+      "source": "sound/effect/effect27.wav"
+    },
+    {
+      "index": 39,
+      "channels": 1,
+      "file": "audio/sounds/effect/effect28.wav",
+      "source": "sound/effect/effect28.wav"
+    },
+    {
+      "index": 40,
+      "channels": 2,
+      "file": "audio/sounds/effect/effect29.wav",
+      "source": "sound/effect/effect29.wav"
+    },
+    {
+      "index": 41,
+      "channels": 1,
+      "file": "audio/sounds/item/item01.wav",
+      "source": "sound/item/item01.wav"
+    },
+    {
+      "index": 42,
+      "channels": 1,
+      "file": "audio/sounds/item/item01-B.wav",
+      "source": "sound/item/item01-B.wav"
+    },
+    {
+      "index": 43,
+      "channels": 1,
+      "file": "audio/sounds/item/item02.wav",
+      "source": "sound/item/item02.wav"
+    },
+    {
+      "index": 44,
+      "channels": 1,
+      "file": "audio/sounds/item/item03.wav",
+      "source": "sound/item/item03.wav"
+    },
+    {
+      "index": 45,
+      "channels": 1,
+      "file": "audio/sounds/item/item04.wav",
+      "source": "sound/item/item04.wav"
+    },
+    {
+      "index": 46,
+      "channels": 1,
+      "file": "audio/sounds/item/item04-B.wav",
+      "source": "sound/item/item04-B.wav"
+    },
+    {
+      "index": 47,
+      "channels": 1,
+      "file": "audio/sounds/item/item05.wav",
+      "source": "sound/item/item05.wav"
+    },
+    {
+      "index": 48,
+      "channels": 1,
+      "file": "audio/sounds/item/hdustdrop.wav",
+      "source": "sound/item/hdustdrop.wav"
+    },
+    {
+      "index": 51,
+      "channels": 1,
+      "file": "audio/sounds/menu/menu01.wav",
+      "source": "sound/menu/menu01.wav"
+    },
+    {
+      "index": 52,
+      "channels": 1,
+      "file": "audio/sounds/menu/menu02.wav",
+      "source": "sound/menu/menu02.wav"
+    },
+    {
+      "index": 53,
+      "channels": 1,
+      "file": "audio/sounds/menu/menu03.wav",
+      "source": "sound/menu/menu03.wav"
+    },
+    {
+      "index": 54,
+      "channels": 1,
+      "file": "audio/sounds/menu/menu04.wav",
+      "source": "sound/menu/menu04.wav"
+    },
+    {
+      "index": 56,
+      "channels": 1,
+      "file": "audio/sounds/menu/menu05.wav",
+      "source": "sound/menu/menu05.wav"
+    },
+    {
+      "index": 57,
+      "channels": 2,
+      "file": "audio/sounds/menu/menu06.wav",
+      "source": "sound/menu/menu06.wav"
+    },
+    {
+      "index": 58,
+      "channels": 2,
+      "file": "audio/sounds/effect/effect30.wav",
+      "source": "sound/effect/effect30.wav"
+    },
+    {
+      "index": 59,
+      "channels": 2,
+      "file": "audio/sounds/effect/effect31.wav",
+      "source": "sound/effect/effect31.wav"
+    },
+    {
+      "index": 60,
+      "channels": 2,
+      "file": "audio/sounds/effect/effect32.wav",
+      "source": "sound/effect/effect32.wav"
+    },
+    {
+      "index": 61,
+      "channels": 1,
+      "file": "audio/sounds/monster/monst01.wav",
+      "source": "sound/monster/monst01.wav"
+    },
+    {
+      "index": 62,
+      "channels": 1,
+      "file": "audio/sounds/monster/monst02.wav",
+      "source": "sound/monster/monst02.wav"
+    },
+    {
+      "index": 63,
+      "channels": 1,
+      "file": "audio/sounds/monster/monst03.wav",
+      "source": "sound/monster/monst03.wav"
+    },
+    {
+      "index": 64,
+      "channels": 1,
+      "file": "audio/sounds/monster/monst04.wav",
+      "source": "sound/monster/monst04.wav"
+    },
+    {
+      "index": 65,
+      "channels": 1,
+      "file": "audio/sounds/monster/monst05.wav",
+      "source": "sound/monster/monst05.wav"
+    },
+    {
+      "index": 66,
+      "channels": 1,
+      "file": "audio/sounds/monster/monst06.wav",
+      "source": "sound/monster/monst06.wav"
+    },
+    {
+      "index": 67,
+      "channels": 1,
+      "file": "audio/sounds/monster/monst07.wav",
+      "source": "sound/monster/monst07.wav"
+    },
+    {
+      "index": 68,
+      "channels": 1,
+      "file": "audio/sounds/monster/monst08.wav",
+      "source": "sound/monster/monst08.wav"
+    },
+    {
+      "index": 69,
+      "channels": 1,
+      "file": "audio/sounds/monster/monst09.wav",
+      "source": "sound/monster/monst09.wav"
+    },
+    {
+      "index": 70,
+      "channels": 1,
+      "file": "audio/sounds/monster/monst10.wav",
+      "source": "sound/monster/monst10.wav"
+    },
+    {
+      "index": 71,
+      "channels": 1,
+      "file": "audio/sounds/monster/monst21.wav",
+      "source": "sound/monster/monst21.wav"
+    },
+    {
+      "index": 72,
+      "channels": 1,
+      "file": "audio/sounds/monster/monst22.wav",
+      "source": "sound/monster/monst22.wav"
+    },
+    {
+      "index": 73,
+      "channels": 1,
+      "file": "audio/sounds/monster/monst23.wav",
+      "source": "sound/monster/monst23.wav"
+    },
+    {
+      "index": 74,
+      "channels": 1,
+      "file": "audio/sounds/monster/monst24.wav",
+      "source": "sound/monster/monst24.wav"
+    },
+    {
+      "index": 75,
+      "channels": 1,
+      "file": "audio/sounds/monster/monst25.wav",
+      "source": "sound/monster/monst25.wav"
+    },
+    {
+      "index": 76,
+      "channels": 1,
+      "file": "audio/sounds/monster/monst16.wav",
+      "source": "sound/monster/monst16.wav"
+    },
+    {
+      "index": 77,
+      "channels": 1,
+      "file": "audio/sounds/monster/monst17.wav",
+      "source": "sound/monster/monst17.wav"
+    },
+    {
+      "index": 78,
+      "channels": 1,
+      "file": "audio/sounds/monster/monst18.wav",
+      "source": "sound/monster/monst18.wav"
+    },
+    {
+      "index": 79,
+      "channels": 1,
+      "file": "audio/sounds/monster/monst19.wav",
+      "source": "sound/monster/monst19.wav"
+    },
+    {
+      "index": 80,
+      "channels": 1,
+      "file": "audio/sounds/monster/monst20.wav",
+      "source": "sound/monster/monst20.wav"
+    },
+    {
+      "index": 81,
+      "channels": 1,
+      "file": "audio/sounds/monster/trollatt01.wav",
+      "source": "sound/monster/trollatt01.wav"
+    },
+    {
+      "index": 82,
+      "channels": 1,
+      "file": "audio/sounds/monster/trollatt02.wav",
+      "source": "sound/monster/trollatt02.wav"
+    },
+    {
+      "index": 83,
+      "channels": 1,
+      "file": "audio/sounds/monster/trolldam01.wav",
+      "source": "sound/monster/trolldam01.wav"
+    },
+    {
+      "index": 84,
+      "channels": 1,
+      "file": "audio/sounds/monster/trolldam02.wav",
+      "source": "sound/monster/trolldam02.wav"
+    },
+    {
+      "index": 85,
+      "channels": 1,
+      "file": "audio/sounds/monster/trolldie.wav",
+      "source": "sound/monster/trolldie.wav"
+    },
+    {
+      "index": 97,
+      "channels": 1,
+      "file": "audio/sounds/monster/monst22.wav",
+      "source": "sound/monster/monst22.wav"
+    },
+    {
+      "index": 98,
+      "channels": 1,
+      "file": "audio/sounds/monster/monst23.wav",
+      "source": "sound/monster/monst23.wav"
+    },
+    {
+      "index": 99,
+      "channels": 1,
+      "file": "audio/sounds/monster/monst24.wav",
+      "source": "sound/monster/monst24.wav"
+    },
+    {
+      "index": 100,
+      "channels": 1,
+      "file": "audio/sounds/monster/monst25.wav",
+      "source": "sound/monster/monst25.wav"
+    },
+    {
+      "index": 101,
+      "channels": 1,
+      "file": "audio/sounds/weather/weath01.wav",
+      "source": "sound/weather/weath01.wav"
+    },
+    {
+      "index": 102,
+      "channels": 1,
+      "file": "audio/sounds/weather/weath02.wav",
+      "source": "sound/weather/weath02.wav"
+    },
+    {
+      "index": 104,
+      "channels": 1,
+      "file": "audio/sounds/weather/weath03-A.wav",
+      "source": "sound/weather/weath03-A.wav"
+    },
+    {
+      "index": 105,
+      "channels": 1,
+      "file": "audio/sounds/weather/weath03-B.wav",
+      "source": "sound/weather/weath03-B.wav"
+    },
+    {
+      "index": 106,
+      "channels": 1,
+      "file": "audio/sounds/weather/weath04.wav",
+      "source": "sound/weather/weath04.wav"
+    },
+    {
+      "index": 107,
+      "channels": 1,
+      "file": "audio/sounds/weather/weath04-B.wav",
+      "source": "sound/weather/weath04-B.wav"
+    },
+    {
+      "index": 108,
+      "channels": 1,
+      "file": "audio/sounds/weather/weath05.wav",
+      "source": "sound/weather/weath05.wav"
+    },
+    {
+      "index": 109,
+      "channels": 1,
+      "file": "audio/sounds/weather/weath06.wav",
+      "source": "sound/weather/weath06.wav"
+    },
+    {
+      "index": 110,
+      "channels": 1,
+      "file": "audio/sounds/weather/weath07.wav",
+      "source": "sound/weather/weath07.wav"
+    },
+    {
+      "index": 111,
+      "channels": 1,
+      "file": "audio/sounds/weather/weath08.wav",
+      "source": "sound/weather/weath08.wav"
+    },
+    {
+      "index": 112,
+      "channels": 1,
+      "file": "audio/sounds/weather/weath09.wav",
+      "source": "sound/weather/weath09.wav"
+    },
+    {
+      "index": 113,
+      "channels": 1,
+      "file": "audio/sounds/weather/weath10.wav",
+      "source": "sound/weather/weath10.wav"
+    },
+    {
+      "index": 114,
+      "channels": 1,
+      "file": "audio/sounds/weather/weath11.wav",
+      "source": "sound/weather/weath11.wav"
+    },
+    {
+      "index": 121,
+      "channels": 2,
+      "file": "audio/sounds/swing/swing01.wav",
+      "source": "sound/swing/swing01.wav"
+    },
+    {
+      "index": 122,
+      "channels": 2,
+      "file": "audio/sounds/swing/swing02.wav",
+      "source": "sound/swing/swing02.wav"
+    },
+    {
+      "index": 123,
+      "channels": 2,
+      "file": "audio/sounds/swing/swing03.wav",
+      "source": "sound/swing/swing03.wav"
+    },
+    {
+      "index": 124,
+      "channels": 2,
+      "file": "audio/sounds/swing/swing04.wav",
+      "source": "sound/swing/swing04.wav"
+    },
+    {
+      "index": 125,
+      "channels": 2,
+      "file": "audio/sounds/swing/swing05.wav",
+      "source": "sound/swing/swing05.wav"
+    },
+    {
+      "index": 126,
+      "channels": 2,
+      "file": "audio/sounds/swing/swing06.wav",
+      "source": "sound/swing/swing06.wav"
+    },
+    {
+      "index": 127,
+      "channels": 2,
+      "file": "audio/sounds/swing/swing07.wav",
+      "source": "sound/swing/swing07.wav"
+    },
+    {
+      "index": 128,
+      "channels": 2,
+      "file": "audio/sounds/swing/swing08.wav",
+      "source": "sound/swing/swing08.wav"
+    },
+    {
+      "index": 129,
+      "channels": 2,
+      "file": "audio/sounds/swing/swing09.wav",
+      "source": "sound/swing/swing09.wav"
+    },
+    {
+      "index": 131,
+      "channels": 2,
+      "file": "audio/sounds/swing/swing11.wav",
+      "source": "sound/swing/swing11.wav"
+    },
+    {
+      "index": 132,
+      "channels": 2,
+      "file": "audio/sounds/swing/swing12.wav",
+      "source": "sound/swing/swing12.wav"
+    },
+    {
+      "index": 133,
+      "channels": 2,
+      "file": "audio/sounds/swing/swing13.wav",
+      "source": "sound/swing/swing13.wav"
+    },
+    {
+      "index": 134,
+      "channels": 2,
+      "file": "audio/sounds/swing/swing14.wav",
+      "source": "sound/swing/swing14.wav"
+    },
+    {
+      "index": 135,
+      "channels": 2,
+      "file": "audio/sounds/swing/swing15.wav",
+      "source": "sound/swing/swing15.wav"
+    },
+    {
+      "index": 136,
+      "channels": 2,
+      "file": "audio/sounds/swing/swing16.wav",
+      "source": "sound/swing/swing16.wav"
+    },
+    {
+      "index": 137,
+      "channels": 2,
+      "file": "audio/sounds/swing/swing17.wav",
+      "source": "sound/swing/swing17.wav"
+    },
+    {
+      "index": 138,
+      "channels": 2,
+      "file": "audio/sounds/swing/swing18.wav",
+      "source": "sound/swing/swing18.wav"
+    },
+    {
+      "index": 139,
+      "channels": 2,
+      "file": "audio/sounds/swing/swing19.wav",
+      "source": "sound/swing/swing19.wav"
+    },
+    {
+      "index": 140,
+      "channels": 2,
+      "file": "audio/sounds/swing/swing20.wav",
+      "source": "sound/swing/swing20.wav"
+    },
+    {
+      "index": 141,
+      "channels": 2,
+      "file": "audio/sounds/swing/swing21.wav",
+      "source": "sound/swing/swing21.wav"
+    },
+    {
+      "index": 142,
+      "channels": 1,
+      "file": "audio/sounds/monster/gorilatt01.wav",
+      "source": "sound/monster/gorilatt01.wav"
+    },
+    {
+      "index": 143,
+      "channels": 1,
+      "file": "audio/sounds/monster/gorilatt02.wav",
+      "source": "sound/monster/gorilatt02.wav"
+    },
+    {
+      "index": 144,
+      "channels": 1,
+      "file": "audio/sounds/monster/gorildie.wav",
+      "source": "sound/monster/gorildie.wav"
+    },
+    {
+      "index": 145,
+      "channels": 1,
+      "file": "audio/sounds/monster/gorildam.wav",
+      "source": "sound/monster/gorildam.wav"
+    },
+    {
+      "index": 146,
+      "channels": 1,
+      "file": "audio/sounds/monster/astaatt01.wav",
+      "source": "sound/monster/astaatt01.wav"
+    },
+    {
+      "index": 147,
+      "channels": 1,
+      "file": "audio/sounds/monster/astaatt02.wav",
+      "source": "sound/monster/astaatt02.wav"
+    },
+    {
+      "index": 148,
+      "channels": 1,
+      "file": "audio/sounds/monster/astamove.wav",
+      "source": "sound/monster/astamove.wav"
+    },
+    {
+      "index": 149,
+      "channels": 1,
+      "file": "audio/sounds/monster/astadie.wav",
+      "source": "sound/monster/astadie.wav"
+    },
+    {
+      "index": 150,
+      "channels": 1,
+      "file": "audio/sounds/monster/astadam.wav",
+      "source": "sound/monster/astadam.wav"
+    },
+    {
+      "index": 151,
+      "channels": 2,
+      "file": "audio/sounds/effect/effect01.wav",
+      "source": "sound/effect/effect01.wav"
+    },
+    {
+      "index": 152,
+      "channels": 2,
+      "file": "audio/sounds/effect/effect02.wav",
+      "source": "sound/effect/effect02.wav"
+    },
+    {
+      "index": 153,
+      "channels": 2,
+      "file": "audio/sounds/effect/effect03.wav",
+      "source": "sound/effect/effect03.wav"
+    },
+    {
+      "index": 154,
+      "channels": 4,
+      "file": "audio/sounds/effect/effect04.wav",
+      "source": "sound/effect/effect04.wav"
+    },
+    {
+      "index": 155,
+      "channels": 2,
+      "file": "audio/sounds/effect/effect05.wav",
+      "source": "sound/effect/effect05.wav"
+    },
+    {
+      "index": 156,
+      "channels": 2,
+      "file": "audio/sounds/effect/effect06.wav",
+      "source": "sound/effect/effect06.wav"
+    },
+    {
+      "index": 157,
+      "channels": 2,
+      "file": "audio/sounds/effect/effect07.wav",
+      "source": "sound/effect/effect07.wav"
+    },
+    {
+      "index": 158,
+      "channels": 2,
+      "file": "audio/sounds/effect/effect08.wav",
+      "source": "sound/effect/effect08.wav"
+    },
+    {
+      "index": 159,
+      "channels": 2,
+      "file": "audio/sounds/effect/effect09.wav",
+      "source": "sound/effect/effect09.wav"
+    },
+    {
+      "index": 160,
+      "channels": 6,
+      "file": "audio/sounds/effect/effect10.wav",
+      "source": "sound/effect/effect10.wav"
+    },
+    {
+      "index": 161,
+      "channels": 2,
+      "file": "audio/sounds/effect/effect11.wav",
+      "source": "sound/effect/effect11.wav"
+    },
+    {
+      "index": 162,
+      "channels": 1,
+      "file": "audio/sounds/monster/tigeratt01.wav",
+      "source": "sound/monster/tigeratt01.wav"
+    },
+    {
+      "index": 163,
+      "channels": 1,
+      "file": "audio/sounds/monster/tigeratt02.wav",
+      "source": "sound/monster/tigeratt02.wav"
+    },
+    {
+      "index": 164,
+      "channels": 1,
+      "file": "audio/sounds/monster/tigerdie.wav",
+      "source": "sound/monster/tigerdie.wav"
+    },
+    {
+      "index": 165,
+      "channels": 1,
+      "file": "audio/sounds/monster/tigerdam.wav",
+      "source": "sound/monster/tigerdam.wav"
+    },
+    {
+      "index": 166,
+      "channels": 2,
+      "file": "audio/sounds/effect/effect12.wav",
+      "source": "sound/effect/effect12.wav"
+    },
+    {
+      "index": 167,
+      "channels": 2,
+      "file": "audio/sounds/effect/effect13.wav",
+      "source": "sound/effect/effect13.wav"
+    },
+    {
+      "index": 168,
+      "channels": 2,
+      "file": "audio/sounds/effect/effect14.wav",
+      "source": "sound/effect/effect14.wav"
+    },
+    {
+      "index": 169,
+      "channels": 2,
+      "file": "audio/sounds/effect/effect15.wav",
+      "source": "sound/effect/effect15.wav"
+    },
+    {
+      "index": 170,
+      "channels": 2,
+      "file": "audio/sounds/effect/effect16.wav",
+      "source": "sound/effect/effect16.wav"
+    },
+    {
+      "index": 171,
+      "channels": 2,
+      "file": "audio/sounds/effect/effect17.wav",
+      "source": "sound/effect/effect17.wav"
+    },
+    {
+      "index": 172,
+      "channels": 2,
+      "file": "audio/sounds/effect/effect18.wav",
+      "source": "sound/effect/effect18.wav"
+    },
+    {
+      "index": 173,
+      "channels": 2,
+      "file": "audio/sounds/effect/effect19.wav",
+      "source": "sound/effect/effect19.wav"
+    },
+    {
+      "index": 174,
+      "channels": 2,
+      "file": "audio/sounds/effect/effect20.wav",
+      "source": "sound/effect/effect20.wav"
+    },
+    {
+      "index": 175,
+      "channels": 2,
+      "file": "audio/sounds/effect/effect21.wav",
+      "source": "sound/effect/effect21.wav"
+    },
+    {
+      "index": 178,
+      "channels": 2,
+      "file": "audio/sounds/effect/effect22.wav",
+      "source": "sound/effect/effect22.wav"
+    },
+    {
+      "index": 180,
+      "channels": 1,
+      "file": "audio/sounds/step/step06L.wav",
+      "source": "sound/step/step06L.wav"
+    },
+    {
+      "index": 181,
+      "channels": 1,
+      "file": "audio/sounds/step/step06R.wav",
+      "source": "sound/step/step06R.wav"
+    },
+    {
+      "index": 182,
+      "channels": 1,
+      "file": "audio/sounds/step/step01-L.wav",
+      "source": "sound/step/step01-L.wav"
+    },
+    {
+      "index": 183,
+      "channels": 1,
+      "file": "audio/sounds/step/step01-R.wav",
+      "source": "sound/step/step01-R.wav"
+    },
+    {
+      "index": 184,
+      "channels": 1,
+      "file": "audio/sounds/step/step02-L.wav",
+      "source": "sound/step/step02-L.wav"
+    },
+    {
+      "index": 185,
+      "channels": 1,
+      "file": "audio/sounds/step/step02-R.wav",
+      "source": "sound/step/step02-R.wav"
+    },
+    {
+      "index": 186,
+      "channels": 1,
+      "file": "audio/sounds/step/step03-L.wav",
+      "source": "sound/step/step03-L.wav"
+    },
+    {
+      "index": 187,
+      "channels": 1,
+      "file": "audio/sounds/step/step03-R.wav",
+      "source": "sound/step/step03-R.wav"
+    },
+    {
+      "index": 188,
+      "channels": 1,
+      "file": "audio/sounds/step/step04-L.wav",
+      "source": "sound/step/step04-L.wav"
+    },
+    {
+      "index": 189,
+      "channels": 1,
+      "file": "audio/sounds/step/step04-R.wav",
+      "source": "sound/step/step04-R.wav"
+    },
+    {
+      "index": 190,
+      "channels": 1,
+      "file": "audio/sounds/step/step05-L.wav",
+      "source": "sound/step/step05-L.wav"
+    },
+    {
+      "index": 191,
+      "channels": 1,
+      "file": "audio/sounds/step/step05-R.wav",
+      "source": "sound/step/step05-R.wav"
+    },
+    {
+      "index": 192,
+      "channels": 1,
+      "file": "audio/sounds/step/hstep01.wav",
+      "source": "sound/step/hstep01.wav"
+    },
+    {
+      "index": 193,
+      "channels": 1,
+      "file": "audio/sounds/step/hstep02.wav",
+      "source": "sound/step/hstep02.wav"
+    },
+    {
+      "index": 194,
+      "channels": 1,
+      "file": "audio/sounds/step/hstep03.wav",
+      "source": "sound/step/hstep03.wav"
+    },
+    {
+      "index": 195,
+      "channels": 1,
+      "file": "audio/sounds/step/hstep04.wav",
+      "source": "sound/step/hstep04.wav"
+    },
+    {
+      "index": 196,
+      "channels": 1,
+      "file": "audio/sounds/step/step02-L.wav",
+      "source": "sound/step/step02-L.wav"
+    },
+    {
+      "index": 197,
+      "channels": 1,
+      "file": "audio/sounds/step/step02-R.wav",
+      "source": "sound/step/step02-R.wav"
+    },
+    {
+      "index": 198,
+      "channels": 1,
+      "file": "audio/sounds/step/step06L.wav",
+      "source": "sound/step/step06L.wav"
+    },
+    {
+      "index": 199,
+      "channels": 1,
+      "file": "audio/sounds/step/step06R.wav",
+      "source": "sound/step/step06R.wav"
+    },
+    {
+      "index": 200,
+      "channels": 1,
+      "file": "audio/sounds/monster/boardam01.wav",
+      "source": "sound/monster/boardam01.wav"
+    },
+    {
+      "index": 201,
+      "channels": 1,
+      "file": "audio/sounds/monster/boaratt.wav",
+      "source": "sound/monster/boaratt.wav"
+    },
+    {
+      "index": 202,
+      "channels": 1,
+      "file": "audio/sounds/monster/boaratt02.wav",
+      "source": "sound/monster/boaratt02.wav"
+    },
+    {
+      "index": 203,
+      "channels": 1,
+      "file": "audio/sounds/monster/boardie.wav",
+      "source": "sound/monster/boardie.wav"
+    },
+    {
+      "index": 204,
+      "channels": 1,
+      "file": "audio/sounds/monster/birddam.wav",
+      "source": "sound/monster/birddam.wav"
+    },
+    {
+      "index": 205,
+      "channels": 1,
+      "file": "audio/sounds/monster/birdatt_1.wav",
+      "source": "sound/monster/birdatt_1.wav"
+    },
+    {
+      "index": 206,
+      "channels": 1,
+      "file": "audio/sounds/monster/birdatt_2.wav",
+      "source": "sound/monster/birdatt_2.wav"
+    },
+    {
+      "index": 207,
+      "channels": 1,
+      "file": "audio/sounds/monster/birddie.wav",
+      "source": "sound/monster/birddie.wav"
+    },
+    {
+      "index": 208,
+      "channels": 1,
+      "file": "audio/sounds/monster/snakeatt.wav",
+      "source": "sound/monster/snakeatt.wav"
+    },
+    {
+      "index": 209,
+      "channels": 1,
+      "file": "audio/sounds/monster/snakedie.wav",
+      "source": "sound/monster/snakedie.wav"
+    },
+    {
+      "index": 210,
+      "channels": 1,
+      "file": "audio/sounds/monster/hydradam01.wav",
+      "source": "sound/monster/hydradam01.wav"
+    },
+    {
+      "index": 211,
+      "channels": 1,
+      "file": "audio/sounds/monster/hydraatt01.wav",
+      "source": "sound/monster/hydraatt01.wav"
+    },
+    {
+      "index": 212,
+      "channels": 1,
+      "file": "audio/sounds/monster/hydraatt02.wav",
+      "source": "sound/monster/hydraatt02.wav"
+    },
+    {
+      "index": 213,
+      "channels": 1,
+      "file": "audio/sounds/monster/hydradie.wav",
+      "source": "sound/monster/hydradie.wav"
+    },
+    {
+      "index": 214,
+      "channels": 1,
+      "file": "audio/sounds/monster/minotauratt.wav",
+      "source": "sound/monster/minotauratt.wav"
+    },
+    {
+      "index": 215,
+      "channels": 1,
+      "file": "audio/sounds/monster/minotaurdam.wav",
+      "source": "sound/monster/minotaurdam.wav"
+    },
+    {
+      "index": 216,
+      "channels": 1,
+      "file": "audio/sounds/monster/minotaurdie.wav",
+      "source": "sound/monster/minotaurdie.wav"
+    },
+    {
+      "index": 217,
+      "channels": 1,
+      "file": "audio/sounds/monster/minotauridle.wav",
+      "source": "sound/monster/minotauridle.wav"
+    },
+    {
+      "index": 218,
+      "channels": 1,
+      "file": "audio/sounds/monster/argosatt.wav",
+      "source": "sound/monster/argosatt.wav"
+    },
+    {
+      "index": 219,
+      "channels": 1,
+      "file": "audio/sounds/monster/argosdam.wav",
+      "source": "sound/monster/argosdam.wav"
+    },
+    {
+      "index": 220,
+      "channels": 1,
+      "file": "audio/sounds/monster/argosdie.wav",
+      "source": "sound/monster/argosdie.wav"
+    },
+    {
+      "index": 220,
+      "channels": 1,
+      "file": "audio/sounds/monster/argosidle.wav",
+      "source": "sound/monster/argosidle.wav"
+    },
+    {
+      "index": 222,
+      "channels": 1,
+      "file": "audio/sounds/monster/cyclopsatt.wav",
+      "source": "sound/monster/cyclopsatt.wav"
+    },
+    {
+      "index": 223,
+      "channels": 1,
+      "file": "audio/sounds/monster/cyclopsdam.wav",
+      "source": "sound/monster/cyclopsdam.wav"
+    },
+    {
+      "index": 224,
+      "channels": 1,
+      "file": "audio/sounds/monster/cyclopsdie.wav",
+      "source": "sound/monster/cyclopsdie.wav"
+    },
+    {
+      "index": 225,
+      "channels": 1,
+      "file": "audio/sounds/monster/cyclopsidle.wav",
+      "source": "sound/monster/cyclopsidle.wav"
+    },
+    {
+      "index": 226,
+      "channels": 1,
+      "file": "audio/sounds/monster/orcsh_att.wav",
+      "source": "sound/monster/orcsh_att.wav"
+    },
+    {
+      "index": 227,
+      "channels": 1,
+      "file": "audio/sounds/monster/orcsh_idle.wav",
+      "source": "sound/monster/orcsh_idle.wav"
+    },
+    {
+      "index": 228,
+      "channels": 1,
+      "file": "audio/sounds/monster/cabuncle_att.wav",
+      "source": "sound/monster/cabuncle_att.wav"
+    },
+    {
+      "index": 229,
+      "channels": 1,
+      "file": "audio/sounds/monster/cabuncle_dam.wav",
+      "source": "sound/monster/cabuncle_dam.wav"
+    },
+    {
+      "index": 230,
+      "channels": 1,
+      "file": "audio/sounds/monster/cabuncle_die.wav",
+      "source": "sound/monster/cabuncle_die.wav"
+    },
+    {
+      "index": 231,
+      "channels": 1,
+      "file": "audio/sounds/monster/cabuncle_idle.wav",
+      "source": "sound/monster/cabuncle_idle.wav"
+    },
+    {
+      "index": 232,
+      "channels": 1,
+      "file": "audio/sounds/monster/ghoul_att1.wav",
+      "source": "sound/monster/ghoul_att1.wav"
+    },
+    {
+      "index": 233,
+      "channels": 1,
+      "file": "audio/sounds/monster/ghoul_att2.wav",
+      "source": "sound/monster/ghoul_att2.wav"
+    },
+    {
+      "index": 234,
+      "channels": 1,
+      "file": "audio/sounds/monster/ghoul_dam.wav",
+      "source": "sound/monster/ghoul_dam.wav"
+    },
+    {
+      "index": 235,
+      "channels": 1,
+      "file": "audio/sounds/monster/ghoul_idle.wav",
+      "source": "sound/monster/ghoul_idle.wav"
+    },
+    {
+      "index": 236,
+      "channels": 1,
+      "file": "audio/sounds/monster/ghoul_die.wav",
+      "source": "sound/monster/ghoul_die.wav"
+    },
+    {
+      "index": 237,
+      "channels": 1,
+      "file": "audio/sounds/monster/nwolf_att1.wav",
+      "source": "sound/monster/nwolf_att1.wav"
+    },
+    {
+      "index": 238,
+      "channels": 1,
+      "file": "audio/sounds/monster/nwolf_att2.wav",
+      "source": "sound/monster/nwolf_att2.wav"
+    },
+    {
+      "index": 239,
+      "channels": 1,
+      "file": "audio/sounds/monster/nwolf_dam.wav",
+      "source": "sound/monster/nwolf_dam.wav"
+    },
+    {
+      "index": 240,
+      "channels": 1,
+      "file": "audio/sounds/monster/nwolf_die.wav",
+      "source": "sound/monster/nwolf_die.wav"
+    },
+    {
+      "index": 241,
+      "channels": 1,
+      "file": "audio/sounds/monster/nbear_att1.wav",
+      "source": "sound/monster/nbear_att1.wav"
+    },
+    {
+      "index": 242,
+      "channels": 1,
+      "file": "audio/sounds/monster/nbear_att2.wav",
+      "source": "sound/monster/nbear_att2.wav"
+    },
+    {
+      "index": 243,
+      "channels": 1,
+      "file": "audio/sounds/monster/nbear_dam.wav",
+      "source": "sound/monster/nbear_dam.wav"
+    },
+    {
+      "index": 244,
+      "channels": 1,
+      "file": "audio/sounds/monster/nbear_dam.wav",
+      "source": "sound/monster/nbear_dam.wav"
+    },
+    {
+      "index": 245,
+      "channels": 1,
+      "file": "audio/sounds/monster/swolf_att.wav",
+      "source": "sound/monster/swolf_att.wav"
+    },
+    {
+      "index": 247,
+      "channels": 1,
+      "file": "audio/sounds/monster/swolf_dam.wav",
+      "source": "sound/monster/swolf_dam.wav"
+    },
+    {
+      "index": 248,
+      "channels": 1,
+      "file": "audio/sounds/monster/swolf_die.wav",
+      "source": "sound/monster/swolf_die.wav"
+    },
+    {
+      "index": 249,
+      "channels": 1,
+      "file": "audio/sounds/monster/nwolf_die.wav",
+      "source": "sound/monster/nwolf_die.wav"
+    },
+    {
+      "index": 250,
+      "channels": 1,
+      "file": "audio/sounds/monster/sbear_att_1.wav",
+      "source": "sound/monster/sbear_att_1.wav"
+    },
+    {
+      "index": 251,
+      "channels": 1,
+      "file": "audio/sounds/monster/sbear_att_2.wav",
+      "source": "sound/monster/sbear_att_2.wav"
+    },
+    {
+      "index": 252,
+      "channels": 1,
+      "file": "audio/sounds/monster/sbear_dam.wav",
+      "source": "sound/monster/sbear_dam.wav"
+    },
+    {
+      "index": 253,
+      "channels": 1,
+      "file": "audio/sounds/monster/sbear_die.wav",
+      "source": "sound/monster/sbear_die.wav"
+    },
+    {
+      "index": 256,
+      "channels": 1,
+      "file": "audio/sounds/monster/frogatt1.wav",
+      "source": "sound/monster/frogatt1.wav"
+    },
+    {
+      "index": 257,
+      "channels": 1,
+      "file": "audio/sounds/monster/frogatt2.wav",
+      "source": "sound/monster/frogatt2.wav"
+    },
+    {
+      "index": 258,
+      "channels": 1,
+      "file": "audio/sounds/monster/frogdam.wav",
+      "source": "sound/monster/frogdam.wav"
+    },
+    {
+      "index": 259,
+      "channels": 1,
+      "file": "audio/sounds/monster/frogdie.wav",
+      "source": "sound/monster/frogdie.wav"
+    },
+    {
+      "index": 260,
+      "channels": 1,
+      "file": "audio/sounds/monster/frogiatt1.wav",
+      "source": "sound/monster/frogiatt1.wav"
+    },
+    {
+      "index": 261,
+      "channels": 1,
+      "file": "audio/sounds/monster/hboardam.wav",
+      "source": "sound/monster/hboardam.wav"
+    },
+    {
+      "index": 262,
+      "channels": 1,
+      "file": "audio/sounds/monster/hboardie.wav",
+      "source": "sound/monster/hboardie.wav"
+    },
+    {
+      "index": 263,
+      "channels": 1,
+      "file": "audio/sounds/monster/hboarbdie.wav",
+      "source": "sound/monster/hboarbdie.wav"
+    },
+    {
+      "index": 264,
+      "channels": 2,
+      "file": "audio/sounds/monster/skel_die.wav",
+      "source": "sound/monster/skel_die.wav"
+    },
+    {
+      "index": 265,
+      "channels": 2,
+      "file": "audio/sounds/monster/devil_att1.wav",
+      "source": "sound/monster/devil_att1.wav"
+    },
+    {
+      "index": 266,
+      "channels": 2,
+      "file": "audio/sounds/monster/devil_att2.wav",
+      "source": "sound/monster/devil_att2.wav"
+    },
+    {
+      "index": 267,
+      "channels": 2,
+      "file": "audio/sounds/monster/devil_laught.wav",
+      "source": "sound/monster/devil_laught.wav"
+    },
+    {
+      "index": 268,
+      "channels": 2,
+      "file": "audio/sounds/monster/marble_die.wav",
+      "source": "sound/monster/marble_die.wav"
+    },
+    {
+      "index": 270,
+      "channels": 2,
+      "file": "audio/sounds/monster/mtpig.wav",
+      "source": "sound/monster/mtpig.wav"
+    },
+    {
+      "index": 271,
+      "channels": 2,
+      "file": "audio/sounds/monster/mtboar.wav",
+      "source": "sound/monster/mtboar.wav"
+    },
+    {
+      "index": 272,
+      "channels": 2,
+      "file": "audio/sounds/monster/mtpuppy.wav",
+      "source": "sound/monster/mtpuppy.wav"
+    },
+    {
+      "index": 273,
+      "channels": 2,
+      "file": "audio/sounds/monster/mtwolf.wav",
+      "source": "sound/monster/mtwolf.wav"
+    },
+    {
+      "index": 274,
+      "channels": 2,
+      "file": "audio/sounds/monster/mtbear.wav",
+      "source": "sound/monster/mtbear.wav"
+    },
+    {
+      "index": 275,
+      "channels": 2,
+      "file": "audio/sounds/monster/mttiger.wav",
+      "source": "sound/monster/mttiger.wav"
+    },
+    {
+      "index": 276,
+      "channels": 2,
+      "file": "audio/sounds/monster/mthorse.wav",
+      "source": "sound/monster/mthorse.wav"
+    },
+    {
+      "index": 277,
+      "channels": 2,
+      "file": "audio/sounds/monster/mttwolf.wav",
+      "source": "sound/monster/mttwolf.wav"
+    },
+    {
+      "index": 278,
+      "channels": 2,
+      "file": "audio/sounds/monster/mtdragon.wav",
+      "source": "sound/monster/mtdragon.wav"
+    },
+    {
+      "index": 279,
+      "channels": 2,
+      "file": "audio/sounds/monster/hsatt01.wav",
+      "source": "sound/monster/hsatt01.wav"
+    },
+    {
+      "index": 280,
+      "channels": 2,
+      "file": "audio/sounds/monster/hsatt02.wav",
+      "source": "sound/monster/hsatt02.wav"
+    },
+    {
+      "index": 281,
+      "channels": 2,
+      "file": "audio/sounds/monster/hsdead.wav",
+      "source": "sound/monster/hsdead.wav"
+    },
+    {
+      "index": 282,
+      "channels": 1,
+      "file": "audio/sounds/monster/TowerDam.wav",
+      "source": "sound/monster/TowerDam.wav"
+    },
+    {
+      "index": 283,
+      "channels": 1,
+      "file": "audio/sounds/monster/TowerDie.wav",
+      "source": "sound/monster/TowerDie.wav"
+    },
+    {
+      "index": 284,
+      "channels": 1,
+      "file": "audio/sounds/monster/DoorDam.wav",
+      "source": "sound/monster/DoorDam.wav"
+    },
+    {
+      "index": 285,
+      "channels": 1,
+      "file": "audio/sounds/monster/DoorDie.wav",
+      "source": "sound/monster/DoorDie.wav"
+    },
+    {
+      "index": 286,
+      "channels": 1,
+      "file": "audio/sounds/monster/SpiderAtt.wav",
+      "source": "sound/monster/SpiderAtt.wav"
+    },
+    {
+      "index": 287,
+      "channels": 1,
+      "file": "audio/sounds/monster/SpiderDie.wav",
+      "source": "sound/monster/SpiderDie.wav"
+    },
+    {
+      "index": 288,
+      "channels": 1,
+      "file": "audio/sounds/monster/SpiderEm.wav",
+      "source": "sound/monster/SpiderEm.wav"
+    },
+    {
+      "index": 289,
+      "channels": 1,
+      "file": "audio/sounds/monster/RayAtt.wav",
+      "source": "sound/monster/RayAtt.wav"
+    },
+    {
+      "index": 290,
+      "channels": 1,
+      "file": "audio/sounds/monster/RayDie.wav",
+      "source": "sound/monster/RayDie.wav"
+    },
+    {
+      "index": 291,
+      "channels": 1,
+      "file": "audio/sounds/monster/RayEm.wav",
+      "source": "sound/monster/RayEm.wav"
+    },
+    {
+      "index": 292,
+      "channels": 1,
+      "file": "audio/sounds/monster/EntsAtt.wav",
+      "source": "sound/monster/EntsAtt.wav"
+    },
+    {
+      "index": 293,
+      "channels": 1,
+      "file": "audio/sounds/monster/EntsDie.wav",
+      "source": "sound/monster/EntsDie.wav"
+    },
+    {
+      "index": 294,
+      "channels": 1,
+      "file": "audio/sounds/monster/EntsEm.wav",
+      "source": "sound/monster/EntsEm.wav"
+    },
+    {
+      "index": 295,
+      "channels": 1,
+      "file": "audio/sounds/monster/GrubAtt.wav",
+      "source": "sound/monster/GrubAtt.wav"
+    },
+    {
+      "index": 296,
+      "channels": 1,
+      "file": "audio/sounds/monster/GrubDie.wav",
+      "source": "sound/monster/GrubDie.wav"
+    },
+    {
+      "index": 297,
+      "channels": 1,
+      "file": "audio/sounds/monster/GrubEm.wav",
+      "source": "sound/monster/GrubEm.wav"
+    },
+    {
+      "index": 298,
+      "channels": 1,
+      "file": "audio/sounds/monster/DKnightAtt.wav",
+      "source": "sound/monster/DKnightAtt.wav"
+    },
+    {
+      "index": 299,
+      "channels": 1,
+      "file": "audio/sounds/monster/DKnightDie.wav",
+      "source": "sound/monster/DKnightDie.wav"
+    },
+    {
+      "index": 300,
+      "channels": 1,
+      "file": "audio/sounds/monster/DKnightEm.wav",
+      "source": "sound/monster/DKnightEm.wav"
+    },
+    {
+      "index": 301,
+      "channels": 1,
+      "file": "audio/sounds/monster/FenrilAtt.wav",
+      "source": "sound/monster/FenrilAtt.wav"
+    },
+    {
+      "index": 302,
+      "channels": 1,
+      "file": "audio/sounds/ambient/SandMove.wav",
+      "source": "sound/ambient/SandMove.wav"
+    },
+    {
+      "index": 303,
+      "channels": 1,
+      "file": "audio/sounds/ambient/SandMobCre.wav",
+      "source": "sound/ambient/SandMobCre.wav"
+    },
+    {
+      "index": 304,
+      "channels": 1,
+      "file": "audio/sounds/ambient/SandWind.wav",
+      "source": "sound/ambient/SandWind.wav"
+    },
+    {
+      "index": 305,
+      "channels": 1,
+      "file": "audio/sounds/ambient/SandHole.wav",
+      "source": "sound/ambient/SandHole.wav"
+    },
+    {
+      "index": 306,
+      "channels": 1,
+      "file": "audio/sounds/ambient/DropCrown.wav",
+      "source": "sound/ambient/DropCrown.wav"
+    },
+    {
+      "index": 307,
+      "channels": 2,
+      "file": "audio/sounds/ambient/CannonFire.wav",
+      "source": "sound/ambient/CannonFire.wav"
+    },
+    {
+      "index": 308,
+      "channels": 2,
+      "file": "audio/sounds/ambient/CannonFly.wav",
+      "source": "sound/ambient/CannonFly.wav"
+    },
+    {
+      "index": 309,
+      "channels": 2,
+      "file": "audio/sounds/ambient/CannonBomb.wav",
+      "source": "sound/ambient/CannonBomb.wav"
+    },
+    {
+      "index": 310,
+      "channels": 1,
+      "file": "audio/sounds/monster/EntsDam.wav",
+      "source": "sound/monster/EntsDam.wav"
+    },
+    {
+      "index": 311,
+      "channels": 1,
+      "file": "audio/sounds/monster/RayDam.wav",
+      "source": "sound/monster/RayDam.wav"
+    },
+    {
+      "index": 312,
+      "channels": 1,
+      "file": "audio/sounds/monster/DKnightDam.wav",
+      "source": "sound/monster/DKnightDam.wav"
+    },
+    {
+      "index": 313,
+      "channels": 1,
+      "file": "audio/sounds/monster/SpiderDam.wav",
+      "source": "sound/monster/SpiderDam.wav"
+    },
+    {
+      "index": 314,
+      "channels": 1,
+      "file": "audio/sounds/monster/GrubDam.wav",
+      "source": "sound/monster/GrubDam.wav"
+    },
+    {
+      "index": 315,
+      "channels": 3,
+      "file": "audio/sounds/effect/firework1.wav",
+      "source": "sound/effect/firework1.wav"
+    },
+    {
+      "index": 316,
+      "channels": 3,
+      "file": "audio/sounds/effect/firework2.wav",
+      "source": "sound/effect/firework2.wav"
+    },
+    {
+      "index": 317,
+      "channels": 1,
+      "file": "audio/sounds/monster/FTigerAtt.wav",
+      "source": "sound/monster/FTigerAtt.wav"
+    },
+    {
+      "index": 318,
+      "channels": 1,
+      "file": "audio/sounds/monster/FTigerDam.wav",
+      "source": "sound/monster/FTigerDam.wav"
+    },
+    {
+      "index": 319,
+      "channels": 1,
+      "file": "audio/sounds/monster/FTigerDie.wav",
+      "source": "sound/monster/FTigerDie.wav"
+    },
+    {
+      "index": 320,
+      "channels": 1,
+      "file": "audio/sounds/monster/FTigerEm.wav",
+      "source": "sound/monster/FTigerEm.wav"
+    },
+    {
+      "index": 321,
+      "channels": 1,
+      "file": "audio/sounds/monster/GriponAtt.wav",
+      "source": "sound/monster/GriponAtt.wav"
+    },
+    {
+      "index": 322,
+      "channels": 1,
+      "file": "audio/sounds/monster/GriponDam.wav",
+      "source": "sound/monster/GriponDam.wav"
+    },
+    {
+      "index": 323,
+      "channels": 1,
+      "file": "audio/sounds/monster/GriponDie.wav",
+      "source": "sound/monster/GriponDie.wav"
+    },
+    {
+      "index": 324,
+      "channels": 1,
+      "file": "audio/sounds/monster/GriponEm.wav",
+      "source": "sound/monster/GriponEm.wav"
+    },
+    {
+      "index": 325,
+      "channels": 1,
+      "file": "audio/sounds/monster/ColBossAtt.wav",
+      "source": "sound/monster/ColBossAtt.wav"
+    },
+    {
+      "index": 326,
+      "channels": 1,
+      "file": "audio/sounds/monster/ColBossDam.wav",
+      "source": "sound/monster/ColBossDam.wav"
+    },
+    {
+      "index": 327,
+      "channels": 1,
+      "file": "audio/sounds/monster/ColBossDie.wav",
+      "source": "sound/monster/ColBossDie.wav"
+    },
+    {
+      "index": 328,
+      "channels": 1,
+      "file": "audio/sounds/monster/ColBossEm.wav",
+      "source": "sound/monster/ColBossEm.wav"
+    },
+    {
+      "index": 329,
+      "channels": 1,
+      "file": "audio/sounds/monster/BatAtt.wav",
+      "source": "sound/monster/BatAtt.wav"
+    },
+    {
+      "index": 330,
+      "channels": 1,
+      "file": "audio/sounds/monster/BatDam.wav",
+      "source": "sound/monster/BatDam.wav"
+    },
+    {
+      "index": 331,
+      "channels": 1,
+      "file": "audio/sounds/monster/BatDie.wav",
+      "source": "sound/monster/BatDie.wav"
+    },
+    {
+      "index": 332,
+      "channels": 1,
+      "file": "audio/sounds/monster/rich_att01.wav",
+      "source": "sound/monster/rich_att01.wav"
+    },
+    {
+      "index": 333,
+      "channels": 1,
+      "file": "audio/sounds/monster/rich_move.wav",
+      "source": "sound/monster/rich_move.wav"
+    },
+    {
+      "index": 334,
+      "channels": 1,
+      "file": "audio/sounds/monster/rich_dam.wav",
+      "source": "sound/monster/rich_dam.wav"
+    },
+    {
+      "index": 335,
+      "channels": 1,
+      "file": "audio/sounds/monster/rich_die.wav",
+      "source": "sound/monster/rich_die.wav"
+    },
+    {
+      "index": 336,
+      "channels": 1,
+      "file": "audio/sounds/item/hell_item.wav",
+      "source": "sound/item/hell_item.wav"
+    },
+    {
+      "index": 337,
+      "channels": 1,
+      "file": "audio/sounds/menu/menu7.wav",
+      "source": "sound/menu/menu7.wav"
+    },
+    {
+      "index": 338,
+      "channels": 1,
+      "file": "audio/sounds/menu/menu8.wav",
+      "source": "sound/menu/menu8.wav"
+    },
+    {
+      "index": 339,
+      "channels": 1,
+      "file": "audio/sounds/menu/menu9.wav",
+      "source": "sound/menu/menu9.wav"
+    },
+    {
+      "index": 340,
+      "channels": 1,
+      "file": "audio/sounds/menu/menu10.wav",
+      "source": "sound/menu/menu10.wav"
+    },
+    {
+      "index": 341,
+      "channels": 1,
+      "file": "audio/sounds/ambient/Kheprafx.wav",
+      "source": "sound/ambient/Kheprafx.wav"
+    },
+    {
+      "index": 342,
+      "channels": 1,
+      "file": "audio/sounds/monster/kheprajump.wav",
+      "source": "sound/monster/kheprajump.wav"
+    },
+    {
+      "index": 343,
+      "channels": 1,
+      "file": "audio/sounds/monster/Khepradie.wav",
+      "source": "sound/monster/Khepradie.wav"
+    },
+    {
+      "index": 344,
+      "channels": 1,
+      "file": "audio/sounds/monster/Khepracry.wav",
+      "source": "sound/monster/Khepracry.wav"
+    },
+    {
+      "index": 345,
+      "channels": 1,
+      "file": "audio/sounds/monster/Kheprarisingstone.wav",
+      "source": "sound/monster/Kheprarisingstone.wav"
+    },
+    {
+      "index": 346,
+      "channels": 1,
+      "file": "audio/sounds/step/step07L.wav",
+      "source": "sound/step/step07L.wav"
+    },
+    {
+      "index": 347,
+      "channels": 1,
+      "file": "audio/sounds/step/step07R.wav",
+      "source": "sound/step/step07R.wav"
+    },
+    {
+      "index": 348,
+      "channels": 1,
+      "file": "audio/sounds/step/step08L.wav",
+      "source": "sound/step/step08L.wav"
+    },
+    {
+      "index": 349,
+      "channels": 1,
+      "file": "audio/sounds/step/step08R.wav",
+      "source": "sound/step/step08R.wav"
+    },
+    {
+      "index": 350,
+      "channels": 1,
+      "file": "audio/sounds/step/hstep11.wav",
+      "source": "sound/step/hstep11.wav"
+    },
+    {
+      "index": 351,
+      "channels": 1,
+      "file": "audio/sounds/step/hstep12.wav",
+      "source": "sound/step/hstep12.wav"
+    },
+    {
+      "index": 352,
+      "channels": 1,
+      "file": "audio/sounds/step/hstep13.wav",
+      "source": "sound/step/hstep13.wav"
+    },
+    {
+      "index": 353,
+      "channels": 1,
+      "file": "audio/sounds/step/hstep14.wav",
+      "source": "sound/step/hstep14.wav"
+    },
+    {
+      "index": 354,
+      "channels": 1,
+      "file": "audio/sounds/step/hstep21.wav",
+      "source": "sound/step/hstep21.wav"
+    },
+    {
+      "index": 355,
+      "channels": 1,
+      "file": "audio/sounds/step/hstep22.wav",
+      "source": "sound/step/hstep22.wav"
+    },
+    {
+      "index": 356,
+      "channels": 1,
+      "file": "audio/sounds/step/hstep23.wav",
+      "source": "sound/step/hstep23.wav"
+    },
+    {
+      "index": 357,
+      "channels": 1,
+      "file": "audio/sounds/step/hstep24.wav",
+      "source": "sound/step/hstep24.wav"
+    },
+    {
+      "index": 359,
+      "channels": 1,
+      "file": "audio/sounds/monster/queenatt.wav",
+      "source": "sound/monster/queenatt.wav"
+    },
+    {
+      "index": 360,
+      "channels": 1,
+      "file": "audio/sounds/monster/queendam.wav",
+      "source": "sound/monster/queendam.wav"
+    },
+    {
+      "index": 361,
+      "channels": 1,
+      "file": "audio/sounds/monster/queendie.wav",
+      "source": "sound/monster/queendie.wav"
+    },
+    {
+      "index": 362,
+      "channels": 1,
+      "file": "audio/sounds/monster/queenidle.wav",
+      "source": "sound/monster/queenidle.wav"
+    },
+    {
+      "index": 364,
+      "channels": 1,
+      "file": "audio/sounds/monster/mguarddam.wav",
+      "source": "sound/monster/mguarddam.wav"
+    },
+    {
+      "index": 365,
+      "channels": 1,
+      "file": "audio/sounds/monster/mguarddie.wav",
+      "source": "sound/monster/mguarddie.wav"
+    },
+    {
+      "index": 366,
+      "channels": 1,
+      "file": "audio/sounds/monster/mguardidle.wav",
+      "source": "sound/monster/mguardidle.wav"
+    },
+    {
+      "index": 367,
+      "channels": 1,
+      "file": "audio/sounds/ambient/seaship.wav",
+      "source": "sound/ambient/seaship.wav"
+    },
+    {
+      "index": 368,
+      "channels": 1,
+      "file": "audio/sounds/ambient/seagull.wav",
+      "source": "sound/ambient/seagull.wav"
+    },
+    {
+      "index": 369,
+      "channels": 1,
+      "file": "audio/sounds/ambient/seashore.wav",
+      "source": "sound/ambient/seashore.wav"
+    }
+  ],
+  "music": [
+    {
+      "index": 0,
+      "file": "audio/music/login.mp3",
+      "source": "music/login.mp3"
+    },
+    {
+      "index": 1,
+      "file": "audio/music/town01.mp3",
+      "source": "music/town01.mp3"
+    },
+    {
+      "index": 2,
+      "file": "audio/music/field01.mp3",
+      "source": "music/field01.mp3"
+    },
+    {
+      "index": 3,
+      "file": "audio/music/town02.mp3",
+      "source": "music/town02.mp3"
+    },
+    {
+      "index": 4,
+      "file": "audio/music/field02.mp3",
+      "source": "music/field02.mp3"
+    },
+    {
+      "index": 5,
+      "file": "audio/music/dungeon01.mp3",
+      "source": "music/dungeon01.mp3"
+    },
+    {
+      "index": 6,
+      "file": "audio/music/kingdom.mp3",
+      "source": "music/kingdom.mp3"
+    },
+    {
+      "index": 7,
+      "file": "audio/music/dungeon02.mp3",
+      "source": "music/dungeon02.mp3"
+    },
+    {
+      "index": 8,
+      "file": "audio/music/town03.mp3",
+      "source": "music/town03.mp3"
+    },
+    {
+      "index": 9,
+      "file": "audio/music/field03.mp3",
+      "source": "music/field03.mp3"
+    },
+    {
+      "index": 10,
+      "file": "audio/music/CastleWar.mp3",
+      "source": "music/CastleWar.mp3"
+    },
+    {
+      "index": 11,
+      "file": "audio/music/kepra.mp3",
+      "source": "music/kepra.mp3"
+    },
+    {
+      "index": 12,
+      "file": "audio/music/KhepraBoss.mp3",
+      "source": "music/KhepraBoss.mp3"
+    }
+  ],
+  "missing": [
+    {
+      "kind": "sound",
+      "index": 55,
+      "source": "sound/menu/menu04-B.wav"
+    },
+    {
+      "kind": "sound",
+      "index": 95,
+      "source": "sound/effect/fireball.wav"
+    },
+    {
+      "kind": "sound",
+      "index": 96,
+      "source": "sound/effect/firearrow.wav"
+    },
+    {
+      "kind": "sound",
+      "index": 103,
+      "source": "sound/weather/weath03.wav"
+    },
+    {
+      "kind": "sound",
+      "index": 363,
+      "source": "sound/monster/mguardatt.wav"
+    }
+  ]
+}

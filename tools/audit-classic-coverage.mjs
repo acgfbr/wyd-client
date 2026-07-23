@@ -10,6 +10,10 @@ const monsterCatalog = await readJson(join(classicRoot, manifest.monsters.catalo
 const commerceCatalog = await readJson(join(classicRoot, "commerce/catalog.json"));
 const skillCatalog = await readJson(join(classicRoot, "data/skills.json"));
 const itemIcons = await readJson(join(classicRoot, "ui/item-icons.json"));
+const audioCatalogPath = join(classicRoot, "audio/catalog.json");
+const audioCatalog = await Bun.file(audioCatalogPath).exists()
+  ? await readJson(audioCatalogPath)
+  : null;
 
 const { CLASSIC_PLAYER_CLASSES } = await import("../src/game/player/PlayerClasses.ts");
 const { HUNTRESS_LOOKS } = await import("../src/game/player/HuntressLooks.ts");
@@ -34,6 +38,7 @@ const areas = [
   ["Dados", "data"],
   ["Comercio", "commerce"],
   ["Navegacao", "navigation"],
+  ["Audio", "audio"],
 ];
 
 const areaStats = [];
@@ -158,6 +163,9 @@ const coverage = {
   },
   audio: {
     importedFiles: audioFiles.length,
+    catalogSounds: audioCatalog?.counts.sounds ?? 0,
+    catalogMusic: audioCatalog?.counts.music ?? 0,
+    missingReferences: audioCatalog?.missing ?? [],
   },
   screenshots: {
     total: screenshotFiles.length,
@@ -189,6 +197,10 @@ function renderMarkdown(report) {
   const classRows = report.player.classes.map((entry) =>
     `| ${entry.name} | ${entry.looks} |`,
   ).join("\n");
+
+  const audioGap = report.audio.importedFiles === 0
+    ? "- Audio continua sem arquivos importados."
+    : `- Audio: ${report.audio.catalogSounds} entradas de SFX e ${report.audio.catalogMusic} musicas; ${report.audio.missingReferences.length} referencias do soundlist nao existem no corpus.`;
 
   return `# Matriz automatica de cobertura do cliente classico
 
@@ -233,6 +245,8 @@ ${areaRows}
 | Registros de skill | ${report.skills.catalogRecords} |
 | Arquivos TS dedicados a efeitos | ${report.skills.dedicatedEffectSourceFiles} |
 | Arquivos de audio importados | ${report.audio.importedFiles} |
+| Entradas SFX no catalogo de audio | ${report.audio.catalogSounds} |
+| Musicas no catalogo de audio | ${report.audio.catalogMusic} |
 
 Templates de NPC/monstro nao resolvidos: ${report.monsters.unresolvedTemplates.length}.
 Templates comerciais nao resolvidos: ${report.items.unresolvedNpcTemplates}.
@@ -260,7 +274,7 @@ ${skillRows}
 
 ## Lacunas objetivas
 
-- Audio continua sem arquivos importados (${report.audio.importedFiles}).
+${audioGap}
 - Skills importadas mas ainda nao promovidas aparecem na tabela acima.
 - Compra, venda, ownership, economia, drops e formulas autoritativas dependem
   do futuro servidor e nao podem ser inferidos desta matriz de assets.

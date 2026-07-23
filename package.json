@@ -10,6 +10,7 @@
     "import:skills": "bun tools/import-classic-skills.mjs",
     "import:ui": "bun tools/import-classic-ui.mjs",
     "import:commerce": "bun tools/import-classic-commerce.mjs",
+    "import:audio": "bun tools/import-classic-audio.mjs",
     "import:all": "bun tools/import-all-classic.mjs",
     "audit:coverage": "bun tools/audit-classic-coverage.mjs",
     "dev": "vite",

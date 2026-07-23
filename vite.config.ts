@@ -23,6 +23,14 @@ export default defineConfig(({ command }) => ({
         entryFileNames: "assets/[hash].js",
         chunkFileNames: "assets/[hash].js",
         assetFileNames: "assets/[hash][extname]",
+        manualChunks(id) {
+          // Three.js changes independently from the recovered game runtime.
+          // Keeping it in a stable vendor chunk improves repeat-visit caching
+          // and makes the application budget visible instead of hiding both
+          // behind one near-megabyte entry file.
+          if (id.includes("/node_modules/three/")) return "vendor-three";
+          return undefined;
+        },
       },
     },
   },

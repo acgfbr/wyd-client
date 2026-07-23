@@ -305,10 +305,20 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
     listeners, input, mundo, spawns, player, ground items, preview, efeitos,
     renderer e caches de terreno/modelos/texturas, preservando o bfcache do
     Safari/iOS em `pagehide.persisted=true`. Ainda faltam baseline visual/perf
-    por cenário, teste manual de reload/bfcache e geração automática da matriz
-    por arquivo importado.
-13. Memória canônica do projeto. Depois da auditoria final, criar e consolidar
-    `MEMORIA_PROJETO.md` com a arquitetura resultante, decisões e justificativas,
+    por cenário e teste manual de reload/bfcache. A matriz automatica por
+    arquivo importado foi concluida: `bun run audit:coverage` cruza o manifesto,
+    o corpus fisico e as definicoes TypeScript do runtime, gerando Markdown e
+    JSON em `docs/matriz-cobertura-classico.*`. O snapshot atual valida 2.285
+    caminhos declarados sem faltantes, 111 TRN, 108 DAT declarados, 103
+    minimapas declarados, 377 templates, 3.937 geradores, 6.500 itens, 248
+    skills binárias, 14 montarias e oito evocacoes; tambem explicita por classe
+    quais skills ja foram promovidas ao runtime. O code splitting tambem foi
+    aplicado: Three.js ocupa um chunk vendor cacheavel, a entrada da aplicacao
+    ficou em cerca de 460 KiB minificados e os renderers de Foema, TransKnight
+    e BeastMaster viraram chunks lazy de aproximadamente 20/54/96 KiB,
+    carregados somente no primeiro switch para cada classe.
+13. Memória canônica do projeto — **primeira consolidacao concluida**.
+    `MEMORIA_PROJETO.md` registra a arquitetura resultante, decisões e justificativas,
     fontes do cliente clássico por subsistema, formatos/parsers, descobertas,
     bugs corrigidos, bugs ainda conhecidos, limitações técnicas e de navegador,
     soluções rejeitadas, riscos, débitos, procedimentos de importação/build e

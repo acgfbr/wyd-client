@@ -1,19 +1,21 @@
 # Matriz automatica de cobertura do cliente classico
 
-Gerado por `bun run audit:coverage` em 2026-07-23T02:42:59.975Z. Este arquivo e
+Gerado por `bun run audit:coverage` em 2026-07-23T02:55:43.281Z. Este arquivo e
 derivado dos artefatos importados e do runtime; nao deve ser editado
 manualmente. A analise e as decisoes ficam em `auditoria-threejs-cobertura.md`.
 
 ## Integridade dos imports
 
-- 2287 caminhos unicos referenciados pelo manifesto.
-- 2 caminhos referenciados ausentes.
+- 2285 caminhos unicos referenciados pelo manifesto.
+- 0 caminhos referenciados ausentes.
 - 111 Fields: 111 TRN,
-  108 DAT e 103 minimapas.
+  108 DAT declarados e 103
+  minimapas declarados.
+- Referencias declaradas ausentes: 0 DAT e
+  0 minimapas.
 - 111 capturas de mapa presentes na documentacao.
 
-- `minimaps/undefined`
-- `objects/undefined`
+Nenhum arquivo referenciado pelo manifesto esta ausente.
 
 ## Inventario fisico
 
@@ -53,7 +55,7 @@ manualmente. A analise e as decisoes ficam em `auditoria-threejs-cobertura.md`.
 | Atlas de icones | 14 |
 | Registros de skill | 248 |
 | Arquivos TS dedicados a efeitos | 27 |
-| Arquivos de audio importados | 0 |
+| Arquivos de audio importados | 335 |
 
 Templates de NPC/monstro nao resolvidos: 1.
 Templates comerciais nao resolvidos: 1.
@@ -87,7 +89,7 @@ manual e rastreada em `PENDENCIAS.md`.
 
 ## Lacunas objetivas
 
-- Audio continua sem arquivos importados (0).
+- Audio continua sem arquivos importados (335).
 - Skills importadas mas ainda nao promovidas aparecem na tabela acima.
 - Compra, venda, ownership, economia, drops e formulas autoritativas dependem
   do futuro servidor e nao podem ser inferidos desta matriz de assets.

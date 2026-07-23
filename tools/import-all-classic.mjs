@@ -10,6 +10,7 @@ const imports = [
   { label: "skills", script: "import-classic-skills.mjs" },
   { label: "HUD clássico", script: "import-classic-ui.mjs" },
   { label: "itens e comercio", script: "import-classic-commerce.mjs", serverData: true },
+  { label: "audio e musicas", script: "import-classic-audio.mjs" },
 ];
 
 for (const entry of imports) {

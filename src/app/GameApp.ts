@@ -65,13 +65,14 @@ import {
 import { HuntressCombatEffects } from "../render/effects/HuntressCombatEffects";
 import { ClassicDamageNumbers } from "../render/effects/ClassicDamageNumbers";
 import { ClassicHuntressSkillEffects } from "../render/effects/ClassicHuntressSkillEffects";
-import { ClassicFoemaSkillEffects } from "../render/effects/ClassicFoemaSkillEffects";
-import { ClassicTransKnightSkillEffects } from "../render/effects/ClassicTransKnightSkillEffects";
-import { ClassicBeastMasterSkillEffects } from "../render/effects/ClassicBeastMasterSkillEffects";
+import type { ClassicFoemaSkillEffects } from "../render/effects/ClassicFoemaSkillEffects";
+import type { ClassicTransKnightSkillEffects } from "../render/effects/ClassicTransKnightSkillEffects";
+import type { ClassicBeastMasterSkillEffects } from "../render/effects/ClassicBeastMasterSkillEffects";
 import { ClassicEtherealExplosionEffect } from "../render/effects/ClassicEtherealExplosionEffect";
 import { ClassicLevelUpEffects } from "../render/effects/ClassicLevelUpEffects";
 import { ClassicInventoryPreview } from "../render/inventory/ClassicInventoryPreview";
 import { configureClassicDdsTextureSupport } from "../render/textures/ClassicDdsTextureLoader";
+import { ClassicAudio } from "../audio/ClassicAudio";
 import {
   connectedFieldRegions,
   fieldKey,
@@ -143,15 +144,17 @@ export class GameApp {
   readonly #input: GameInput;
   readonly #hud = new GameHud();
   readonly #telemetry = new RuntimeTelemetry();
+  readonly #audio = new ClassicAudio();
   readonly #playerOverhead: ClassicPlayerOverheadHud;
   readonly #playerState = new PlayerState("Huntress");
   #skills = new ClassSkillSystem("huntress");
   #activeClassKey: ClassicClassKey = "huntress";
   readonly #combatEffects = new HuntressCombatEffects();
   readonly #skillEffects: ClassicHuntressSkillEffects;
-  readonly #foemaSkillEffects: ClassicFoemaSkillEffects;
-  readonly #transKnightSkillEffects: ClassicTransKnightSkillEffects;
-  readonly #beastMasterSkillEffects: ClassicBeastMasterSkillEffects;
+  #foemaSkillEffects: ClassicFoemaSkillEffects | null = null;
+  #transKnightSkillEffects: ClassicTransKnightSkillEffects | null = null;
+  #beastMasterSkillEffects: ClassicBeastMasterSkillEffects | null = null;
+  readonly #classEffectLoads = new Map<ClassicClassKey, Promise<void>>();
   readonly #etherealExplosionEffects: ClassicEtherealExplosionEffect;
   readonly #levelUpEffects: ClassicLevelUpEffects;
   readonly #damageNumbers: ClassicDamageNumbers;
@@ -252,9 +255,6 @@ export class GameApp {
     this.#renderer.domElement.addEventListener("webglcontextrestored", this.webglContextRestored);
     this.container.appendChild(this.#renderer.domElement);
     this.#skillEffects = new ClassicHuntressSkillEffects(this.#scene);
-    this.#foemaSkillEffects = new ClassicFoemaSkillEffects(this.#scene);
-    this.#transKnightSkillEffects = new ClassicTransKnightSkillEffects(this.#scene);
-    this.#beastMasterSkillEffects = new ClassicBeastMasterSkillEffects(this.#scene);
     this.#etherealExplosionEffects = new ClassicEtherealExplosionEffect(this.#scene);
     this.#levelUpEffects = new ClassicLevelUpEffects(this.#scene);
     this.#damageNumbers = new ClassicDamageNumbers(this.container);
@@ -457,12 +457,17 @@ export class GameApp {
     this.#world = undefined;
     this.#combatEffects.dispose();
     this.#skillEffects.dispose();
-    this.#foemaSkillEffects.dispose();
-    this.#transKnightSkillEffects.dispose();
-    this.#beastMasterSkillEffects.dispose();
+    this.#foemaSkillEffects?.dispose();
+    this.#foemaSkillEffects = null;
+    this.#transKnightSkillEffects?.dispose();
+    this.#transKnightSkillEffects = null;
+    this.#beastMasterSkillEffects?.dispose();
+    this.#beastMasterSkillEffects = null;
+    this.#classEffectLoads.clear();
     this.#etherealExplosionEffects.dispose();
     this.#levelUpEffects.dispose();
     this.#damageNumbers.dispose();
+    this.#audio.dispose();
     this.#renderer.dispose();
     this.#renderer.domElement.remove();
     this.#scene.clear();
@@ -531,6 +536,10 @@ export class GameApp {
         }
         this.#player.update(dt, movement);
         this.#world?.update(dt, this.#player.position);
+        this.#audio.updateMusic(
+          this.#player.position,
+          this.#world?.attributeAt(this.#player.position) ?? null,
+        );
         this.#groundItems?.update(dt);
         this.updateGroundItemPickup(dt);
         this.updateGroundPortalPrompt();
@@ -548,9 +557,9 @@ export class GameApp {
     }
     this.updatePersistentBuffEffects(dt);
     this.#skillEffects.update(dt);
-    this.#foemaSkillEffects.update(dt);
-    this.#transKnightSkillEffects.update(dt);
-    this.#beastMasterSkillEffects.update(dt);
+    this.#foemaSkillEffects?.update(dt);
+    this.#transKnightSkillEffects?.update(dt);
+    this.#beastMasterSkillEffects?.update(dt);
     this.#inventoryPreview?.update(dt);
     this.#renderer.render(this.#scene, this.#camera);
     this.#inventoryPreview?.render();
@@ -1026,6 +1035,7 @@ export class GameApp {
         return;
       }
       this.#hud.addLog(`Coletado: ${delivery.item.name}.`, "reward");
+      void this.#audio.playSound(31);
     } catch (error) {
       console.error("Falha ao coletar item do chão", error);
       if (generation === this.#groundItemPickupGeneration) {
@@ -1429,9 +1439,9 @@ export class GameApp {
     this.#player?.setEffectsEnabled(this.#effectsEnabled);
     this.#combatEffects.setEnabled(this.#effectsEnabled);
     this.#skillEffects.setEnabled(this.#effectsEnabled);
-    this.#foemaSkillEffects.setEnabled(this.#effectsEnabled);
-    this.#transKnightSkillEffects.setEnabled(this.#effectsEnabled);
-    this.#beastMasterSkillEffects.setEnabled(this.#effectsEnabled);
+    this.#foemaSkillEffects?.setEnabled(this.#effectsEnabled);
+    this.#transKnightSkillEffects?.setEnabled(this.#effectsEnabled);
+    this.#beastMasterSkillEffects?.setEnabled(this.#effectsEnabled);
     this.#etherealExplosionEffects.setEnabled(this.#effectsEnabled);
     this.#levelUpEffects.setEnabled(this.#effectsEnabled);
     this.#inventoryPreview?.setEffectsEnabled(this.#effectsEnabled);
@@ -1892,7 +1902,7 @@ export class GameApp {
       ) return;
       const casterBase = this.#player.object.position.clone();
       const handled = skill.classKey === "transknight"
-        && this.#transKnightSkillEffects.playAttack(skill.classicIndex, casterBase, casterBase);
+        && this.#transKnightSkillEffects?.playAttack(skill.classicIndex, casterBase, casterBase);
       if (!handled) {
         this.#combatEffects.burst(
           casterBase,
@@ -1954,7 +1964,7 @@ export class GameApp {
       const currentTarget = spawns.snapshot(targetId);
       if (currentTarget?.alive && currentTarget.hostile) {
         const targetBase = foemaTargetSnapshot ?? this.combatPoint(currentTarget.position, 0);
-        this.#foemaSkillEffects.playAttack(skill.classicIndex, casterBase, targetBase);
+        this.#foemaSkillEffects?.playAttack(skill.classicIndex, casterBase, targetBase);
         this.applySkillImpact(skill, targetId, targetBase, false);
         if (skill.classicIndex === 36) {
           spawns.applyClassicFreeze(targetId, skill.affectTimeSeconds);
@@ -1971,7 +1981,7 @@ export class GameApp {
       if (currentTarget?.alive && currentTarget.hostile) {
         const targetBase = this.combatPoint(currentTarget.position, 0);
         if (skill.classicIndex === 52) {
-          this.#beastMasterSkillEffects.playAttack(
+          this.#beastMasterSkillEffects?.playAttack(
             52,
             casterBase,
             targetBase,
@@ -1989,7 +1999,7 @@ export class GameApp {
           // Select once so EffectStart actors and the offline damage packet use
           // exactly the same primary-first list of at most five entities.
           const targets = this.selectSkillTargets(skill, currentTarget);
-          this.#beastMasterSkillEffects.playVengefulSpirit(
+          this.#beastMasterSkillEffects?.playVengefulSpirit(
             targetBase,
             targets.map((affected) => ({
               feet: this.combatPoint(affected.position, 0),
@@ -2061,7 +2071,7 @@ export class GameApp {
 
       if (
         skill.classKey === "foema"
-        && this.#foemaSkillEffects.playAttack(
+        && this.#foemaSkillEffects?.playAttack(
           skill.classicIndex,
           this.combatPoint(this.#player!.position, 0),
           foemaTargetSnapshot ?? targetBase,
@@ -2075,7 +2085,7 @@ export class GameApp {
         skill.classKey === "beastmaster"
         && skill.classicIndex === 51
       ) {
-        this.#beastMasterSkillEffects.playAttack(
+        this.#beastMasterSkillEffects?.playAttack(
           51,
           this.combatPoint(this.#player!.position, 0),
           beastMasterTargetSnapshot ?? targetBase,
@@ -2092,7 +2102,7 @@ export class GameApp {
 
       if (
         skill.classKey === "beastmaster"
-        && this.#beastMasterSkillEffects.playAttack(
+        && this.#beastMasterSkillEffects?.playAttack(
           skill.classicIndex,
           this.combatPoint(this.#player!.position, 0),
           beastMasterTargetSnapshot ?? targetBase,
@@ -2112,7 +2122,7 @@ export class GameApp {
 
       if (
         skill.classKey === "transknight"
-        && this.#transKnightSkillEffects.playAttack(skill.classicIndex, casterBase, targetBase)
+        && this.#transKnightSkillEffects?.playAttack(skill.classicIndex, casterBase, targetBase)
       ) {
         this.applySkillImpact(skill, targetId, targetBase, false);
         return;
@@ -2172,7 +2182,7 @@ export class GameApp {
     // unlike the actor-owned effect event, it does not wait the usual 500 ms.
     const immediateAthenaTouch = skill.classKey === "foema"
       && skill.classicIndex === 45
-      && this.#foemaSkillEffects.playCast(45, this.#player.object.position);
+      && this.#foemaSkillEffects?.playCast(45, this.#player.object.position);
     const delay = timing?.effectDelaySeconds ?? 0.5;
     this.scheduleSkillEvent(delay, () => {
       if (!this.#player || !this.#playerState.snapshot.alive) return;
@@ -2181,7 +2191,7 @@ export class GameApp {
       if (skill.classicIndex === 76) this.#skillEffects.playImmunityCast(this.#player.object.position);
       if (skill.classicIndex === 81) this.#skillEffects.playSoulLinkCast(this.#player.object.position);
       if (skill.classKey === "foema" && skill.classicIndex === 37) {
-        this.#foemaSkillEffects.playThunderCast(
+        this.#foemaSkillEffects?.playThunderCast(
           this.#player.object.position,
           this.#player.mounted,
         );
@@ -2189,12 +2199,12 @@ export class GameApp {
       const handledFoemaEffect = skill.classKey === "foema" && (
         skill.classicIndex === 37
         || (skill.classicIndex === 45 && immediateAthenaTouch)
-        || this.#foemaSkillEffects.playCast(skill.classicIndex, this.#player.object.position)
+        || this.#foemaSkillEffects?.playCast(skill.classicIndex, this.#player.object.position)
       );
       const handledTransKnightEffect = skill.classKey === "transknight"
-        && this.#transKnightSkillEffects.playBuff(skill.classicIndex, this.#player.object.position);
+        && this.#transKnightSkillEffects?.playBuff(skill.classicIndex, this.#player.object.position);
       const handledBeastMasterEffect = skill.classKey === "beastmaster"
-        && this.#beastMasterSkillEffects.playBuffCast(
+        && this.#beastMasterSkillEffects?.playBuffCast(
           skill.classicIndex,
           this.#player.object.position,
         );
@@ -2366,7 +2376,7 @@ export class GameApp {
         mounted: false,
         ownerYaw: 0,
       });
-      this.#foemaSkillEffects.syncPersistentBuffs(null, {
+      this.#foemaSkillEffects?.syncPersistentBuffs(null, {
         thunder: false,
         magicWeapon: false,
         magicShield: false,
@@ -2376,7 +2386,7 @@ export class GameApp {
         scaledPickHeight: 0,
         ownerSkinAnchor: null,
       });
-      this.#beastMasterSkillEffects.syncPersistentBuffs(null);
+      this.#beastMasterSkillEffects?.syncPersistentBuffs(null);
       return;
     }
     const active = this.#skills.activeBuffs();
@@ -2396,7 +2406,7 @@ export class GameApp {
     const weaponSegmentCount = magicWeapon
       ? player.sampleWeaponEffectSegments(this.#weaponEffectSegments)
       : 0;
-    this.#foemaSkillEffects.syncPersistentBuffs(player.object.position, {
+    this.#foemaSkillEffects?.syncPersistentBuffs(player.object.position, {
       thunder: this.#activeClassKey === "foema" && activeIndices.has(37),
       magicWeapon,
       magicShield: this.#activeClassKey === "foema" && activeIndices.has(43),
@@ -2406,7 +2416,7 @@ export class GameApp {
       scaledPickHeight: CLASSIC_HUMANOID_PICK_HEIGHT * player.classicScale,
       ownerSkinAnchor: this.#playerSkinAnchor,
     }, this.#weaponEffectSegments, weaponSegmentCount);
-    this.#beastMasterSkillEffects.syncPersistentBuffs({
+    this.#beastMasterSkillEffects?.syncPersistentBuffs({
       ownerFeet: player.object.position,
       ownerSkinAnchor: this.#playerSkinAnchor,
       ownerClassicYaw: player.classicYaw,
@@ -2458,7 +2468,7 @@ export class GameApp {
     const spawns = this.#boundSpawns;
     const player = this.#player;
     if (!this.#effectsEnabled || !targetId || !spawns || !player) {
-      this.#foemaSkillEffects.syncCancellation(null, false);
+      this.#foemaSkillEffects?.syncCancellation(null, false);
       return;
     }
     const target = spawns.snapshot(targetId);
@@ -2467,11 +2477,11 @@ export class GameApp {
       || spawns.classicCancellationRemaining(targetId) <= 0
     ) {
       this.#foemaCancellationTargetId = null;
-      this.#foemaSkillEffects.syncCancellation(null, false);
+      this.#foemaSkillEffects?.syncCancellation(null, false);
       return;
     }
     const targetFeet = this.combatPoint(target.position, 0);
-    this.#foemaSkillEffects.syncCancellation({
+    this.#foemaSkillEffects?.syncCancellation({
       targetFeet,
       targetSkinAnchor: targetFeet,
       mounted: false,
@@ -2650,9 +2660,9 @@ export class GameApp {
     this.#buffVisualPulseRemaining.clear();
     this.#skillEffects.clear();
     this.#foemaCancellationTargetId = null;
-    this.#foemaSkillEffects.clear();
-    this.#transKnightSkillEffects.clear();
-    this.#beastMasterSkillEffects.clear();
+    this.#foemaSkillEffects?.clear();
+    this.#transKnightSkillEffects?.clear();
+    this.#beastMasterSkillEffects?.clear();
     this.#etherealExplosionEffects.clear();
     this.#player?.setInvisible(false);
     this.#respawnRemaining = 4.5;
@@ -2729,9 +2739,9 @@ export class GameApp {
     this.#buffVisualPulseRemaining.clear();
     this.#skillEffects.clear();
     this.#foemaCancellationTargetId = null;
-    this.#foemaSkillEffects.clear();
-    this.#transKnightSkillEffects.clear();
-    this.#beastMasterSkillEffects.clear();
+    this.#foemaSkillEffects?.clear();
+    this.#transKnightSkillEffects?.clear();
+    this.#beastMasterSkillEffects?.clear();
     this.#player.setInvisible(false);
     this.#damageNumbers.clear();
     this.#player.teleport(ARMIA_SPAWN);
@@ -2814,18 +2824,57 @@ export class GameApp {
   /** Keeps complete class-specific rigs/textures out of mobile boot memory. */
   private async prepareClassSkillEffects(classKey: ClassicClassKey): Promise<void> {
     const assets = this.#assets;
-    if (!assets) return;
-    const jobs = classKey === "huntress"
-      ? [
-          this.#skillEffects.prepareClassic(assets),
-          this.#etherealExplosionEffects.prepareClassic(assets),
-        ]
-      : classKey === "foema"
-        ? [this.#foemaSkillEffects.prepareClassic(assets)]
-        : classKey === "transknight"
-          ? [this.#transKnightSkillEffects.prepareClassic(assets)]
-          : [this.#beastMasterSkillEffects.prepareClassic(assets)];
-    await Promise.allSettled(jobs);
+    if (!assets || this.#disposed) return;
+    if (classKey === "huntress") {
+      await Promise.allSettled([
+        this.#skillEffects.prepareClassic(assets),
+        this.#etherealExplosionEffects.prepareClassic(assets),
+      ]);
+      return;
+    }
+
+    const existing = this.#classEffectLoads.get(classKey);
+    if (existing) {
+      await existing;
+      return;
+    }
+
+    const load = this.loadClassSkillEffectRenderer(classKey, assets)
+      .catch((error: unknown) => {
+        console.warn(`Renderer de skills de ${classKey} indisponivel`, error);
+      });
+    this.#classEffectLoads.set(classKey, load);
+    await load;
+  }
+
+  private async loadClassSkillEffectRenderer(
+    classKey: Exclude<ClassicClassKey, "huntress">,
+    assets: ClassicAssetSource,
+  ): Promise<void> {
+    if (classKey === "foema") {
+      const { ClassicFoemaSkillEffects } = await import("../render/effects/ClassicFoemaSkillEffects");
+      if (this.#disposed) return;
+      const renderer = this.#foemaSkillEffects ?? new ClassicFoemaSkillEffects(this.#scene);
+      this.#foemaSkillEffects = renderer;
+      renderer.setEnabled(this.#effectsEnabled);
+      await renderer.prepareClassic(assets);
+      return;
+    }
+    if (classKey === "transknight") {
+      const { ClassicTransKnightSkillEffects } = await import("../render/effects/ClassicTransKnightSkillEffects");
+      if (this.#disposed) return;
+      const renderer = this.#transKnightSkillEffects ?? new ClassicTransKnightSkillEffects(this.#scene);
+      this.#transKnightSkillEffects = renderer;
+      renderer.setEnabled(this.#effectsEnabled);
+      await renderer.prepareClassic(assets);
+      return;
+    }
+    const { ClassicBeastMasterSkillEffects } = await import("../render/effects/ClassicBeastMasterSkillEffects");
+    if (this.#disposed) return;
+    const renderer = this.#beastMasterSkillEffects ?? new ClassicBeastMasterSkillEffects(this.#scene);
+    this.#beastMasterSkillEffects = renderer;
+    renderer.setEnabled(this.#effectsEnabled);
+    await renderer.prepareClassic(assets);
   }
 
   private requestPlayerClass(classKey: string): void {
@@ -2893,9 +2942,9 @@ export class GameApp {
       this.#buffVisualPulseRemaining.clear();
       this.#skillEffects.clear();
       this.#foemaCancellationTargetId = null;
-      this.#foemaSkillEffects.clear();
-      this.#transKnightSkillEffects.clear();
-      this.#beastMasterSkillEffects.clear();
+      this.#foemaSkillEffects?.clear();
+      this.#transKnightSkillEffects?.clear();
+      this.#beastMasterSkillEffects?.clear();
       this.#etherealExplosionEffects.clear();
       this.#player?.setInvisible(this.#skills.hasBuff(95));
       this.#playerState.setName(definition.name);
@@ -3136,9 +3185,9 @@ export class GameApp {
     this.selectTarget(null);
     this.#skillEffects.clear();
     this.#foemaCancellationTargetId = null;
-    this.#foemaSkillEffects.clear();
-    this.#transKnightSkillEffects.clear();
-    this.#beastMasterSkillEffects.clear();
+    this.#foemaSkillEffects?.clear();
+    this.#transKnightSkillEffects?.clear();
+    this.#beastMasterSkillEffects?.clear();
     this.#etherealExplosionEffects.clear();
     this.#damageNumbers.clear();
 

@@ -1,19 +1,18 @@
 {
-  "generatedAt": "2026-07-23T02:42:59.975Z",
+  "generatedAt": "2026-07-23T02:55:43.281Z",
   "command": "bun run audit:coverage",
   "source": "WYD classic",
   "referencedFiles": {
-    "total": 2287,
-    "missing": [
-      "minimaps/undefined",
-      "objects/undefined"
-    ]
+    "total": 2285,
+    "missing": []
   },
   "maps": {
     "fields": 111,
     "completeTerrain": 111,
-    "completeObjects": 108,
-    "completeMinimaps": 103,
+    "declaredObjects": 108,
+    "declaredMinimaps": 103,
+    "missingObjectReferences": 0,
+    "missingMinimapReferences": 0,
     "screenshots": 111
   },
   "manifest": {
@@ -277,7 +276,7 @@
     "dedicatedEffectSourceFiles": 27
   },
   "audio": {
-    "importedFiles": 0
+    "importedFiles": 335
   },
   "screenshots": {
     "total": 124,

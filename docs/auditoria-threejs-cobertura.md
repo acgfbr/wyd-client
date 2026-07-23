@@ -56,9 +56,12 @@ com vários drops, com NPC shop/cargo/inventário aberto e no iPhone.
 - Alguns efeitos de skill possuem pools próprios e modelos/texuras dedicados;
   a matriz completa deve confirmar que cada pool tem limite, cleanup de mapa e
   cleanup de troca de classe.
-- O chunk de produção está grande. A distribuição atual é aceitável para o
-  protótipo, mas o build final deve considerar code splitting por classe,
-  renderer de skill e catálogos.
+- O runtime principal agora fica separado do vendor Three.js. Foema,
+  TransKnight e BeastMaster possuem chunks de renderer próprios carregados
+  apenas no primeiro switch para a classe; o build medido gerou chunks de
+  aproximadamente 20, 54 e 96 KiB minificados. A entrada da aplicação ficou em
+  aproximadamente 460 KiB e o vendor Three.js em 518 KiB. Huntress permanece
+  no boot porque é a classe inicial; catálogos grandes já usam fetch lazy.
 - `performance.memory` não existe no Safari/iPhone, então RAM JS aparece como
   `—`; para iOS, usar GEO/TEX/CALLS/TRIS e inspeção remota.
 - WebGPU não é alternativa atual: o runtime depende de materiais Three.js
@@ -66,6 +69,15 @@ com vários drops, com NPC shop/cargo/inventário aberto e no iPhone.
   esses caminhos para outro pipeline.
 
 ## Matriz de cobertura
+
+A matriz fisica e reproduzivel agora e gerada por
+`bun run audit:coverage` em `docs/matriz-cobertura-classico.md` e
+`docs/matriz-cobertura-classico.json`. O gerador cruza o manifesto com os
+arquivos existentes e importa as definicoes TypeScript do runtime para nao
+confundir asset presente com feature jogavel. No snapshot atual existem 2.285
+caminhos unicos declarados e nenhum ausente; os 111 Fields possuem 111 TRN,
+108 DAT declarados e 103 minimapas declarados. As ausencias de DAT/minimapa
+nos demais Fields fazem parte do proprio manifesto, nao sao links quebrados.
 
 | Subsistema | Cobertura atual | Fonte/rastro | Aberto |
 | --- | --- | --- | --- |
@@ -89,9 +101,7 @@ com vários drops, com NPC shop/cargo/inventário aberto e no iPhone.
 1. Homologar visualmente a telemetria nova e coletar baseline de Armia:
    FPS/RAM/THREAD/GEO/TEX/CALLS/TRIS.
 2. Testar o shutdown central em reload/pagehide real e bfcache Safari.
-3. Gerar uma tabela automática de cobertura por arquivo importado: mapas,
-   monstros, player, montarias, itens, UI e skills.
-4. Separar code splitting por classe/skill apenas depois da matriz mostrar
-   quais assets são realmente carregados no boot.
-5. Voltar ao épico de skills somente com uma lista curta por lote, mantendo a
+3. Medir o boot e a troca das quatro classes em desktop/iPhone para homologar
+   os novos chunks e registrar a baseline real.
+4. Voltar ao épico de skills somente com uma lista curta por lote, mantendo a
    regra de não cair em efeito genérico silencioso.
