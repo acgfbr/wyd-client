@@ -225,6 +225,26 @@ export class ClassicFloatObjects {
     for (const material of state.ownedMaterials.splice(0)) material.dispose();
   }
 
+  dispose(): void {
+    const keys = [...this.#fields.keys()];
+    for (const key of keys) {
+      const [column, row] = parseFieldKey(key);
+      this.removeBlock(column, row);
+    }
+    this.#generations.clear();
+    this.#plane.dispose();
+    const materialJobs = [this.#rippleMaterial, this.#markerMaterial].filter(
+      (entry): entry is Promise<THREE.ShaderMaterial | null> => entry !== null,
+    );
+    this.#rippleMaterial = null;
+    this.#markerMaterial = null;
+    for (const job of materialJobs) void job.then((material) => material?.dispose()).catch(() => undefined);
+    void this.#runtime.then((runtime) => runtime?.skinned.dispose()).catch(() => undefined);
+    this.#textures.dispose();
+    this.object.removeFromParent();
+    this.object.clear();
+  }
+
   private isCurrent(key: string, generation: number, state: FieldState): boolean {
     return this.#generations.get(key) === generation && this.#fields.get(key) === state;
   }
@@ -279,6 +299,12 @@ export class ClassicFloatObjects {
     ));
     return this.#markerMaterial;
   }
+}
+
+function parseFieldKey(key: string): [number, number] {
+  const [column, row] = key.split(",").map(Number);
+  if (!Number.isFinite(column) || !Number.isFinite(row)) return [0, 0];
+  return [column!, row!];
 }
 
 function createEffectInstances(

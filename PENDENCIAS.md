@@ -297,7 +297,16 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
     foi e não foi importado para todas as classes, monstros, NPCs, itens,
     equipamentos, montarias, animações, sons e efeitos; apontar os parsers e
     dados-fonte existentes, lacunas, dependências e a ordem segura para trazer
-    o restante sem regressões visuais.
+    o restante sem regressões visuais. Iniciado em
+    `docs/auditoria-threejs-cobertura.md`: a HUD agora expõe também
+    `WebGLRenderer.info` (`GEO/TEX/CALLS/TRIS`) além de FPS, heap JS e proxy de
+    thread, e a primeira matriz de cobertura/riscos está registrada. O
+    shutdown central `GameApp.dispose()` também foi implementado com cleanup de
+    listeners, input, mundo, spawns, player, ground items, preview, efeitos,
+    renderer e caches de terreno/modelos/texturas, preservando o bfcache do
+    Safari/iOS em `pagehide.persisted=true`. Ainda faltam baseline visual/perf
+    por cenário, teste manual de reload/bfcache e geração automática da matriz
+    por arquivo importado.
 13. Memória canônica do projeto. Depois da auditoria final, criar e consolidar
     `MEMORIA_PROJETO.md` com a arquitetura resultante, decisões e justificativas,
     fontes do cliente clássico por subsistema, formatos/parsers, descobertas,

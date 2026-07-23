@@ -115,6 +115,31 @@ export class ClassicWorld {
     this.#mapObjects.setEffectsEnabled(enabled);
   }
 
+  dispose(): void {
+    for (const controller of this.#loadControllers.values()) controller.abort();
+    this.#loadControllers.clear();
+    this.#loadJobs.clear();
+    this.#objectJobs.clear();
+    this.#spawns?.dispose();
+    this.#spawns = null;
+    for (const key of [...this.#loadedFields]) this.unloadField(key);
+    this.#blocks.clear();
+    this.#collisionMasks.clear();
+    this.#terrainMeshes.clear();
+    this.#loadedFields.clear();
+    this.#desiredFields.clear();
+    this.#objectReady.clear();
+    this.#objectRetries.clear();
+    this.#fieldRetries.clear();
+    this.#fieldGenerations.clear();
+    this.#predictiveFields.clear();
+    this.#mapObjects.dispose();
+    this.#materials.dispose();
+    this.models.dispose();
+    this.object.removeFromParent();
+    this.object.clear();
+  }
+
   /**
    * Garante somente o terreno do Field atual. Em teleportes, reset=true
    * invalida o streaming anterior; objetos continuam entrando em background.

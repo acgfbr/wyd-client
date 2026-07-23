@@ -43,6 +43,17 @@ export class ModelLibrary {
     }).catch(() => undefined);
   }
 
+  dispose(): void {
+    const entries = [...this.#cache.values()];
+    this.#cache.clear();
+    for (const entry of entries) {
+      entry.references = 0;
+      void entry.promise.then((prototype) => {
+        if (prototype) disposePrototype(prototype);
+      }).catch(() => undefined);
+    }
+  }
+
   private async loadUncached(type: number): Promise<THREE.Group | null> {
     const source = await this.assets.loadModel(type);
     if (!source) return null;

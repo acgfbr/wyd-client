@@ -192,6 +192,18 @@ export class ClassicSpawnManager {
     return new ClassicSpawnManager(await MonsterCatalog.load(assets), assets, environment);
   }
 
+  dispose(): void {
+    for (const key of [...this.#fields.keys()]) this.cancelField(key);
+    this.#actors.length = 0;
+    this.#actorsById.clear();
+    this.#friendlyHoverId = null;
+    this.#hostileHoverId = null;
+    this.#selectedHostileId = null;
+    this.#listeners.clear();
+    this.object.removeFromParent();
+    this.object.clear();
+  }
+
   snapshot(id: string): ClassicMonsterSnapshot | null {
     const actor = this.#actorsById.get(id);
     return actor ? actorSnapshot(actor) : null;

@@ -121,6 +121,14 @@ export class TerrainMaterialLibrary {
     }
   }
 
+  dispose(): void {
+    for (const material of this.#materials.values()) material.dispose();
+    this.#materials.clear();
+    for (const texture of this.#textures.values()) texture.dispose();
+    this.#textures.clear();
+    this.#whiteTexture.dispose();
+  }
+
   #texture(index: number): THREE.Texture {
     const cached = this.#textures.get(index);
     if (cached) return cached;

@@ -34,28 +34,12 @@ export class GameInput {
   onNearbyGroundItemPickup?: () => void;
   onGroundItemLabelsToggle?: () => void;
   onSkill?: (slot: number) => void;
+  #disposed = false;
 
   constructor(private readonly element: HTMLElement) {
-    window.addEventListener("keydown", (event) => {
-      if (isTextEntry(event.target)) return;
-      if (event.code === "Space" && isNativeSpaceControl(event.target)) return;
-      this.#keys.add(event.code);
-      if (event.code === "KeyG" && !event.repeat) this.onSpeedToggle?.();
-      if (event.code === "KeyI" && !event.repeat) this.onInventoryToggle?.();
-      if (event.code === "KeyC" && !event.repeat) this.onCharacterToggle?.();
-      if (event.code === "KeyK" && !event.repeat) this.onSkillMenuToggle?.();
-      if (event.code === "KeyR" && !event.repeat) this.onMountToggle?.();
-      if (event.code === "KeyF" && !event.repeat) this.onAutoCombatToggle?.();
-      if (event.code === "KeyV" && !event.repeat) this.onEffectsToggle?.();
-      if (event.code === "Space") {
-        event.preventDefault();
-        if (!event.repeat) this.onNearbyGroundItemPickup?.();
-      }
-      if (event.code === "KeyZ" && !event.repeat) this.onGroundItemLabelsToggle?.();
-      if (!event.repeat && /^Digit[1-9]$/.test(event.code)) this.onSkill?.(Number(event.code.slice(-1)));
-    });
-    window.addEventListener("keyup", (event) => this.#keys.delete(event.code));
-    element.addEventListener("contextmenu", (event) => event.preventDefault());
+    window.addEventListener("keydown", this.keyDown);
+    window.addEventListener("keyup", this.keyUp);
+    element.addEventListener("contextmenu", this.contextMenu);
     // Mouse events are intentional: browsers may only emit pointerdown for
     // the first button in a chord, while mousedown/up report L and R separately.
     element.addEventListener("mousedown", this.mouseDown);
@@ -64,10 +48,25 @@ export class GameInput {
     window.addEventListener("mousemove", this.mouseMove);
     window.addEventListener("mouseup", this.mouseUp);
     window.addEventListener("blur", this.resetTransientState);
-    window.addEventListener("focusin", (event) => {
-      if (isTextEntry(event.target)) this.resetTransientState();
-    });
+    window.addEventListener("focusin", this.focusIn);
     element.addEventListener("wheel", this.wheel, { passive: false });
+  }
+
+  dispose(): void {
+    if (this.#disposed) return;
+    this.#disposed = true;
+    window.removeEventListener("keydown", this.keyDown);
+    window.removeEventListener("keyup", this.keyUp);
+    this.element.removeEventListener("contextmenu", this.contextMenu);
+    this.element.removeEventListener("mousedown", this.mouseDown);
+    this.element.removeEventListener("mouseenter", this.mouseEnter);
+    this.element.removeEventListener("mouseleave", this.mouseLeave);
+    window.removeEventListener("mousemove", this.mouseMove);
+    window.removeEventListener("mouseup", this.mouseUp);
+    window.removeEventListener("blur", this.resetTransientState);
+    window.removeEventListener("focusin", this.focusIn);
+    this.element.removeEventListener("wheel", this.wheel);
+    this.resetTransientState();
   }
 
   movement(): THREE.Vector2 {
@@ -139,6 +138,37 @@ export class GameInput {
       return;
     }
     this.onGroundClick?.(this.#pointer.clone());
+  };
+
+  private readonly keyDown = (event: KeyboardEvent): void => {
+    if (isTextEntry(event.target)) return;
+    if (event.code === "Space" && isNativeSpaceControl(event.target)) return;
+    this.#keys.add(event.code);
+    if (event.code === "KeyG" && !event.repeat) this.onSpeedToggle?.();
+    if (event.code === "KeyI" && !event.repeat) this.onInventoryToggle?.();
+    if (event.code === "KeyC" && !event.repeat) this.onCharacterToggle?.();
+    if (event.code === "KeyK" && !event.repeat) this.onSkillMenuToggle?.();
+    if (event.code === "KeyR" && !event.repeat) this.onMountToggle?.();
+    if (event.code === "KeyF" && !event.repeat) this.onAutoCombatToggle?.();
+    if (event.code === "KeyV" && !event.repeat) this.onEffectsToggle?.();
+    if (event.code === "Space") {
+      event.preventDefault();
+      if (!event.repeat) this.onNearbyGroundItemPickup?.();
+    }
+    if (event.code === "KeyZ" && !event.repeat) this.onGroundItemLabelsToggle?.();
+    if (!event.repeat && /^Digit[1-9]$/.test(event.code)) this.onSkill?.(Number(event.code.slice(-1)));
+  };
+
+  private readonly keyUp = (event: KeyboardEvent): void => {
+    this.#keys.delete(event.code);
+  };
+
+  private readonly contextMenu = (event: MouseEvent): void => {
+    event.preventDefault();
+  };
+
+  private readonly focusIn = (event: FocusEvent): void => {
+    if (isTextEntry(event.target)) this.resetTransientState();
   };
 
   private readonly mouseMove = (event: MouseEvent): void => {

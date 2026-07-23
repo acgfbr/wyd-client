@@ -244,6 +244,29 @@ export class HuntressCombatEffects {
     for (const impact of impacts) impact();
   }
 
+  dispose(): void {
+    this.setEnabled(false);
+    this.#shaftGeometry.dispose();
+    this.#tipGeometry.dispose();
+    for (const material of this.#materials.values()) {
+      material.shaft.dispose();
+      material.tip.dispose();
+    }
+    this.#materials.clear();
+    for (const visual of this.#criticalVisuals.splice(0)) disposeCriticalVisual(visual);
+    if (this.#criticalResources) {
+      this.#criticalResources.meshGeometry.dispose();
+      this.#criticalResources.planeGeometry.dispose();
+      this.#criticalResources.coreTexture.dispose();
+      this.#criticalResources.shadeTexture.dispose();
+      this.#criticalResources.billboardTexture.dispose();
+      this.#criticalResources.particleTexture.dispose();
+      this.#criticalResources = null;
+    }
+    this.object.removeFromParent();
+    this.object.clear();
+  }
+
   private async loadClassicCriticalResources(assets: ClassicAssetSource): Promise<ClassicCriticalResources> {
     const loader = new ClassicDdsTextureLoader();
     const texture = async (index: number): Promise<THREE.Texture> => {
@@ -397,6 +420,17 @@ export class HuntressCombatEffects {
     }
     return entry;
   }
+}
+
+function disposeCriticalVisual(visual: ClassicCriticalVisual): void {
+  visual.group.removeFromParent();
+  visual.core.material.dispose();
+  visual.shade.material.dispose();
+  visual.billboards[0].material.dispose();
+  visual.billboards[1].material.dispose();
+  visual.particles.geometry.dispose();
+  visual.particles.material.dispose();
+  visual.group.clear();
 }
 
 function createCriticalVisual(resources: ClassicCriticalResources, poolIndex: number): ClassicCriticalVisual {

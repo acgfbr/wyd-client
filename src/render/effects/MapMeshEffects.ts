@@ -117,6 +117,19 @@ export class MapMeshEffects {
     for (const type of resources.retainedTypes) this.models.release(type);
   }
 
+  dispose(): void {
+    const keys = [...this.#fieldGroups.keys()];
+    for (const key of keys) {
+      const [column, row] = parseFieldKey(key);
+      this.removeBlock(column, row);
+    }
+    this.#generations.clear();
+    this.#shadeGeometry.dispose();
+    this.#shadeMaterial.dispose();
+    this.object.removeFromParent();
+    this.object.clear();
+  }
+
   private isCurrent(key: string, generation: number, group: THREE.Group): boolean {
     return this.#generations.get(key) === generation && this.#fieldGroups.get(key) === group;
   }
@@ -141,6 +154,12 @@ export class MapMeshEffects {
     shades.instanceMatrix.needsUpdate = true;
     return shades;
   }
+}
+
+function parseFieldKey(key: string): [number, number] {
+  const [column, row] = key.split(",").map(Number);
+  if (!Number.isFinite(column) || !Number.isFinite(row)) return [0, 0];
+  return [column!, row!];
 }
 
 function installEffectMaterials(

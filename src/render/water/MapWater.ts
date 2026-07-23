@@ -194,6 +194,29 @@ export class MapWater {
     });
   }
 
+  dispose(): void {
+    const keys = [...this.#fieldGroups.keys()];
+    for (const key of keys) {
+      const [column, row] = parseFieldKey(key);
+      this.removeBlock(column, row);
+    }
+    this.#generations.clear();
+    const materials = [...this.#materials.values()];
+    this.#materials.clear();
+    for (const entry of materials) {
+      void entry.then((material) => {
+        if (!material) return;
+        const uniforms = material.uniforms as Record<string, { value: unknown }>;
+        const textures = [uniforms.baseMap?.value, uniforms.detailMap?.value]
+          .filter((value): value is THREE.Texture => value instanceof THREE.Texture);
+        material.dispose();
+        for (const texture of textures) texture.dispose();
+      }).catch(() => undefined);
+    }
+    this.object.removeFromParent();
+    this.object.clear();
+  }
+
   /** Exact TMScene::GroundGetWaterHeight lookup for resident Fields. */
   waterHeightAt(
     position: WydPosition,
@@ -285,6 +308,12 @@ export class MapWater {
     this.#materials.set(key, promise);
     return promise;
   }
+}
+
+function parseFieldKey(key: string): [number, number] {
+  const [column, row] = key.split(",").map(Number);
+  if (!Number.isFinite(column) || !Number.isFinite(row)) return [0, 0];
+  return [column!, row!];
 }
 
 interface ClassicWaterSurface {

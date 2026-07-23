@@ -27,4 +27,12 @@ export class EffectTextureLibrary {
     const textures = await Promise.all(Array.from({ length: count }, (_, index) => this.load(first + index)));
     return textures.filter((texture): texture is THREE.Texture => texture !== null);
   }
+
+  dispose(): void {
+    const entries = [...this.#cache.values()];
+    this.#cache.clear();
+    for (const entry of entries) {
+      void entry.then((texture) => texture?.dispose()).catch(() => undefined);
+    }
+  }
 }

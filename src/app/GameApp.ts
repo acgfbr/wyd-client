@@ -231,6 +231,7 @@ export class GameApp {
   #equipmentVisualSignature = "";
   #summonGeneration = 0;
   readonly #beastMasterSummons = new Map<number, ClassicBeastMasterSummon[]>();
+  #disposed = false;
 
   constructor(private readonly container: HTMLElement) {
     this.#mobileGpuProfile = isAppleMobileDevice();
@@ -246,6 +247,7 @@ export class GameApp {
     this.#renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.#renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.#renderer.domElement.className = "game-canvas";
+    this.#telemetry.setRenderInfo(this.#renderer.info);
     this.#renderer.domElement.addEventListener("webglcontextlost", this.webglContextLost);
     this.#renderer.domElement.addEventListener("webglcontextrestored", this.webglContextRestored);
     this.container.appendChild(this.#renderer.domElement);
@@ -370,11 +372,7 @@ export class GameApp {
       effectsEnabled: this.#effectsEnabled,
     });
     this.#groundItems.setAllLabelsVisible(this.#groundItemLabelsVisible);
-    window.addEventListener("pagehide", (event) => {
-      // Preserve GPU/model references for Safari's back-forward cache, but
-      // release them on an actual document unload.
-      if (!event.persisted) this.#groundItems?.dispose();
-    });
+    window.addEventListener("pagehide", this.pageHide);
     const previewRoot = document.querySelector<HTMLElement>("#inventory-preview");
     const previewViewport = document.querySelector<HTMLElement>("#inventory-preview-viewport");
     if (previewRoot && previewViewport) {
@@ -387,12 +385,6 @@ export class GameApp {
       );
       this.#inventoryPreview.setEffectsEnabled(this.#effectsEnabled);
       this.#hud.onInventoryPreview = (item) => this.#inventoryPreview?.setItem(item);
-      window.addEventListener("pagehide", (event) => {
-        // Safari/iOS fires pagehide before placing the live document in the
-        // back-forward cache. Keep its shared renderer resources alive so the
-        // preview still works after pageshow; dispose only on a real unload.
-        if (!event.persisted) this.#inventoryPreview?.dispose();
-      });
     }
     world.setEffectsEnabled(this.#effectsEnabled);
     this.#scene.add(world.object);
@@ -437,6 +429,43 @@ export class GameApp {
     this.configureScene();
     document.querySelector("#loading")?.classList.add("is-hidden");
     this.#renderer.setAnimationLoop(this.frame);
+  }
+
+  dispose(): void {
+    if (this.#disposed) return;
+    this.#disposed = true;
+    this.#streamingPaused = true;
+    this.#renderer.setAnimationLoop(null);
+    window.removeEventListener("resize", this.resize);
+    window.removeEventListener("pagehide", this.pageHide);
+    this.#renderer.domElement.removeEventListener("webglcontextlost", this.webglContextLost);
+    this.#renderer.domElement.removeEventListener("webglcontextrestored", this.webglContextRestored);
+    this.#spawnUnsubscribers.splice(0).forEach((unsubscribe) => unsubscribe());
+    for (const summons of this.#beastMasterSummons.values()) {
+      for (const summon of summons) summon.release();
+    }
+    this.#beastMasterSummons.clear();
+    this.#input.dispose();
+    this.#inventoryPreview?.dispose();
+    this.#inventoryPreview = null;
+    this.#groundItems?.dispose();
+    this.#groundItems = null;
+    this.#playerOverhead.dispose();
+    this.#player?.dispose();
+    this.#player = undefined;
+    this.#world?.dispose();
+    this.#world = undefined;
+    this.#combatEffects.dispose();
+    this.#skillEffects.dispose();
+    this.#foemaSkillEffects.dispose();
+    this.#transKnightSkillEffects.dispose();
+    this.#beastMasterSkillEffects.dispose();
+    this.#etherealExplosionEffects.dispose();
+    this.#levelUpEffects.dispose();
+    this.#damageNumbers.dispose();
+    this.#renderer.dispose();
+    this.#renderer.domElement.remove();
+    this.#scene.clear();
   }
 
   private configureScene(): void {
@@ -2736,6 +2765,13 @@ export class GameApp {
 
   private readonly webglContextRestored = (): void => {
     window.location.reload();
+  };
+
+  private readonly pageHide = (event: PageTransitionEvent): void => {
+    // Safari/iOS fires pagehide before placing the live document in the
+    // back-forward cache. Keep GPU resources alive for bfcache, but free the
+    // full runtime on a real document unload.
+    if (!event.persisted) this.dispose();
   };
 
   private configureMapSelector(assets: ClassicAssetSource): void {

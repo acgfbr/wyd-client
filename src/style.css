@@ -217,8 +217,8 @@ button, select { font: inherit; }
 .runtime-telemetry {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 4px 10px;
-  padding: 7px 8px 8px;
+  gap: 3px 9px;
+  padding: 7px 8px;
   border-top: 1px solid #4b463b;
   background: linear-gradient(rgb(18 20 19 / 96%), rgb(6 8 8 / 96%));
   font-variant-numeric: tabular-nums;
@@ -226,6 +226,7 @@ button, select { font: inherit; }
 }
 .runtime-telemetry div { display: flex; align-items: baseline; justify-content: space-between; gap: 4px; min-width: 0; }
 .runtime-telemetry div:nth-child(3) { grid-column: 1 / -1; padding-top: 3px; border-top: 1px solid rgb(91 83 67 / 42%); }
+.runtime-telemetry div:nth-child(4), .runtime-telemetry div:nth-child(5) { padding-top: 3px; border-top: 1px solid rgb(91 83 67 / 28%); }
 .runtime-telemetry span { color: #a19a89; font-size: 8px; font-weight: 700; letter-spacing: .04em; white-space: nowrap; }
 .runtime-telemetry b { overflow: hidden; color: #e4d9b7; font-size: 10px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 .runtime-telemetry div:first-child b { color: #b9d9a1; }
@@ -1724,9 +1725,9 @@ button, select { font: inherit; }
   .map-teleport select { height: 21px; }
   .minimap-panel { width: 132px; }
   .minimap-panel canvas { width: 116px; height: 116px; }
-  .runtime-telemetry { gap: 3px 7px; padding: 6px 7px; }
+  .runtime-telemetry { gap: 2px 7px; padding: 6px 7px; }
   .runtime-telemetry span { font-size: 7px; }
-  .runtime-telemetry b { font-size: 9px; }
+  .runtime-telemetry b { font-size: 8px; }
   .runtime-telemetry small { display: none; }
   .location-panel strong { display: none; }
   .target-status { top: 92px; width: 340px; background-size: 340px 39px; }

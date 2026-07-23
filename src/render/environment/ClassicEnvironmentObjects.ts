@@ -173,6 +173,30 @@ export class ClassicEnvironmentObjects {
     for (const release of state.releases.splice(0)) release();
   }
 
+  dispose(): void {
+    const keys = [...this.#fields.keys()];
+    for (const key of keys) {
+      const [column, row] = parseFieldKey(key);
+      this.removeBlock(column, row);
+    }
+    this.#generations.clear();
+    const prototypes = [...this.#prototypes.values()];
+    this.#prototypes.clear();
+    for (const entry of prototypes) {
+      entry.references = 0;
+      void entry.promise.then((prototype) => {
+        if (!prototype) return;
+        prototype.geometry.dispose();
+        prototype.material.dispose();
+        prototype.lease.release();
+      }).catch(() => undefined);
+    }
+    void this.#runtime.then((runtime) => runtime?.skinned.dispose()).catch(() => undefined);
+    this.#textures.dispose();
+    this.object.removeFromParent();
+    this.object.clear();
+  }
+
   /** Mirrors g_bHideEffect for rain/snow/ambient particles, not vegetation. */
   setEffectsEnabled(enabled: boolean): void {
     this.#effectsEnabled = enabled;
@@ -356,6 +380,12 @@ export class ClassicEnvironmentObjects {
     });
     state.group.add(particles);
   }
+}
+
+function parseFieldKey(key: string): [number, number] {
+  const [column, row] = key.split(",").map(Number);
+  if (!Number.isFinite(column) || !Number.isFinite(row)) return [0, 0];
+  return [column!, row!];
 }
 
 const UP = new THREE.Vector3(0, 1, 0);

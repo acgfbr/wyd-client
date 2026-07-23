@@ -98,6 +98,19 @@ export class MapEffects {
     });
   }
 
+  dispose(): void {
+    const keys = [...this.#fieldGroups.keys()];
+    for (const key of keys) {
+      const [column, row] = parseFieldKey(key);
+      this.removeBlock(column, row);
+    }
+    this.#generations.clear();
+    this.#meshEffects.dispose();
+    this.#textures.dispose();
+    this.object.removeFromParent();
+    this.object.clear();
+  }
+
   setEnabled(enabled: boolean): void {
     this.object.visible = enabled;
   }
@@ -174,6 +187,12 @@ export class MapEffects {
 
     if (record.type === 504) installPulse(sprite, record.scaleH, record.scaleV);
   }
+}
+
+function parseFieldKey(key: string): [number, number] {
+  const [column, row] = key.split(",").map(Number);
+  if (!Number.isFinite(column) || !Number.isFinite(row)) return [0, 0];
+  return [column!, row!];
 }
 
 function createGroundShade(

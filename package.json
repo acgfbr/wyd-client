@@ -11,6 +11,7 @@
     "import:ui": "bun tools/import-classic-ui.mjs",
     "import:commerce": "bun tools/import-classic-commerce.mjs",
     "import:all": "bun tools/import-all-classic.mjs",
+    "audit:coverage": "bun tools/audit-classic-coverage.mjs",
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",

@@ -26,7 +26,11 @@ app.innerHTML = `
       <div><span>FPS</span><b id="telemetry-fps">—</b></div>
       <div><span>RAM JS</span><b id="telemetry-memory">—</b></div>
       <div><span>THREAD*</span><b id="telemetry-thread">—</b></div>
-      <small>* proxy da thread principal · não é CPU real</small>
+      <div><span>GEO</span><b id="telemetry-geometries">—</b></div>
+      <div><span>TEX</span><b id="telemetry-textures">—</b></div>
+      <div><span>CALLS</span><b id="telemetry-draw-calls">—</b></div>
+      <div><span>TRIS</span><b id="telemetry-triangles">—</b></div>
+      <small>* THREAD não é CPU real · GEO/TEX/CALLS/TRIS vêm do WebGLRenderer</small>
     </section>
   </aside>
 
@@ -244,6 +248,9 @@ function showBootError(error: unknown): void {
 
 try {
   const game = new GameApp(app);
+  window.addEventListener("pagehide", (event) => {
+    if (!event.persisted) game.dispose();
+  }, { once: true });
   void game.start().catch(showBootError);
 } catch (error) {
   // WebGLRenderer can fail synchronously before start() returns a Promise.

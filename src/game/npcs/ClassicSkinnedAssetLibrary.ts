@@ -111,6 +111,23 @@ export class ClassicSkinnedAssetLibrary {
     });
   }
 
+  dispose(): void {
+    const materials = [...this.#materials.values()];
+    this.#materials.clear();
+    this.#buffers.clear();
+    this.#skeletons.clear();
+    this.#meshes.clear();
+    this.#animations.clear();
+    this.#definitions.clear();
+    for (const entry of materials) {
+      entry.references = 0;
+      void entry.promise.then(({ material, texture }) => {
+        material.dispose();
+        texture?.dispose();
+      }).catch(() => undefined);
+    }
+  }
+
   async createInstance(look: ClassicSkinnedLook): Promise<ClassicSkinnedInstanceLease | null> {
     const definition = await this.definition(look);
     if (!definition) return null;

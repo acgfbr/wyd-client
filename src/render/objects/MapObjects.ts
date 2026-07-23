@@ -148,6 +148,28 @@ export class MapObjects {
     this.#floats.removeBlock(column, row);
     this.#water.removeBlock(column, row);
   }
+
+  dispose(): void {
+    const keys = [...this.#fieldGroups.keys()];
+    for (const key of keys) {
+      const [column, row] = parseFieldKey(key);
+      this.removeBlock(column, row);
+    }
+    this.#generations.clear();
+    this.#fieldTypes.clear();
+    this.#effects.dispose();
+    this.#environment.dispose();
+    this.#floats.dispose();
+    this.#water.dispose();
+    this.object.removeFromParent();
+    this.object.clear();
+  }
+}
+
+function parseFieldKey(key: string): [number, number] {
+  const [column, row] = key.split(",").map(Number);
+  if (!Number.isFinite(column) || !Number.isFinite(row)) return [0, 0];
+  return [column!, row!];
 }
 
 function nextFrame(): Promise<void> {
