@@ -107,6 +107,24 @@ foi homologada; nao reabrir sua colisao global sem regressao reproduzivel.
   inversao anterior fazia a chama aparecer separada ou abaixo da brasa.
 - Cataventos, floats e objetos animados podem possuir partes skinned separadas;
   importar apenas a base remove componentes como a helice.
+- `TMDust` tipo `531` não desenha sua MSA: é um emissor invisível que sorteia
+  rajadas da textura `119` a cada `10 s`. Existem 1.189 registros em 28 Fields;
+  o runtime os agrupa em um único `Points` por Field, preservando escala do DAT,
+  queda de seis unidades, chance de 40%, streaming, descarte e a tecla `V`.
+- Os dois portais `2035` acrescentam os billboards `423/424`; os três objetos
+  `1846` possuem as coroas de fogo/brilho em raios `3` e `2,25`. O descritor
+  `1980` aparece cinco vezes e é uma composição das malhas `1979/1980/1981`;
+  a camada `1979` usa brilho, scroll U, offset `4,58/4,5` e escala vertical
+  derivada da altura. `1979/1981` são dependências indiretas do importador.
+- `TMHouse::Render` também compõe malhas que não aparecem no DAT. Os cinco
+  portões `607` usam duas cópias de `608` e uma de `609`, contra-rotacionadas
+  no ciclo de `20 s`; `614`, `1750`, `1739` e `1711` acrescentam,
+  respectivamente, `615`, `1770`, `1771` e `1772`. São 430 bases afetadas.
+  Essas dependências agora são importadas explicitamente e compartilham o
+  mesmo lease/lifecycle de streaming da base.
+- Os tipos `520..530` são criados como `TMEffectMesh`, mas o próprio
+  `TMEffectMesh::Render` retorna sem desenhá-los. `657/658` são `m_bNullObj` e
+  `674` não possui entrada utilizável. Eles devem continuar invisíveis.
 - Partes pretas nao devem receber um plano generico. Preto pode significar
   asset ausente, alpha incorreto, agua/efeito nao carregado ou lado interno de
   geometria; diagnosticar pela origem antes de preencher.
@@ -130,7 +148,7 @@ decodificar DDS para RGBA na CPU.
 
 O build separa Three.js em vendor cacheavel. Renderers de Foema, TransKnight e
 BeastMaster sao chunks lazy carregados no primeiro switch; Huntress permanece
-no boot por ser a classe inicial. Medicao de 23/07/2026: app ~504 KiB, Three.js
+no boot por ser a classe inicial. Medicao de 23/07/2026: app ~544 KiB, Three.js
 ~518 KiB e chunks de classe na faixa de ~37–124 KiB, todos minificados.
 
 O plano do servidor autoritativo está em
@@ -287,7 +305,10 @@ refinamento, Ancient e preco estatico quando aplicavel.
   pede persistência, retoma entradas ausentes e pode ser interrompido ou limpo
   sem bloquear o fallback de rede. Os demais mapas continuam lazy. A
   homologação de expulsão/retomada em Safari/iPhone permanece manual; cache em
-  disco reduz rede, mas não elimina parsing, upload para GPU nem streaming.
+  disco reduz rede, mas não elimina parsing ou upload para GPU. Por isso, o
+  boot mantém a tela opaca até o Field inicial concluir DAT, modelos, água,
+  efeitos e visuais do jogador, e executa um primeiro render oculto antes de
+  revelar Armia. O streaming dos demais Fields continua assíncrono.
 - Reload real, bfcache e contadores GEO/TEX antes/depois de trocas pesadas
   precisam de baseline manual.
 - Nem todas as 248 skills possuem definicao jogavel e renderer fiel; a matriz

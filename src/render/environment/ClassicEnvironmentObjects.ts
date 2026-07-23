@@ -14,7 +14,7 @@ import { FIELD_WORLD_SIZE, toScene, type WydPosition } from "../../world/coordin
 import { fieldKey } from "../../world/regions";
 import { EffectTextureLibrary } from "../effects/EffectTextureLibrary";
 
-const LOW_AMBIENT_TYPES = new Set([4, 6, 7, 8, 9, 10, 12, 13, 343, 344]);
+const LOW_AMBIENT_TYPES = new Set([4, 6, 7, 8, 9, 10, 12, 13, 343, 344, 531]);
 
 export function isClassicEnvironmentType(type: number): boolean {
   return LOW_AMBIENT_TYPES.has(type)
@@ -119,7 +119,13 @@ export class ClassicEnvironmentObjects {
 
     const batches = new Map<string, InstanceBatch>();
     for (const { record, index } of special) {
-      if (record.type === 8 || record.type === 9 || record.type === 10 || record.type === 13) continue;
+      if (
+        record.type === 8
+        || record.type === 9
+        || record.type === 10
+        || record.type === 13
+        || record.type === 531
+      ) continue;
       const definition = runtime.catalog.skinnedObject(record.type);
       if (!definition || definition.variants.length === 0) continue;
       const copies = definition.kind === "butterfly" || definition.kind === "fish" ? 5 : 1;
@@ -155,6 +161,7 @@ export class ClassicEnvironmentObjects {
       this.addParticleBatch(key, generation, state, column, row, special.map(({ record }) => record), 9),
       this.addParticleBatch(key, generation, state, column, row, special.map(({ record }) => record), 10),
       this.addParticleBatch(key, generation, state, column, row, special.map(({ record }) => record), 13),
+      this.addParticleBatch(key, generation, state, column, row, special.map(({ record }) => record), 531),
     ]);
   }
 
@@ -334,17 +341,22 @@ export class ClassicEnvironmentObjects {
     column: number,
     row: number,
     records: readonly MapObjectRecord[],
-    type: 8 | 9 | 10 | 13,
+    type: 8 | 9 | 10 | 13 | 531,
   ): Promise<void> {
     const matching = records.filter((record) => record.type === type);
     if (matching.length === 0) return;
     const textureIndex = type === 9 ? 6 : type === 10 ? 9 : 119;
     const texture = await this.#textures.load(textureIndex);
     if (!texture || !this.isCurrent(field, generation, state)) return;
-    const copies = type === 9 ? 2 : type === 10 ? 10 : 1;
+    // TMDust(type 531) sorteia 1/3 fontes e cada TMEffectDust cria quatro
+    // billboards. Quatro pontos preservam a densidade sem multiplicar os
+    // milhares de emissores do DAT em objetos Three.js independentes.
+    const copies = type === 9 ? 2 : type === 10 ? 10 : type === 531 ? 4 : 1;
     const count = matching.length * copies;
     const positions = new Float32Array(count * 3);
     const seeds = new Float32Array(count);
+    const emitterSeeds = new Float32Array(count);
+    const sizes = new Float32Array(count);
     let cursor = 0;
     for (let recordIndex = 0; recordIndex < matching.length; recordIndex++) {
       const record = matching[recordIndex];
@@ -354,21 +366,40 @@ export class ClassicEnvironmentObjects {
         y: row * FIELD_WORLD_SIZE + record.localY,
       }, this.origin);
       for (let copy = 0; copy < copies; copy++, cursor++) {
-        const seed = deterministic(column, row, recordIndex, copy, type);
-        positions[cursor * 3] = scene.x + (hash01(seed * 97.1) - 0.5) * (type === 10 ? 1 : 0.8);
+        const placementSeed = deterministic(column, row, recordIndex, copy, type);
+        // Os quatro filhos de um TMDust pertencem à mesma rajada; um pequeno
+        // atraso reproduz os offsets de 100 ms do TMEffectBillBoard.
+        const emitterSeed = deterministic(column, row, recordIndex, 0, type);
+        const seed = type === 531
+          ? emitterSeed + copy * 0.01
+          : placementSeed;
+        const spread = type === 10 ? 1 : type === 531 ? 1.4 : 0.8;
+        positions[cursor * 3] = scene.x + (hash01(placementSeed * 97.1) - 0.5) * spread;
         positions[cursor * 3 + 1] = record.height;
-        positions[cursor * 3 + 2] = scene.z + (hash01(seed * 193.7) - 0.5) * (type === 10 ? 1 : 0.8);
+        positions[cursor * 3 + 2] = scene.z + (hash01(placementSeed * 193.7) - 0.5) * spread;
         seeds[cursor] = seed;
+        emitterSeeds[cursor] = emitterSeed;
+        sizes[cursor] = type === 531
+          ? THREE.MathUtils.clamp(record.scaleV * 0.35, 0.65, 2.4)
+          : 1;
       }
     }
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
     geometry.setAttribute("seed", new THREE.BufferAttribute(seeds, 1));
+    geometry.setAttribute("emitterSeed", new THREE.BufferAttribute(emitterSeeds, 1));
+    geometry.setAttribute("size", new THREE.BufferAttribute(sizes, 1));
     geometry.computeBoundingSphere();
-    if (geometry.boundingSphere) geometry.boundingSphere.radius += type === 13 ? 24 : 12;
+    if (geometry.boundingSphere) {
+      geometry.boundingSphere.radius += type === 13 ? 24 : type === 531 ? 9 : 12;
+    }
     const { material, time } = createParticleMaterial(texture, type);
     const particles = new THREE.Points(geometry, material);
-    particles.name = type === 10 ? "classic-local-rain" : `classic-ambient-particles-${type}`;
+    particles.name = type === 10
+      ? "classic-local-rain"
+      : type === 531
+        ? "classic-map-dust-531"
+        : `classic-ambient-particles-${type}`;
     particles.renderOrder = 5;
     particles.visible = this.#effectsEnabled;
     particles.onBeforeRender = () => {
@@ -592,14 +623,35 @@ function installAmbientShader(
 
 function createParticleMaterial(
   texture: THREE.Texture,
-  type: 8 | 9 | 10 | 13,
+  type: 8 | 9 | 10 | 13 | 531,
 ): { readonly material: THREE.ShaderMaterial; readonly time: { value: number } } {
   const time = { value: 0 };
   const rain = type === 10;
   const fallingStone = type === 13;
   const luminous = type === 9;
+  const mapDust = type === 531;
+  const phaseRate = rain ? "0.52" : fallingStone ? "0.18" : luminous ? "0.31" : mapDust ? "0.1" : "0.095";
+  const motion = rain
+    ? "animated.y += (1.0 - phase) * 10.0; animated.x += sin(seed * 51.0) * 0.18;"
+    : fallingStone
+      ? "animated.y += (1.0 - phase) * 21.0; animated.x += sin(seed * 43.0) * 0.7; animated.z += cos(seed * 37.0) * 0.7;"
+      : luminous
+        ? "animated.y += phase * 1.4; animated.x += sin(time * 1.7 + seed * 29.0) * 0.18;"
+        : mapDust
+          ? `float localPhase = clamp(phase / 0.22, 0.0, 1.0);
+             animated.y += (1.0 - localPhase) * 6.0;
+             animated.x += sin(seed * 47.0) * 0.22;
+             animated.z += cos(seed * 41.0) * 0.18;`
+          : "animated.y += phase * 1.1; animated.x += sin(time * 0.8 + seed * 17.0) * 0.28;";
+  const fade = mapDust
+    ? `float cycle = floor(time * 0.1 + emitterSeed);
+       float eventRoll = fract(sin((cycle + emitterSeed) * 12.9898) * 43758.5453);
+       vFade = step(0.6, eventRoll) * step(phase, 0.22) * sin(localPhase * 3.14159265);`
+    : "vFade = sin(phase * 3.14159265);";
+  const pointSize = rain ? "235.0" : fallingStone ? "135.0" : "105.0";
+  const pointRange = rain ? "4.0, 24.0" : mapDust ? "2.0, 20.0" : "2.0, 14.0";
   const material = new THREE.ShaderMaterial({
-    name: rain ? "WYD local rain" : `WYD ambient particle ${type}`,
+    name: rain ? "WYD local rain" : mapDust ? "WYD map TMDust 531" : `WYD ambient particle ${type}`,
     uniforms: {
       time,
       spriteMap: { value: texture },
@@ -609,20 +661,16 @@ function createParticleMaterial(
     vertexShader: /* glsl */ `
       uniform float time;
       attribute float seed;
+      attribute float emitterSeed;
+      attribute float size;
       varying float vFade;
       void main() {
         vec3 animated = position;
-        float phase = fract(time * ${rain ? "0.52" : fallingStone ? "0.18" : luminous ? "0.31" : "0.095"} + seed);
-        ${rain
-          ? "animated.y += (1.0 - phase) * 10.0; animated.x += sin(seed * 51.0) * 0.18;"
-          : fallingStone
-            ? "animated.y += (1.0 - phase) * 21.0; animated.x += sin(seed * 43.0) * 0.7; animated.z += cos(seed * 37.0) * 0.7;"
-            : luminous
-              ? "animated.y += phase * 1.4; animated.x += sin(time * 1.7 + seed * 29.0) * 0.18;"
-              : "animated.y += phase * 1.1; animated.x += sin(time * 0.8 + seed * 17.0) * 0.28;"}
-        vFade = sin(phase * 3.14159265);
+        float phase = fract(time * ${phaseRate} + seed);
+        ${motion}
+        ${fade}
         vec4 mvPosition = modelViewMatrix * vec4(animated, 1.0);
-        gl_PointSize = clamp(${rain ? "235.0" : fallingStone ? "135.0" : "105.0"} / max(1.0, -mvPosition.z), ${rain ? "4.0, 24.0" : "2.0, 14.0"});
+        gl_PointSize = clamp((${pointSize} * size) / max(1.0, -mvPosition.z), ${pointRange});
         gl_Position = projectionMatrix * mvPosition;
       }
     `,

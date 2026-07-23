@@ -9,8 +9,14 @@ import { ClassicEnvironmentObjects, isClassicEnvironmentType } from "../environm
 import { MapWater } from "../water/MapWater";
 import { ClassicFloatObjects } from "../water/ClassicFloatObjects";
 
-const nonStaticTypes = new Set([2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 121, 343, 344]);
+const nonStaticTypes = new Set([2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 121, 343, 344, 1980]);
 const WATERFALL_OBJECT_TYPES = new Set([292, 490, 1526, 1665, 2005]);
+const HOUSE_STATIC_COMPANIONS = new Map<number, number>([
+  [614, 615],
+  [1750, 1770],
+  [1739, 1771],
+  [1711, 1772],
+]);
 
 export interface ClassicMapAmbientSoundSource {
   readonly soundIndex: number;
@@ -122,6 +128,13 @@ export class MapObjects {
     const typeSet = new Set(records.map((record) => record.type).filter(isStaticMeshType));
     // TMHouse(474) possui uma segunda MSA: as pas animadas do catavento.
     if (typeSet.has(474)) typeSet.add(475);
+    if (typeSet.has(607)) {
+      typeSet.add(608);
+      typeSet.add(609);
+    }
+    for (const [ownerType, companionType] of HOUSE_STATIC_COMPANIONS) {
+      if (typeSet.has(ownerType)) typeSet.add(companionType);
+    }
     const types = [...typeSet];
     const retainedTypes = new Set<number>();
     this.#fieldTypes.set(key, retainedTypes);
@@ -151,6 +164,20 @@ export class MapObjects {
       if (record.type === 474) {
         const bladePrototype = prototypes.get(475);
         if (bladePrototype) group.add(createWindmillBlade(bladePrototype, record, scene));
+      }
+      if (record.type === 607) {
+        const rotatingPrototype = prototypes.get(608);
+        const centerPrototype = prototypes.get(609);
+        if (rotatingPrototype && centerPrototype) {
+          group.add(createGateParts(rotatingPrototype, centerPrototype, record, scene));
+        }
+      }
+      const companionType = HOUSE_STATIC_COMPANIONS.get(record.type);
+      if (companionType !== undefined) {
+        const companionPrototype = prototypes.get(companionType);
+        if (companionPrototype) {
+          group.add(createHouseCompanion(companionPrototype, companionType, record, scene));
+        }
       }
       if (index > 0 && index % 64 === 0) {
         await nextFrame();
@@ -244,4 +271,55 @@ function createWindmillBlade(
     child.onBeforeRender = animate;
   });
   return blade;
+}
+
+function createGateParts(
+  rotatingPrototype: THREE.Group,
+  centerPrototype: THREE.Group,
+  record: MapObjectRecord,
+  scene: { readonly x: number; readonly z: number },
+): THREE.Group {
+  const parts = new THREE.Group();
+  parts.name = "object-607-house-parts";
+  const lower = rotatingPrototype.clone(true);
+  const upper = rotatingPrototype.clone(true);
+  const center = centerPrototype.clone(true);
+  lower.position.set(scene.x, record.height + 0.44999999, scene.z);
+  upper.position.set(scene.x, record.height + 2.7, scene.z);
+  center.position.set(scene.x, record.height + 2, scene.z);
+  lower.name = "object-608-lower";
+  upper.name = "object-608-upper";
+  center.name = "object-609-center";
+  parts.add(lower, upper, center);
+
+  const animate = () => {
+    const windAngle = ((performance.now() % 20_000) / 10_000) * Math.PI;
+    // TMHouse passa yaw -wind para 608 e +wind para 609. O eixo Z refletido
+    // do runtime inverte esses yaws ao convertê-los para Three.js.
+    lower.rotation.y = windAngle;
+    upper.rotation.y = windAngle;
+    center.rotation.y = -windAngle;
+  };
+  animate();
+  for (const part of [lower, upper, center]) {
+    part.traverse((child) => {
+      if (!(child instanceof THREE.Mesh)) return;
+      child.onBeforeRender = animate;
+    });
+  }
+  return parts;
+}
+
+function createHouseCompanion(
+  prototype: THREE.Group,
+  companionType: number,
+  record: MapObjectRecord,
+  scene: { readonly x: number; readonly z: number },
+): THREE.Group {
+  const companion = prototype.clone(true);
+  companion.position.set(scene.x, record.height, scene.z);
+  companion.rotation.y = -record.angle;
+  companion.scale.set(record.scaleH || 1, record.scaleV || 1, record.scaleH || 1);
+  companion.name = `object-${record.type}-house-companion-${companionType}`;
+  return companion;
 }

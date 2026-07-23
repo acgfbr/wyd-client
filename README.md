@@ -47,7 +47,9 @@ Documentação de arquitetura:
   monstros/NPCs usam os IDs de suas ações no `AniSound4.txt`, e cachoeiras,
   chuva local e objetos ambientais possuem loops atenuados por distância.
 - Primeiro acesso assistido com cache versionado de Armia, progresso em
-  arquivos/bytes, retomada e fallback transparente para a rede.
+  arquivos/bytes, retomada e fallback transparente para a rede. A cidade só é
+  revelada depois de terreno, prédios, água, efeitos e jogador estarem montados
+  e a primeira imagem já ter sido enviada à GPU.
 
 ## Capturas do build atual
 
@@ -326,6 +328,7 @@ que você tem autorização para distribuí-los.
 | Tela preta ou erro WebGL | Atualize o navegador/driver e habilite aceleração de hardware. |
 | Vercel publica o app, mas assets retornam 404 | Confirme que `public/game-data` está versionado e que `manifest.json` existe no deployment. |
 | O primeiro carregamento reinicia ou usa a rede | Evite modo privado, confira espaço livre e mantenha a aba aberta; uma preparação interrompida retoma no próximo acesso. Safari/iOS pode expulsar o cache sob pressão. |
+| A tela fica em “Montando…” mesmo com o cache pronto | O cache evita a rede, mas o navegador ainda precisa decodificar modelos/texturas e montar a primeira cena. Armia só é revelada quando essa etapa termina. |
 | Alterei/importei assets, mas o cache antigo continua | Rode `bun run import:cache`, gere um novo build e publique também `precache-armia.json`. |
 
 ## Estrutura principal

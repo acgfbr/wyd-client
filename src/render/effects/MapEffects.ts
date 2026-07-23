@@ -67,7 +67,12 @@ export class MapEffects {
     group.name = `effects-${key}`;
     this.#fieldGroups.set(key, group);
     this.object.add(group);
-    const effects = records.filter((record) => record.type in billboardDefinitions || (record.type >= 511 && record.type <= 518));
+    const effects = records.filter((record) => (
+      record.type in billboardDefinitions
+      || (record.type >= 511 && record.type <= 518)
+      || record.type === 1846
+      || record.type === 2035
+    ));
     await Promise.all([
       this.#meshEffects.addBlock(column, row, records),
       ...effects.map((record) => this.addRecord(column, row, record, group, () => (
@@ -135,6 +140,83 @@ export class MapEffects {
       light.position.copy(position);
       light.name = `map-light-${record.type}`;
       target.add(light);
+      return;
+    }
+
+    if (record.type === 2035) {
+      const [portalTexture, coreTexture] = await Promise.all([
+        this.#textures.load(423),
+        this.#textures.load(424),
+      ]);
+      if (!isCurrent()) return;
+      if (portalTexture) {
+        const portal = createSprite([portalTexture], 80, 0xffffff, 1);
+        portal.position.copy(position);
+        portal.position.y += 3.5699999;
+        portal.scale.set(1.7, 3.5999999, 1);
+        portal.renderOrder = 3;
+        portal.name = "map-effect-2035-portal";
+        target.add(portal);
+      }
+      if (coreTexture) {
+        const core = createSprite([coreTexture], 80, 0xffffff, 1);
+        core.position.copy(position);
+        core.position.y += 0.5;
+        core.scale.set(1, 1, 1);
+        core.renderOrder = 3;
+        core.name = "map-effect-2035-core";
+        target.add(core);
+      }
+      return;
+    }
+
+    if (record.type === 1846) {
+      const [glowTexture, fireFrames] = await Promise.all([
+        this.#textures.load(2),
+        this.#textures.sequence(11, 8),
+      ]);
+      if (!isCurrent()) return;
+      // TMObjectContainer creates twelve fire/glow pairs at radius 3 and a
+      // second ring of eight glows at radius 2.25 around the effect mesh.
+      for (let index = 0; index < 12; index++) {
+        const angle = index * Math.PI * 2 / 12;
+        const ringPosition = position.clone().add(new THREE.Vector3(
+          0.5 + Math.cos(angle) * 3,
+          2.9000001,
+          -Math.sin(angle) * 3,
+        ));
+        if (glowTexture) {
+          const glow = createSprite([glowTexture], 80, 0x553300, 0x55 / 255);
+          glow.position.copy(ringPosition);
+          glow.scale.set(2.8, 2.8, 1);
+          glow.renderOrder = 2;
+          glow.name = "map-effect-1846-lower-glow";
+          target.add(glow);
+        }
+        if (fireFrames.length > 0) {
+          const fire = createSprite(fireFrames, 80, 0xeecc00, 0xee / 255);
+          fire.position.copy(ringPosition);
+          fire.scale.set(1, 1, 1);
+          fire.renderOrder = 3;
+          fire.name = "map-effect-1846-fire";
+          target.add(fire);
+        }
+      }
+      if (glowTexture) {
+        for (let index = 0; index < 8; index++) {
+          const angle = index * Math.PI * 2 / 8;
+          const glow = createSprite([glowTexture], 80, 0x553300, 0x55 / 255);
+          glow.position.copy(position).add(new THREE.Vector3(
+            0.5 + Math.cos(angle) * 2.25,
+            4.6500001,
+            -Math.sin(angle) * 2.25,
+          ));
+          glow.scale.set(2.8, 2.8, 1);
+          glow.renderOrder = 2;
+          glow.name = "map-effect-1846-upper-glow";
+          target.add(glow);
+        }
+      }
       return;
     }
 

@@ -1,9 +1,9 @@
 {
-  "generatedAt": "2026-07-23T21:15:06.381Z",
+  "generatedAt": "2026-07-23T22:45:48.841Z",
   "command": "bun run audit:coverage",
   "source": "WYD classic",
   "referencedFiles": {
-    "total": 2285,
+    "total": 2295,
     "missing": []
   },
   "maps": {
@@ -19,7 +19,7 @@
     "terrainTextures": 238,
     "effectTextures": 495,
     "waterTextures": 5,
-    "objectModels": 875
+    "objectModels": 881
   },
   "monsters": {
     "templates": 377,
@@ -406,11 +406,11 @@
     {
       "label": "Modelos de mapa",
       "directory": "models",
-      "files": 1222,
-      "bytes": 36941050,
+      "files": 1232,
+      "bytes": 37059248,
       "extensions": {
-        ".dds": 347,
-        ".msa": 875
+        ".dds": 351,
+        ".msa": 881
       }
     },
     {

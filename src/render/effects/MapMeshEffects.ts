@@ -4,8 +4,21 @@ import { FIELD_WORLD_SIZE, toScene, type WydPosition } from "../../world/coordin
 import { fieldKey } from "../../world/regions";
 import type { ModelLibrary } from "../objects/ModelLibrary";
 
-const EFFECT_MESH_TYPES = new Set([506, 532]);
+const EFFECT_MESH_TYPES = new Set([506, 532, 1980]);
 const EFFECT_CYCLE_MS = 5_000;
+
+interface EffectMeshDefinition {
+  readonly modelType: number;
+  readonly color: number;
+  readonly shine: boolean;
+  readonly scrollU: boolean;
+  readonly positionOffsetX: number;
+  readonly positionOffsetY: number;
+  readonly positionOffsetZ: number;
+  readonly absoluteHeight: number | null;
+  readonly scaleH: number;
+  readonly scaleV: number;
+}
 
 interface AnimatedMaterial {
   readonly material: THREE.MeshBasicMaterial;
@@ -13,6 +26,7 @@ interface AnimatedMaterial {
   readonly baseGreen: number;
   readonly baseBlue: number;
   readonly baseAlpha: number;
+  readonly shine: boolean;
   readonly scrollingTexture: THREE.Texture | null;
 }
 
@@ -59,7 +73,9 @@ export class MapMeshEffects {
     this.#fieldResources.set(key, resources);
 
     const prototypes = new Map<number, THREE.Group | null>();
-    const types = [...new Set(matching.map((record) => record.type))];
+    const types = [...new Set(matching.flatMap((record) => (
+      effectMeshDefinitions(record).map((definition) => definition.modelType)
+    )))];
     await Promise.all(types.map(async (type) => {
       resources.retainedTypes.add(type);
       prototypes.set(type, await this.models.retain(type));
@@ -68,28 +84,34 @@ export class MapMeshEffects {
 
     const materialCaches = new Map<number, Map<THREE.Material, AnimatedMaterial>>();
     for (const record of matching) {
-      const prototype = prototypes.get(record.type);
-      if (!prototype) continue;
-      let cache = materialCaches.get(record.type);
-      if (!cache) {
-        cache = new Map();
-        materialCaches.set(record.type, cache);
-      }
-
-      const instance = prototype.clone(true);
       const scene = toScene({
         x: column * FIELD_WORLD_SIZE + record.localX,
         y: row * FIELD_WORLD_SIZE + record.localY,
       }, this.origin);
-      instance.position.set(scene.x, record.height, scene.z);
-      instance.scale.set(record.scaleH || 1, record.scaleV || 1, record.scaleH || 1);
-      // TMEffectMesh passes (angle - 90deg, 0, 90deg) to TMMesh, whose
-      // renderer contributes another -90deg pitch. This is the converted
-      // right-handed YXZ orientation used by the classic windmill as well.
-      instance.rotation.set(Math.PI / 2, -(record.angle - Math.PI / 2), Math.PI / 2, "YXZ");
-      instance.name = `map-mesh-effect-${record.type}`;
-      installEffectMaterials(instance, record.type, cache, resources);
-      group.add(instance);
+      for (const definition of effectMeshDefinitions(record)) {
+        const prototype = prototypes.get(definition.modelType);
+        if (!prototype) continue;
+        let cache = materialCaches.get(definition.modelType);
+        if (!cache) {
+          cache = new Map();
+          materialCaches.set(definition.modelType, cache);
+        }
+
+        const instance = prototype.clone(true);
+        instance.position.set(
+          scene.x + definition.positionOffsetX,
+          definition.absoluteHeight ?? record.height + definition.positionOffsetY,
+          scene.z + definition.positionOffsetZ,
+        );
+        instance.scale.set(definition.scaleH, definition.scaleV, definition.scaleH);
+        // TMEffectMesh passes (angle - 90deg, 0, 90deg) to TMMesh, whose
+        // renderer contributes another -90deg pitch. This is the converted
+        // right-handed YXZ orientation used by the classic windmill as well.
+        instance.rotation.set(Math.PI / 2, -(record.angle - Math.PI / 2), Math.PI / 2, "YXZ");
+        instance.name = `map-mesh-effect-${record.type}-${definition.modelType}`;
+        installEffectMaterials(instance, definition, cache, resources);
+        group.add(instance);
+      }
     }
 
     const lights = matching.filter((record) => record.type === 506);
@@ -164,7 +186,7 @@ function parseFieldKey(key: string): [number, number] {
 
 function installEffectMaterials(
   instance: THREE.Group,
-  type: number,
+  definition: EffectMeshDefinition,
   cache: Map<THREE.Material, AnimatedMaterial>,
   resources: FieldResources,
 ): void {
@@ -177,7 +199,7 @@ function installEffectMaterials(
     const animated = sources.map((source) => {
       let entry = cache.get(source);
       if (!entry) {
-        entry = createAnimatedMaterial(source, type, resources);
+        entry = createAnimatedMaterial(source, definition, resources);
         cache.set(source, entry);
       }
       return entry;
@@ -188,19 +210,19 @@ function installEffectMaterials(
     child.castShadow = false;
     child.receiveShadow = false;
     child.renderOrder = 3;
-    child.onBeforeRender = () => animateMaterials(animated, type);
+    child.onBeforeRender = () => animateMaterials(animated);
   });
 }
 
 function createAnimatedMaterial(
   source: THREE.Material,
-  type: number,
+  definition: EffectMeshDefinition,
   resources: FieldResources,
 ): AnimatedMaterial {
   const textured = source as THREE.Material & { map?: THREE.Texture | null };
   let map = textured.map ?? null;
   let scrollingTexture: THREE.Texture | null = null;
-  if (type === 532 && map) {
+  if (definition.scrollU && map) {
     map = map.clone();
     map.wrapS = THREE.RepeatWrapping;
     map.wrapT = THREE.RepeatWrapping;
@@ -209,13 +231,13 @@ function createAnimatedMaterial(
     resources.ownedTextures.add(map);
   }
 
-  const packedColor = type === 506 ? 0x44554444 : 0xaaaaaaaa;
+  const packedColor = definition.color;
   const baseAlpha = ((packedColor >>> 24) & 0xff) / 255;
   const baseRed = ((packedColor >>> 16) & 0xff) / 255;
   const baseGreen = ((packedColor >>> 8) & 0xff) / 255;
   const baseBlue = (packedColor & 0xff) / 255;
   const material = new THREE.MeshBasicMaterial({
-    name: `WYD map EffectMesh ${type}`,
+    name: `WYD map EffectMesh ${definition.modelType}`,
     map,
     color: new THREE.Color().setRGB(baseRed, baseGreen, baseBlue),
     opacity: baseAlpha,
@@ -228,26 +250,89 @@ function createAnimatedMaterial(
     toneMapped: false,
   });
   resources.materials.add(material);
-  return { material, baseRed, baseGreen, baseBlue, baseAlpha, scrollingTexture };
+  return {
+    material,
+    baseRed,
+    baseGreen,
+    baseBlue,
+    baseAlpha,
+    shine: definition.shine,
+    scrollingTexture,
+  };
 }
 
-function animateMaterials(materials: readonly AnimatedMaterial[], type: number): void {
+function animateMaterials(materials: readonly AnimatedMaterial[]): void {
   const now = performance.now();
   const progress = (now % EFFECT_CYCLE_MS) / EFFECT_CYCLE_MS;
   const shine = 0.8 + Math.sin(progress * Math.PI * 2) * 0.2;
   for (const entry of materials) {
+    const intensity = entry.shine ? shine : 1;
     entry.material.color.setRGB(
-      entry.baseRed * shine,
-      entry.baseGreen * shine,
-      entry.baseBlue * shine,
+      entry.baseRed * intensity,
+      entry.baseGreen * intensity,
+      entry.baseBlue * intensity,
     );
-    entry.material.opacity = entry.baseAlpha * shine;
-    if (type === 532 && entry.scrollingTexture) {
+    entry.material.opacity = entry.baseAlpha * intensity;
+    if (entry.scrollingTexture) {
       // The original increments U by progress*0.001 every rendered frame.
       // 0.03 UV/s matches that frame-dependent drift at its nominal 60 FPS.
       entry.scrollingTexture.offset.x = (now * 0.00003) % 1;
     }
   }
+}
+
+function effectMeshDefinitions(record: MapObjectRecord): readonly EffectMeshDefinition[] {
+  if (record.type === 1980) {
+    return [
+      effectMeshDefinition(1980, 0xaaaaaaaa),
+      {
+        ...effectMeshDefinition(1979, 0xaaaaaaaa, true, true),
+        positionOffsetX: 4.5799999,
+        positionOffsetZ: -4.5,
+        absoluteHeight: 0.3,
+        scaleH: 0.98,
+        scaleV: record.height / 15.4 + 0.72000003,
+      },
+      {
+        ...effectMeshDefinition(1981, 0x88888888),
+        positionOffsetX: 4.5799999,
+        positionOffsetZ: -4.5,
+        absoluteHeight: 0.30000001,
+      },
+    ];
+  }
+  return [
+    effectMeshDefinition(
+      record.type,
+      record.type === 506 ? 0x44554444 : 0xaaaaaaaa,
+      true,
+      record.type === 532,
+      record.scaleH || 1,
+      record.scaleV || 1,
+    ),
+  ];
+}
+
+function effectMeshDefinition(
+  modelType: number,
+  color: number,
+  shine = false,
+  scrollU = false,
+  scaleH = 1,
+  scaleV = 1,
+): EffectMeshDefinition {
+  return {
+    modelType,
+    color,
+    shine,
+    scrollU,
+    positionOffsetX: 0,
+    positionOffsetY: 0,
+    positionOffsetZ: 0,
+    absoluteHeight: null,
+    scaleH,
+    scaleV,
+  };
 }
 
 function createShadeMaterial(): THREE.ShaderMaterial {

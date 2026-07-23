@@ -470,9 +470,10 @@ export class GameApp {
     if (!map) throw new Error("Mapa padrão não definido");
     const spawn = { x: map.spawn[0], y: map.spawn[1] };
     const world = new ClassicWorld(assets, spawn);
-    // O boot aguarda apenas o TRN atual. DAT, modelos e vizinhos entram sem
-    // bloquear a primeira imagem.
-    await world.ensureCurrent(spawn, true);
+    // CacheStorage elimina downloads repetidos, mas não substitui a decodificação
+    // e montagem do Three.js. No primeiro Field, espere também DAT, modelos,
+    // água e efeitos para não revelar Armia com os prédios surgindo depois.
+    await world.ensureCurrent(spawn, true, true);
     this.#world = world;
     this.#groundItems = new ClassicGroundItemManager(world, assets, {
       effectsEnabled: this.#effectsEnabled,
@@ -498,7 +499,7 @@ export class GameApp {
     this.#player.setBeforeClassicVisualRelease(() => this.#skillEffects.clear());
     this.#player.setEffectsEnabled(this.#effectsEnabled);
     this.#scene.add(this.#player.object);
-    void this.#player.loadClassicAvatar(assets, "huntress", DEFAULT_HUNTRESS_LOOK_KEY).then((loaded) => {
+    const avatarReady = this.#player.loadClassicAvatar(assets, "huntress", DEFAULT_HUNTRESS_LOOK_KEY).then((loaded) => {
       const status = document.querySelector<HTMLElement>("#outfit-status");
       if (!loaded) {
         if (status) status.textContent = "Visual indisponível";
@@ -510,12 +511,12 @@ export class GameApp {
     }).catch((error: unknown) => {
       console.warn("Avatar clássico indisponível; mantendo fallback", error);
     });
-    void this.#player.loadClassicFamiliar(assets).then((loaded) => {
+    const familiarReady = this.#player.loadClassicFamiliar(assets).then((loaded) => {
       if (!loaded) console.warn("Familiar Griupan clássico indisponível");
     }).catch((error: unknown) => {
       console.warn("Familiar Griupan clássico indisponível", error);
     });
-    void this.#player.loadClassicMount(assets, DEFAULT_MOUNT_LOOK_KEY).then((loaded) => {
+    const mountReady = this.#player.loadClassicMount(assets, DEFAULT_MOUNT_LOOK_KEY).then((loaded) => {
       const select = document.querySelector<HTMLSelectElement>("#mount-select");
       const status = document.querySelector<HTMLElement>("#mount-select-status");
       if (!loaded) {
@@ -529,10 +530,18 @@ export class GameApp {
     }).catch((error: unknown) => {
       console.warn("Montaria clássica indisponível", error);
     });
+    if (loadingStatus) loadingStatus.textContent = "Montando personagem e equipamentos…";
+    await Promise.all([avatarReady, familiarReady, mountReady]);
     this.activateField(spawn, true);
     this.#scene.add(this.#clickMarker);
     this.#scene.add(this.#combatEffects.object);
     this.configureScene();
+    this.#cameraRig.update(this.#player.object.position, 1);
+    if (loadingStatus) loadingStatus.textContent = "Preparando a primeira imagem de Armia…";
+    // WebGL envia texturas e compila materiais sob demanda. Esta renderização
+    // ocorre atrás da tela opaca de boot e evita que o usuário veja esse upload.
+    this.#renderer.render(this.#scene, this.#camera);
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     document.querySelector("#loading")?.classList.add("is-hidden");
     this.#renderer.setAnimationLoop(this.frame);
   }

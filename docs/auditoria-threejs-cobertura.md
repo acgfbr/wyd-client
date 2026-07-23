@@ -91,7 +91,7 @@ A matriz fisica e reproduzivel agora e gerada por
 `bun run audit:coverage` em `docs/matriz-cobertura-classico.md` e
 `docs/matriz-cobertura-classico.json`. O gerador cruza o manifesto com os
 arquivos existentes e importa as definicoes TypeScript do runtime para nao
-confundir asset presente com feature jogavel. No snapshot atual existem 2.285
+confundir asset presente com feature jogavel. No snapshot atual existem 2.295
 caminhos unicos declarados e nenhum ausente; os 111 Fields possuem 111 TRN,
 108 DAT declarados e 103 minimapas declarados. As ausencias de DAT/minimapa
 nos demais Fields fazem parte do proprio manifesto, nao sao links quebrados.
@@ -100,7 +100,7 @@ nos demais Fields fazem parte do proprio manifesto, nao sao links quebrados.
 | --- | --- | --- | --- |
 | Mapas/Fields | 111 Fields, streaming, conexões, minimapas, seletor | `manifest.json`, `Field*.trn`, `regions.ts` | Revisão visual final dos 111 mapas |
 | Terreno/colisão | TRN, AttributeMap, object.bin, pontes/altura, pathfinding | `ClassicWorld`, `ClassicNavigation` | Casos isolados de máscara/altura que aparecerem em teste |
-| Objetos/props | DAT/WYS/MSH, água, folhas, fogueiras, fontes, floats | `MapObjects`, `MapWater`, `ClassicEnvironmentObjects` | Homologar pontos de grama e objetos raros |
+| Objetos/props | DAT/WYS/MSH, água, folhas, fogueiras, fontes, floats, TMDust 531, TMHouse e composições 1846/1980/2035 | `MapObjects`, `MapWater`, `ClassicEnvironmentObjects`, `MapEffects`, `MapMeshEffects` | Homologar pontos de grama e objetos raros |
 | Personagem | Quatro classes jogáveis, rigs, traje base, arma, montaria/familiar | `PlayerClasses`, `ClassicPlayerAvatar` | Cobertura completa de equipamentos visuais por classe |
 | Huntress | Mulher Kalintz, Skytalos Ancient +15, Griupan, 17 skills promovidas | `HuntressLooks`, `ClassicHuntressSkillEffects`, `ClassicAlchemyCatalog`, `ClassicLevelUpEffects` | 17 passivas e 2 casts ainda fora do runtime |
 | Montarias | 14 montarias nível 120, Unicórnio padrão, sela/bones | `MountLooks`, `ClassicMount` | Homologação visual de todas as variações |
@@ -135,7 +135,11 @@ nos demais Fields fazem parte do proprio manifesto, nao sao links quebrados.
   criação, coleta e alteração de saldo continuam corretamente no servidor.
 - Mapas: os 111 TRN existem; 108 DAT e 103 minimapas são exatamente os
   declarados pela fonte. O aberto é homologação visual dos mapas e dos raros
-  objetos com comportamento próprio, não uma importação em lote ausente.
+  objetos com comportamento próprio, não uma importação em lote ausente. A
+  primeira varredura recuperou 1.189 emissores `TMDust 531`, portais `2035`,
+  coroas `1846`, composições `1980` e 430 bases `TMHouse` com partes indiretas;
+  confirmou ainda que `520..530`, `657/658` e `674` são deliberadamente
+  invisíveis no cliente.
 - Áudio: 333 SFX e 13 músicas estão no catálogo. Quatro referências não existem
   nos corpora usados e não devem receber substituto arbitrário.
 

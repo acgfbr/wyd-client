@@ -223,6 +223,10 @@ for (const index of [1, 2, 3, 8, 9]) {
 // O TMHouse 474 desenha a hélice como GetCommonMesh(dwObjType + 1), portanto
 // o MSA 475 é uma dependência indireta e não aparece nos records DAT.
 usedObjectTypes.add(475);
+// Partes auxiliares renderizadas por TMHouse::Render e ausentes dos DATs.
+// 615/1770 também são adicionadas explicitamente para clones limpos em que
+// não apareçam por acaso como registros independentes de outro Field.
+for (const type of [608, 609, 615, 1770, 1771, 1772]) usedObjectTypes.add(type);
 // TMArrow type 152 level 2 (Explosão Etérea) referencia estes modelos
 // diretamente; eles também não aparecem nos records dos mapas.
 usedObjectTypes.add(28); // Effect/plane.msa, aura animada 101..104
@@ -261,6 +265,10 @@ usedObjectTypes.add(708); // Effect/icespear.msa — Lança de Gelo / Nevasca
 for (let type = 712; type <= 718; type++) usedObjectTypes.add(type);
 usedObjectTypes.add(2838); // Effect/crarmor.msa — Armadura Crítica
 usedObjectTypes.add(2840); // Effect/destiny.msa — Destino
+// O objeto de mapa 1980 é apenas o descritor central de uma composição:
+// TMObjectContainer instancia também 1979 (brilho/scroll) e 1981 (overlay).
+usedObjectTypes.add(1979);
+usedObjectTypes.add(1981);
 for (const [ownerType, waterType] of houseWaterCompanions) {
   if (usedObjectTypes.has(ownerType)) usedObjectTypes.add(waterType);
 }

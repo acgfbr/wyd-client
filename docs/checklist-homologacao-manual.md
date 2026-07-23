@@ -8,6 +8,9 @@ escopo atual.
 
 - Abrir Armia em `1024x768` e em widescreen; conferir HUD, chat, inventario,
   personagem, skills, loja, cargo, C.C e telemetria sem sobreposicao.
+- Com o pacote de Armia já cacheado, recarregar e confirmar que a tela de boot
+  só desaparece depois de terreno, prédios, água, efeitos e personagem estarem
+  presentes, sem objetos surgindo progressivamente na primeira imagem.
 - Registrar FPS, RAM JS, THREAD, GEO, TEX, CALLS e TRIS apos 60 s parado, apos
   cruzar dois Fields e com C.C ativo durante 60 s.
 - Trocar sequencialmente Huntress, TransKnight, Foema e BeastMaster; voltar para
@@ -38,6 +41,15 @@ escopo atual.
   ausencia de plano preto; registrar coordenada e captura para qualquer desvio.
 - Ausencia declarada de DAT ou minimapa deve ser comparada ao manifesto antes
   de ser tratada como erro.
+- Homologar as rajadas `TMDust 531` no Field `4,24`; elas devem cair em ciclos,
+  variar pela escala do DAT e desaparecer com `V`.
+- Conferir os portais `2035` em `2366,3893` e `2366,3926`, as composições
+  `1980` na faixa `3740..3923,2875..2876` e as coroas `1846` em
+  `3818,2846`, `4031,4054` e `4031,4071`.
+- Conferir as partes `TMHouse` em exemplos de cada família: `607` em
+  `147,3781`, `614` em `377,3803`, `1750` em `803,4055`, `1739` em
+  `1684,3674` e `1711` em `1796,3640`. As três peças do `607` devem girar em
+  sentidos opostos; as demais partes devem acompanhar posição/ângulo da base.
 
 ## Criterio de fechamento
 

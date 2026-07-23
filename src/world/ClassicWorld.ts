@@ -148,10 +148,15 @@ export class ClassicWorld {
   }
 
   /**
-   * Garante somente o terreno do Field atual. Em teleportes, reset=true
-   * invalida o streaming anterior; objetos continuam entrando em background.
+   * Garante o terreno do Field atual. O streaming normal mantém objetos em
+   * background; o boot pode pedir `waitForObjects` para só revelar a primeira
+   * imagem depois de DAT, modelos, água e efeitos estarem montados.
    */
-  async ensureCurrent(position: WydPosition, reset = false): Promise<void> {
+  async ensureCurrent(
+    position: WydPosition,
+    reset = false,
+    waitForObjects = false,
+  ): Promise<void> {
     this.#lastStreamingPosition = { ...position };
     const center = fieldAt(position);
     const key = fieldKey(center.column, center.row);
@@ -178,6 +183,9 @@ export class ClassicWorld {
     if (this.#loadedFields.has(key)) {
       this.startSpawnSubsystem();
       this.#spawns?.update(0, position);
+    }
+    if (waitForObjects && entry.objectFile) {
+      await this.waitForFieldObjects(entry, key);
     }
   }
 
@@ -451,6 +459,38 @@ export class ClassicWorld {
         }
       });
     this.#objectJobs.set(key, job);
+  }
+
+  /**
+   * Barreira usada apenas na primeira entrada. Ela também conduz os retries:
+   * antes do animation loop existir, retryObjectLoads() ainda não é chamado.
+   */
+  private async waitForFieldObjects(
+    entry: ClassicFieldEntry,
+    key: string,
+  ): Promise<void> {
+    while (
+      this.#desiredFields.has(key)
+      && this.#loadedFields.has(key)
+      && !this.#objectReady.has(key)
+    ) {
+      const activeJob = this.#objectJobs.get(key);
+      if (activeJob) {
+        await activeJob;
+        continue;
+      }
+
+      const retry = this.#objectRetries.get(key);
+      if (!retry) {
+        throw new Error(`Objetos do Field ${key} não puderam ser montados`);
+      }
+      const remaining = retry.retryAt - performance.now();
+      if (remaining > 0) {
+        await new Promise<void>((resolve) => window.setTimeout(resolve, remaining));
+      }
+      if (!this.isCurrentGeneration(key, retry.generation)) break;
+      this.startObjectLoad(entry, retry.generation, retry.records);
+    }
   }
 
   private isCurrentGeneration(key: string, generation: number): boolean {

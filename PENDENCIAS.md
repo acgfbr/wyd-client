@@ -364,6 +364,20 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
     concluída; clima global futuro só deve ser ligado quando o respectivo
     sistema de weather existir. Ainda falta concluir a revisão visual final
     dos mapas.
+    A revisão estrutural dos DATs recuperou o primeiro lote raro: 1.189
+    emissores `TMDust 531` em batch por Field, os billboards `423/424` dos dois
+    portais `2035`, as coroas dos três objetos `1846` e as três camadas
+    `1979/1980/1981` dos cinco descritores `1980`. As dependências indiretas
+    `1979/1981` agora fazem parte do importador. A auditoria também provou que
+    `520..530`, `657/658` e `674` devem permanecer invisíveis, evitando criar
+    cenário inexistente por inferência. Falta homologar visualmente esses
+    efeitos nas coordenadas/Fields em que aparecem e continuar a amostragem dos
+    demais objetos raros.
+    A família `TMHouse` também foi cruzada: 430 bases recuperaram suas partes
+    indiretas `608/609`, `615`, `1770`, `1771` e `1772`; o portão `607`
+    contra-rotaciona três peças no ciclo de `20 s`. Importador, leases e
+    descarte por Field incluem essas partes. Permanece a homologação visual dos
+    materiais substituídos por texture-set nos tipos `614/1711/1739/1750`.
 11. Distribuição web — **implementação concluída; homologação manual pendente**. O build de produção
     não publica sourcemaps, remove comentários legais/`debugger`/`console.debug`,
     minifica identificadores/sintaxe/espaços e usa nomes de assets por hash. O
@@ -390,6 +404,11 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
     Safari/iPhone ainda pode expulsar o cache sob pressão. Falta homologar em
     uma publicação HTTPS real: primeira visita, interrupção/retomada, limpeza,
     atualização de versão, offline parcial e expulsão no iPhone 15.
+    O boot de Armia agora usa uma barreira adicional: aguarda o DAT e a montagem
+    completa de modelos, água, efeitos, avatar, Griupan e montaria; em seguida
+    faz o primeiro render ainda atrás da tela opaca para compilar materiais e
+    enviar as texturas visíveis à GPU. Caminhada e teleporte preservam o
+    streaming assíncrono, portanto essa espera maior ocorre somente na entrada.
 12. Auditoria técnica final e cobertura do cliente clássico. Revisar o runtime
     contra as melhores práticas atuais do Three.js — ciclo de vida/dispose,
     cache e compartilhamento de GPU, draw calls/instancing, streaming, LOD,
@@ -412,13 +431,13 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
     a manter esse contrato. A matriz automatica por
     arquivo importado foi concluida: `bun run audit:coverage` cruza o manifesto,
     o corpus fisico e as definicoes TypeScript do runtime, gerando Markdown e
-    JSON em `docs/matriz-cobertura-classico.*`. O snapshot atual valida 2.285
+    JSON em `docs/matriz-cobertura-classico.*`. O snapshot atual valida 2.295
     caminhos declarados sem faltantes, 111 TRN, 108 DAT declarados, 103
     minimapas declarados, 377 templates, 3.937 geradores, 6.500 itens, 248
     skills binárias, 14 montarias e oito evocacoes; tambem explicita por classe
     quais skills ja foram promovidas ao runtime. O code splitting tambem foi
     aplicado: Three.js ocupa um chunk vendor cacheavel, a entrada da aplicacao
-    ficou em cerca de 504 KiB minificados e os renderers de Foema, TransKnight
+    ficou em cerca de 544 KiB minificados e os renderers de Foema, TransKnight
     e BeastMaster viraram chunks lazy na faixa de aproximadamente 37–124 KiB,
     carregados somente no primeiro switch para cada classe.
     O preview 3D do inventário também deixou de crescer com cada item
