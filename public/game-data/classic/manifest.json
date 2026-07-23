@@ -3832,6 +3832,24 @@
         "models/textures/mesh-potion1.dds"
       ]
     },
+    "56": {
+      "file": "models/56.msa",
+      "textures": [
+        "models/textures/mesh-potion2.dds"
+      ]
+    },
+    "61": {
+      "file": "models/61.msa",
+      "textures": [
+        "models/textures/mesh-garu01.dds"
+      ]
+    },
+    "62": {
+      "file": "models/62.msa",
+      "textures": [
+        "models/textures/mesh-garu02.dds"
+      ]
+    },
     "101": {
       "file": "models/101.msa",
       "textures": [

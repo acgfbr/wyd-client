@@ -542,15 +542,15 @@ export class Player {
     this.object.position.set(scene.x, this.world.heightAt(this.position), scene.z);
   }
 
-  moveTo(target: WydPosition): void {
-    if (this.#dead) return;
+  moveTo(target: WydPosition): boolean {
+    if (this.#dead) return false;
     this.clearManualDetour();
     // G é também o modo de exploração do cliente web: atravessa qualquer
     // máscara/objeto e segue reto até o ponto escolhido.
     if (this.#speedBoost) {
       this.#path = [{ ...target }];
       this.#pathIndex = 0;
-      return;
+      return true;
     }
 
     // The classic client advances along a stable route segment. Avoid running
@@ -559,7 +559,7 @@ export class Player {
     if (this.world.navigation.canTravelDirectly(this.position, target)) {
       this.#path = [{ ...target }];
       this.#pathIndex = 0;
-      return;
+      return true;
     }
 
     const result = this.world.navigation.findPath(this.position, target, {
@@ -569,7 +569,7 @@ export class Player {
     if (result.status !== "found" && result.status !== "already-there") {
       this.#path = [];
       this.#pathIndex = 0;
-      return;
+      return false;
     }
 
     const points = result.points.slice(1).map((cell) => ({ x: cell.x + 0.5, y: cell.y + 0.5 }));
@@ -584,6 +584,7 @@ export class Player {
     }
     this.#path = this.simplifyClickPath(points);
     this.#pathIndex = 0;
+    return true;
   }
 
   teleport(target: WydPosition): void {

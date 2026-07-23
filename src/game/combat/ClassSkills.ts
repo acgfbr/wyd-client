@@ -1046,14 +1046,41 @@ export interface ActiveClassBuff {
   readonly classicIndex: number;
   readonly name: string;
   readonly iconIndex: number;
+  readonly instanceType: number;
+  readonly instanceValue: number;
+  readonly tickType: number;
+  readonly tickValue: number;
   readonly affectType: number;
   readonly affectValue: number;
   readonly durationSeconds: number;
   readonly remainingSeconds: number;
+  /** Renderer dispatch key when a faithful implementation already exists. */
+  readonly effectKey: string | null;
+}
+
+/**
+ * Complete client-side metadata required to grant a buff outside the active
+ * class loadout (NPCs, packets or a later server bridge). The effect fields
+ * preserve SkillData semantics; this type intentionally does not define any
+ * stat formula or VFX fallback.
+ */
+export interface ExternalClassBuffGrant {
+  readonly classKey: ClassicClassKey;
+  readonly classicIndex: number;
+  readonly name: string;
+  readonly iconIndex: number;
+  readonly instanceType: number;
+  readonly instanceValue: number;
+  readonly tickType: number;
+  readonly tickValue: number;
+  readonly affectType: number;
+  readonly affectValue: number;
+  readonly durationSeconds: number;
+  readonly effectKey?: string | null;
 }
 
 interface MutableClassBuffState {
-  readonly skill: ClassSkill;
+  readonly buff: Readonly<ExternalClassBuffGrant>;
   remainingSeconds: number;
 }
 
@@ -1065,7 +1092,7 @@ export type ClassSkillStartResult =
     readonly reason: "invalid" | "cooldown" | "mana";
   };
 
-/** Shared cooldown and 180-second buff state for every playable class. */
+/** Shared cooldown plus native and externally granted buff state. */
 export class ClassSkillSystem {
   readonly classKey: ClassicClassKey;
   readonly skills: readonly ClassSkill[];
@@ -1073,10 +1100,14 @@ export class ClassSkillSystem {
   readonly #remaining = new Map<number, number>();
   readonly #buffs = new Map<number, MutableClassBuffState>();
 
-  constructor(classKey: ClassicClassKey = "huntress") {
+  constructor(
+    classKey: ClassicClassKey = "huntress",
+    inheritedBuffs: readonly ActiveClassBuff[] = [],
+  ) {
     this.classKey = classKey;
     this.skills = CLASS_SKILL_LOADOUTS[classKey];
     for (const skill of this.skills) this.#bySlot.set(skill.slot, skill);
+    this.importBuffs(inheritedBuffs);
   }
 
   update(deltaSeconds: number): void {
@@ -1107,12 +1138,59 @@ export class ClassSkillSystem {
 
   activateBuff(skill: ClassSkill): ActiveClassBuff | null {
     const loadoutSkill = this.#bySlot.get(skill.slot);
-    if (loadoutSkill !== skill || skill.kind !== "buff") return null;
-    this.#buffs.set(skill.classicIndex, {
-      skill,
-      remainingSeconds: CLASS_BUFF_DURATION_SECONDS,
+    if (
+      loadoutSkill !== skill
+      || skill.kind !== "buff"
+      || !Number.isFinite(skill.runtimeDurationSeconds)
+      || skill.runtimeDurationSeconds <= 0
+    ) return null;
+    return this.grantExternalBuff({
+      classKey: skill.classKey,
+      classicIndex: skill.classicIndex,
+      name: skill.name,
+      iconIndex: skill.classicIndex,
+      instanceType: skill.instanceType,
+      instanceValue: skill.instanceValue,
+      tickType: skill.tickType,
+      tickValue: skill.tickValue,
+      affectType: skill.affectType,
+      affectValue: skill.affectValue,
+      durationSeconds: skill.runtimeDurationSeconds,
+      effectKey: skill.effectKey,
     });
-    return this.buff(skill.classicIndex);
+  }
+
+  /** Grants or refreshes one externally described buff at its full duration. */
+  grantExternalBuff(grant: ExternalClassBuffGrant): ActiveClassBuff | null {
+    return this.storeExternalBuff(grant, grant.durationSeconds);
+  }
+
+  /** Grants a batch while retaining the deterministic input order. */
+  grantExternalBuffs(grants: readonly ExternalClassBuffGrant[]): readonly ActiveClassBuff[] {
+    const activated: ActiveClassBuff[] = [];
+    for (const grant of grants) {
+      const buff = this.grantExternalBuff(grant);
+      if (buff) activated.push(buff);
+    }
+    return activated;
+  }
+
+  /** Immutable transfer snapshot used when the playable class is replaced. */
+  exportBuffs(): readonly ActiveClassBuff[] {
+    return this.activeBuffs();
+  }
+
+  /**
+   * Restores buffs with their remaining time. Existing entries with the same
+   * classic index are replaced; unrelated entries remain active.
+   */
+  importBuffs(buffs: readonly ActiveClassBuff[]): readonly ActiveClassBuff[] {
+    const imported: ActiveClassBuff[] = [];
+    for (const buff of buffs) {
+      const restored = this.storeExternalBuff(buff, buff.remainingSeconds);
+      if (restored) imported.push(restored);
+    }
+    return imported;
   }
 
   removeBuff(classicIndex: number): boolean {
@@ -1151,6 +1229,47 @@ export class ClassSkillSystem {
   clear(): void {
     this.#remaining.clear();
     this.#buffs.clear();
+  }
+
+  private storeExternalBuff(
+    grant: ExternalClassBuffGrant,
+    remainingSeconds: number,
+  ): ActiveClassBuff | null {
+    if (!isValidExternalBuff(grant) || !Number.isFinite(remainingSeconds) || remainingSeconds <= 0) {
+      return null;
+    }
+    const existing = this.#buffs.get(grant.classicIndex);
+    // A native 180-second recast must not shorten the same buff granted by an
+    // external source for longer (for example Mestre Carb's 900 seconds).
+    // It may still refresh a nearly expired long buff up to its native time.
+    const durationSeconds = Math.max(
+      0,
+      grant.durationSeconds,
+      existing?.buff.durationSeconds ?? 0,
+    );
+    const normalizedRemaining = Math.min(
+      durationSeconds,
+      Math.max(0, remainingSeconds, existing?.remainingSeconds ?? 0),
+    );
+    const normalized: Readonly<ExternalClassBuffGrant> = Object.freeze({
+      classKey: grant.classKey,
+      classicIndex: Math.trunc(grant.classicIndex),
+      name: grant.name.trim(),
+      iconIndex: Math.trunc(grant.iconIndex),
+      instanceType: Math.trunc(grant.instanceType),
+      instanceValue: grant.instanceValue,
+      tickType: Math.trunc(grant.tickType),
+      tickValue: grant.tickValue,
+      affectType: Math.trunc(grant.affectType),
+      affectValue: grant.affectValue,
+      durationSeconds,
+      effectKey: grant.effectKey ?? existing?.buff.effectKey ?? null,
+    });
+    this.#buffs.set(normalized.classicIndex, {
+      buff: normalized,
+      remainingSeconds: normalizedRemaining,
+    });
+    return this.buff(normalized.classicIndex);
   }
 }
 
@@ -1241,13 +1360,41 @@ function classicRecord(
 
 function snapshotClassBuff(state: MutableClassBuffState): ActiveClassBuff {
   return {
-    classKey: state.skill.classKey,
-    classicIndex: state.skill.classicIndex,
-    name: state.skill.name,
-    iconIndex: state.skill.classicIndex,
-    affectType: state.skill.affectType,
-    affectValue: state.skill.affectValue,
-    durationSeconds: CLASS_BUFF_DURATION_SECONDS,
+    classKey: state.buff.classKey,
+    classicIndex: state.buff.classicIndex,
+    name: state.buff.name,
+    iconIndex: state.buff.iconIndex,
+    instanceType: state.buff.instanceType,
+    instanceValue: state.buff.instanceValue,
+    tickType: state.buff.tickType,
+    tickValue: state.buff.tickValue,
+    affectType: state.buff.affectType,
+    affectValue: state.buff.affectValue,
+    durationSeconds: state.buff.durationSeconds,
     remainingSeconds: state.remainingSeconds,
+    effectKey: state.buff.effectKey ?? null,
   };
+}
+
+function isValidExternalBuff(grant: ExternalClassBuffGrant): boolean {
+  return (
+    (grant.classKey === "transknight"
+      || grant.classKey === "foema"
+      || grant.classKey === "beastmaster"
+      || grant.classKey === "huntress")
+    && Number.isInteger(grant.classicIndex)
+    && grant.classicIndex >= 0
+    && typeof grant.name === "string"
+    && grant.name.trim().length > 0
+    && Number.isInteger(grant.iconIndex)
+    && grant.iconIndex >= 0
+    && Number.isFinite(grant.instanceType)
+    && Number.isFinite(grant.instanceValue)
+    && Number.isFinite(grant.tickType)
+    && Number.isFinite(grant.tickValue)
+    && Number.isFinite(grant.affectType)
+    && Number.isFinite(grant.affectValue)
+    && Number.isFinite(grant.durationSeconds)
+    && grant.durationSeconds > 0
+  );
 }

@@ -10,9 +10,11 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
 - `AttributeMap.dat` e `object.bin` compõem a máscara de colisão na ordem do
   cliente; pontes e plataformas também fornecem altura caminhável.
 - NPCs/monstros têm streaming por Field, animação, autonomia, separação,
-  combate, morte, respawn, EXP e drops offline. NPCs amistosos de rota curta
-  fazem um passeio offline determinístico de 1–1,75 unidade, sempre contido em
-  2,25 unidades da origem; guardas `RouteType 0` permanecem fixos.
+  combate, morte, respawn e EXP. O drop offline deixa uma instância 3D no chão
+  e só entra no inventário depois do fluxo de coleta confirmado; `Espaço`
+  coleta o vizinho alcançável mais próximo e `Z` alterna todos os nomes. NPCs
+  amistosos de rota curta fazem um passeio offline determinístico de 1–1,75 unidade,
+  sempre contido em 2,25 unidades da origem; guardas `RouteType 0` permanecem fixos.
 - Clique para mover usa rota com desempate estável, remoção segura dos centros
   intermediários visíveis e interpolação linear, sem o zigue-zague do A* cru.
 - O marcador de clique agora é um pulso transitório de 0,72 s, em vez de ficar
@@ -196,16 +198,48 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
    atlas; ícone, nome, requisitos, efeitos e preço estático vêm do catálogo. O
    Aki, por exemplo, expõe os 14 itens recuperados de seu template. Selecionar
    continua sendo apenas apresentação; ainda faltam no servidor compra/venda,
-   saldo, Tax, cargo, combinação, missões, loot e persistência, e nenhuma dessas
-   operações deve ser simulada como autoritativa.
+   saldo, Tax, combinação, missões e persistência, e nenhuma dessas operações
+   deve ser simulada como autoritativa. Drop tables e regras de loot continuam
+   sendo responsabilidade do servidor.
+   O cargo também deixou de ser uma grade vazia. A fonte reserva
+   `MAX_CARGO=128`, mas `TMFieldScene` expõe somente os índices `0..119` em três
+   páginas de 40 (`5×8`); a UI reproduz essas páginas, ícones, quantidades e
+   refinação. Enquanto a conta/servidor não existe, os 120 slots começam vazios
+   e vivem exclusivamente na sessão, com aviso explícito. Mover, juntar pilhas
+   e trocar inventário↔cargo/cargo↔cargo usa uma única transação de estado para
+   não criar estados intermediários de duplicação ou perda. Não há seed,
+   `localStorage`, saldo, taxa nem alegação de persistência compartilhada.
    Para portais, o runtime reconhece o bit `0x10` do `AttributeMap`, cruza as 37
    entradas exatas de `g_TeleportTable` e abre o prompt clássico quando o
    personagem para sobre a célula. O prompt abre uma vez por entrada, não
    reaparece enquanto o personagem permanece nela e é limpo ao sair, morrer,
    trocar de classe/Field ou teleportar. Confirmar ainda não move o personagem
    nem cobra preço: destino, autorização e transição continuam pendentes do
-   servidor. Também restam dimensões multicélula dos
-   itens e a ligação final do catálogo ao loot. NPCs amistosos mantêm o passeio
+   servidor.
+   A apresentação de item no chão agora segue `MSG_CreateItem`/`TMItem`: usa o
+   índice e os três efeitos do `STRUCT_ITEM`, `GridX/Y` inteiros, centro
+   `+0,5`, altura `+0,1`, rotação em quartos, nome/hover branco, brilho por
+   `EF38`, toggle global de efeitos e descarte fora do quadrado de 18 células.
+   Clique e aproximação reproduzem `MoveGet`: alcance `BASE_GetDistance <= 1`,
+   validação do segmento com altura máxima 8, cooldown de 1 s, teste de espaço
+   no inventário e mutação somente após a confirmação equivalente a
+   `CNFGetItem`. O cliente recuperado não contém as drop tables do servidor;
+   portanto a demonstração permanece explicitamente isolada em uma política
+   offline determinística para as poções reais `#400/#405` e as Poeiras de
+   Oriharucon/Lactolerium `#412/#413`, sem o antigo Fragmento de Oriharucon
+   inventado. Os modelos `53/56/61/62` e dados estáticos vêm do catálogo
+   clássico. `Espaço` coleta somente uma instância materializada no mesmo bloco
+   de `BASE_GetDistance <= 1`, e `Z` alterna a visibilidade de todos os nomes
+   residentes sem interferir na digitação do chat. Falhas de A*/segmento e
+   aproximações sem progresso cancelam a coleta e liberam novamente o C.C.; a
+   rota iniciada pelo drop também é encerrada ao cancelar, sem parar um caminho
+   posterior que não pertença à coleta. Como o TTL real depende do servidor, o
+   mock não inventa um tempo clássico: mantém um teto explícito de 128 drops
+   residentes e descarta o mais antigo ao excedê-lo, além da janela espacial de
+   18 células. Ainda faltam ownership,
+   decaimento/ressincronização de servidor, footprint `EF_GRID` multicélula,
+   moedas no chão e drop tables
+   autoritativas. NPCs amistosos mantêm o passeio
    curto já implementado, e o Griupan segue homologado como familiar padrão.
 10. HUD, áudio, efeitos e revisão manual dos mapas — **parcial**. A HUD recebeu
     o primeiro passe de escala/composição baseado na captura 7.54 fornecida:
@@ -273,8 +307,14 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
     permite incluir/remover/reordenar e preserva uma configuração por classe.
     Alvos e skills adquiridos manualmente são separados dos adquiridos pelo
     macro; desligar não cancela uma ação manual. Troca de classe, morte,
-    respawn e teleporte limpam somente o estado transitório necessário. A
-    auditoria também registrou que o macro `Y`/`m_cAutoAttack` do cliente é um
+    respawn e teleporte limpam somente o estado transitório necessário. No
+    modo contínuo (`>>`), o raio de aquisição agora ultrapassa o alcance
+    imediato da arma/skill e entrega o ponto de aproximação ao A*, de modo que
+    o personagem caminha até o próximo monstro em vez de aguardar um alvo já
+    dentro do alcance. Um alvo cujo caminho falha entra em espera por `1,5 s`,
+    permitindo ao C.C. tentar outro monstro em vez de readquirir o mesmo para
+    sempre. A auditoria também registrou que o macro
+    `Y`/`m_cAutoAttack` do cliente é um
     sistema separado, que gira os últimos N atalhos; a lista ordenável web é
     uma decisão explícita do projeto. O menu recebeu as opções clássicas de
     servidor/personagem/saída como estados honestamente bloqueados pela rede.
@@ -286,7 +326,18 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
    deve manter duração/estado e o efeito persistente correto no personagem ou
    alvo. Reproduzir também shader, blend/alpha, UV animado, billboard/mesh,
    escala, cor, bone de ancoragem e sincronização dos frames, evitando efeitos
-   genéricos compartilhados entre classes. Para a Huntress, o catálogo binário,
+   genéricos compartilhados entre classes. O Mestre Carb agora reconhece seus
+   cinco templates importados e renova por `900 s` os 32 buffs reais de
+   classe/master identificados no `SkillData.bin`; classe, índice, ícone
+   (inclusive o atlas master), `instance`, `tick` e `affect` são preservados,
+   os ícones quebram em múltiplas linhas e o estado sobrevive à troca de classe.
+   Os 14 buffs que já possuem renderer continuam usando seus efeitos dedicados
+   quando a respectiva classe visual está carregada. Para os demais, o estado e
+   o ícone são fiéis, mas fórmulas de atributos e VFX ainda dependem de código
+   autoritativo/renderer recuperado e não foram inventados. A interação é
+   instantânea: clicar no Mestre Carb renova os buffs sem abrir modal de NPC ou
+   inventário. Para a Huntress, o
+   catálogo binário,
    ícones clássicos, barra clicável e menu `K` já estão integrados; os buffs
    offline duram `180 s`. A Imunidade `#76` deve manter as duas esferas
    `sphere2` persistentes, e a Ligação Espectral `#81` deve ocupar o slot `9`

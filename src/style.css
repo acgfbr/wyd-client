@@ -309,7 +309,10 @@ button, select { font: inherit; }
   left: 9px;
   z-index: 20;
   display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
   gap: 3px;
+  width: min(464px, calc(100vw - 18px));
   min-height: 28px;
   opacity: 0;
   pointer-events: none;

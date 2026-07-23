@@ -228,9 +228,12 @@ usedObjectTypes.add(2839); // Effect/unsole.msa
 usedObjectTypes.add(10);
 usedObjectTypes.add(19);
 usedObjectTypes.add(20);
-// Dependências do preview 3D do inventário: poção, Skytalos e traje Valkyrie.
-// São itens equipáveis/consumíveis e por isso não aparecem nos DAT dos mapas.
+// Dependências de itens fora dos DAT: preview 3D e materialização de drops.
+// São itens equipáveis/consumíveis/materiais e por isso não aparecem nos mapas.
 usedObjectTypes.add(53); // mesh/hpotion1.msa
+usedObjectTypes.add(56); // mesh/mpotion1.msa
+usedObjectTypes.add(61); // mesh/oriharukon.msa — Poeira de Oriharucon #412
+usedObjectTypes.add(62); // mesh/laktererium.msa — Poeira de Lactolerium #413
 usedObjectTypes.add(762); // mesh/bow16.msa
 usedObjectTypes.add(2883); // mesh/valkyrie.msa
 // TMEffectStart (used by Beast Master summon materialization) resolves this

@@ -4,6 +4,12 @@ import { WydCamera } from "../camera/WydCamera";
 import { Player } from "../game/Player";
 import { loadClassicCommerceCatalog } from "../game/commerce/ClassicCommerceCatalog";
 import {
+  ClassicGroundItemManager,
+  OfflineClassicGroundItemGateway,
+  offlineGroundItemToInventoryItem,
+  type ClassicGroundItemSnapshot,
+} from "../game/items";
+import {
   ClassSkillSystem,
   type ClassSkill,
   type ClassicClassKey,
@@ -24,6 +30,11 @@ import type {
   ClassicMonsterSnapshot,
   ClassicSpawnManager,
 } from "../game/npcs/ClassicSpawnManager";
+import {
+  CLASSIC_MASTER_CARB_BUFFS,
+  grantClassicMasterCarbBuffs,
+  isClassicMasterCarb,
+} from "../game/npcs/ClassicMasterCarb";
 import { findTriggeredClassicGroundPortalAt } from "../game/portals/ClassicGroundPortals";
 import { GameInput } from "../input/GameInput";
 import { ClassicWorld } from "../world/ClassicWorld";
@@ -32,7 +43,11 @@ import { Minimap } from "../ui/Minimap";
 import { GameHud } from "../ui/GameHud";
 import { RuntimeTelemetry } from "../ui/RuntimeTelemetry";
 import { ClassicPlayerOverheadHud } from "../ui/ClassicPlayerOverheadHud";
-import { PlayerState, type PlayerSnapshot } from "../game/state/PlayerState";
+import {
+  PlayerState,
+  type InventoryItem,
+  type PlayerSnapshot,
+} from "../game/state/PlayerState";
 import { ClassicBeastMasterSummon } from "../game/player/ClassicBeastMasterSummon";
 import type { ClassicWeaponEffectSegmentSample } from "../game/player/ClassicPlayerAvatar";
 import {
@@ -74,6 +89,18 @@ const HELD_GROUND_DESTINATION_EPSILON = 0.08;
 const NPC_INTERACTION_DEBOUNCE_SECONDS = 1;
 const NPC_HOVER_DIRTY_INTERVAL_SECONDS = 0.04;
 const NPC_HOVER_REFRESH_INTERVAL_SECONDS = 0.12;
+// TMHuman::MoveGet throttles MSG_GetItem to one request per second and sends
+// it from BASE_GetDistance <= 1 (the item cell or one of its 8 neighbours).
+// TMItem also unloads outside the focused 18-cell square.
+const GROUND_ITEM_PICKUP_COOLDOWN_SECONDS = 1;
+const GROUND_ITEM_STREAM_RADIUS = 18;
+// The server-owned retail expiration is unavailable in the recovered client.
+// Bound only the offline residency so continuous C.C cannot retain unlimited
+// models, canvases and model-library leases while farming one resident area.
+const OFFLINE_GROUND_ITEM_RESIDENT_CAPACITY = 128;
+const GROUND_ITEM_PICKUP_APPROACH_TIMEOUT_SECONDS = 12;
+const GROUND_ITEM_PICKUP_STALL_TIMEOUT_SECONDS = 0.9;
+const MACRO_UNREACHABLE_TARGET_COOLDOWN_SECONDS = 1.5;
 const BEAST_MASTER_SUMMON_PACK_SIZE = 10;
 // TMHuman's normal humanoid skin uses m_vecPickSize[1] = (0.4, 2.0).
 // Player.classicScale supplies the retail 0.9 transform at runtime.
@@ -128,6 +155,8 @@ export class GameApp {
   readonly #levelUpEffects: ClassicLevelUpEffects;
   readonly #damageNumbers: ClassicDamageNumbers;
   #inventoryPreview: ClassicInventoryPreview | null = null;
+  #groundItems: ClassicGroundItemManager | null = null;
+  readonly #offlineGroundItems = new OfflineClassicGroundItemGateway();
   #assets?: ClassicAssetSource;
   #player?: Player;
   #world?: ClassicWorld;
@@ -141,6 +170,18 @@ export class GameApp {
   #selectedTargetId: string | null = null;
   #activeNpcId: string | null = null;
   #pendingNpcId: string | null = null;
+  #pendingGroundItemId: string | null = null;
+  #groundItemPickupTargetId: string | null = null;
+  #groundItemPickupJobId: string | null = null;
+  #groundItemPickupJobToken = 0;
+  #groundItemPickupCooldown = 0;
+  #groundItemPickupGeneration = 0;
+  #groundItemPickupApproachRemaining = 0;
+  #groundItemPickupStallRemaining = 0;
+  #groundItemPickupLastDistance = Number.POSITIVE_INFINITY;
+  #groundItemPickupOwnsMovement = false;
+  #groundItemLabelsVisible = false;
+  readonly #offlineGroundItemResidency = new Set<string>();
   #npcOpenedInventory = false;
   #npcShopLoadId = 0;
   #npcInteractionCooldown = 0;
@@ -163,6 +204,7 @@ export class GameApp {
   #queuedSkillOrigin: "manual" | "macro" | null = null;
   #macroOwnsTarget = false;
   #macroDecisionCooldown = 0;
+  readonly #macroUnreachableTargets = new Map<string, number>();
   #macroSkillCursor = 0;
   #macroSkillSlots = offensiveBarSkillSlots(this.#skills.skills);
   readonly #macroSkillSlotsByClass = new Map<ClassicClassKey, number[]>([
@@ -241,6 +283,17 @@ export class GameApp {
     this.#input.onMountToggle = () => this.toggleMount();
     this.#input.onAutoCombatToggle = () => this.cycleAutoCombatMode();
     this.#input.onEffectsToggle = () => this.toggleEffects();
+    this.#input.onNearbyGroundItemPickup = () => this.pickupNearestGroundItem();
+    this.#input.onGroundItemLabelsToggle = () => {
+      this.#groundItemLabelsVisible = !this.#groundItemLabelsVisible;
+      this.#groundItems?.setAllLabelsVisible(this.#groundItemLabelsVisible);
+      this.#hud.addLog(
+        this.#groundItemLabelsVisible
+          ? "Nomes dos drops ativados (Z)."
+          : "Nomes dos drops desativados (Z).",
+        "system",
+      );
+    };
     this.#input.onSkill = (slot) => this.requestSkill(slot);
     this.#hud.onAutoCombatModeSelected = (mode) => this.setAutoCombatMode(mode);
     this.#hud.onAutoCombatSkillSlotsChanged = (slots) => this.setMacroSkillSlots(slots);
@@ -312,6 +365,15 @@ export class GameApp {
     // bloquear a primeira imagem.
     await world.ensureCurrent(spawn, true);
     this.#world = world;
+    this.#groundItems = new ClassicGroundItemManager(world, assets, {
+      effectsEnabled: this.#effectsEnabled,
+    });
+    this.#groundItems.setAllLabelsVisible(this.#groundItemLabelsVisible);
+    window.addEventListener("pagehide", (event) => {
+      // Preserve GPU/model references for Safari's back-forward cache, but
+      // release them on an actual document unload.
+      if (!event.persisted) this.#groundItems?.dispose();
+    });
     const previewRoot = document.querySelector<HTMLElement>("#inventory-preview");
     const previewViewport = document.querySelector<HTMLElement>("#inventory-preview-viewport");
     if (previewRoot && previewViewport) {
@@ -421,6 +483,7 @@ export class GameApp {
         if (keyboard.x !== 0 || keyboard.y !== 0 || mouseForward) {
           this.breakInvisibility();
           this.closeNpcInteraction();
+          this.cancelGroundItemPickup();
         }
         const movement = new THREE.Vector2();
         if (this.#playerState.snapshot.alive) {
@@ -438,6 +501,8 @@ export class GameApp {
         }
         this.#player.update(dt, movement);
         this.#world?.update(dt, this.#player.position);
+        this.#groundItems?.update(dt);
+        this.updateGroundItemPickup(dt);
         this.updateGroundPortalPrompt();
       }
       this.bindSpawnGameplay();
@@ -464,6 +529,8 @@ export class GameApp {
 
   private readonly groundClick = (pointer: THREE.Vector2): void => {
     this.#pendingNpcId = null;
+    this.#pendingGroundItemId = null;
+    this.cancelGroundItemPickup();
     if (!this.#world || !this.#player || !this.#playerState.snapshot.alive) {
       this.#heldGroundMode = null;
       this.#heldGroundDestination = null;
@@ -495,7 +562,21 @@ export class GameApp {
       }
       return;
     }
-    const hit = hits.find((candidate) => !spawns?.targetFromObject(candidate.object));
+    for (const candidate of hits) {
+      const item = this.#groundItems?.itemFromObject(candidate.object);
+      if (!item) continue;
+      this.#heldGroundMode = "target";
+      this.#heldGroundDestination = null;
+      this.#pendingGroundItemId = item.id;
+      this.closeNpcInteraction();
+      this.selectTarget(null);
+      this.#clickMarker.visible = false;
+      return;
+    }
+    const hit = hits.find((candidate) => (
+      !spawns?.targetFromObject(candidate.object)
+      && !this.#groundItems?.itemFromObject(candidate.object)
+    ));
     if (!hit) {
       this.#heldGroundMode = null;
       this.#heldGroundDestination = null;
@@ -510,18 +591,32 @@ export class GameApp {
 
   private readonly groundRelease = (pointer: THREE.Vector2): void => {
     const pendingNpcId = this.#pendingNpcId;
+    const pendingGroundItemId = this.#pendingGroundItemId;
     this.#pendingNpcId = null;
+    this.#pendingGroundItemId = null;
     if (
-      !pendingNpcId
-      || !this.#world
+      !this.#world
       || !this.#player
       || !this.#playerState.snapshot.alive
-      || this.#npcInteractionCooldown > 0
     ) return;
     this.#raycaster.setFromCamera(pointer, this.#camera);
     const spawns = this.#world.spawns;
-    if (!spawns) return;
     const hits = this.#raycaster.intersectObject(this.#world.object, true);
+
+    if (pendingGroundItemId) {
+      // Actors own the pointer before floor items, matching the retail pick
+      // order and preventing a click from tunnelling through an NPC/monster.
+      if (hits.some((candidate) => spawns?.targetFromObject(candidate.object))) return;
+      for (const candidate of hits) {
+        const item = this.#groundItems?.itemFromObject(candidate.object);
+        if (!item) continue;
+        if (item.id === pendingGroundItemId) this.requestGroundItemPickup(item);
+        return;
+      }
+      return;
+    }
+
+    if (!pendingNpcId || !spawns || this.#npcInteractionCooldown > 0) return;
     for (const candidate of hits) {
       const npc = spawns.targetFromObject(candidate.object);
       if (!npc) continue;
@@ -531,6 +626,14 @@ export class GameApp {
       // Code zero/ordinary guards have no client-authored dialog mapping.
       // MouseClick_NPC simply returns for them, so do not fabricate speech.
       if (npc.interactionKind === "none") return;
+      if (isClassicMasterCarb(npc)) {
+        spawns.setFriendlyHover(null);
+        this.#npcInteractionCooldown = NPC_INTERACTION_DEBOUNCE_SECONDS;
+        this.selectTarget(null);
+        this.#hud.setTarget(null);
+        this.receiveMasterCarbBuffs();
+        return;
+      }
       const interactionWasVisible = this.#hud.npcInteractionVisible;
       const inventoryWasVisible = document.querySelector("#inventory-panel")?.classList.contains("is-visible") ?? false;
       if (!inventoryWasVisible) this.#npcOpenedInventory = true;
@@ -552,6 +655,7 @@ export class GameApp {
 
   private readonly groundReleaseCancelled = (): void => {
     this.#pendingNpcId = null;
+    this.#pendingGroundItemId = null;
   };
 
   private updateHeldGroundDestination(deltaSeconds: number, mouseForward: boolean): void {
@@ -598,10 +702,22 @@ export class GameApp {
       break;
     }
     if (actorBlocksPointer && !liveTarget) return;
+    let liveGroundItem: ClassicGroundItemSnapshot | null = null;
+    if (!actorBlocksPointer) {
+      for (const candidate of hits) {
+        liveGroundItem = this.#groundItems?.itemFromObject(candidate.object) ?? null;
+        if (liveGroundItem) break;
+      }
+    }
     // Retail m_bMoveing semantics: a press on a target waits while still over
     // a living target, then permanently becomes ground navigation after
     // dragging away. A press that began on ground ignores crossed targets.
-    if (this.#heldGroundMode === "target" && liveTarget) {
+    if (
+      this.#heldGroundMode === "target"
+      && this.#pendingGroundItemId
+      && liveGroundItem?.id === this.#pendingGroundItemId
+    ) return;
+    if (this.#heldGroundMode === "target" && liveTarget && !this.#pendingGroundItemId) {
       if (liveTarget.hostile) {
         this.closeNpcInteraction();
         if (liveTarget.id !== this.#selectedTargetId) this.selectTarget(liveTarget);
@@ -611,10 +727,15 @@ export class GameApp {
       }
       return;
     }
-    const hit = hits.find((candidate) => !spawns?.targetFromObject(candidate.object));
+    if (actorBlocksPointer && this.#heldGroundMode === "target") return;
+    const hit = hits.find((candidate) => (
+      !spawns?.targetFromObject(candidate.object)
+      && !this.#groundItems?.itemFromObject(candidate.object)
+    ));
     if (!hit) return;
     const transitionedToGround = this.#heldGroundMode !== "ground";
     if (transitionedToGround) this.#heldGroundMode = "ground";
+    if (transitionedToGround) this.#pendingGroundItemId = null;
     const destination = toWyd(hit.point.x, hit.point.z, this.#world.origin);
     const previous = this.#heldGroundDestination;
     if (
@@ -658,12 +779,248 @@ export class GameApp {
     if (progress >= 1) this.#clickMarker.visible = false;
   }
 
+  private pickupNearestGroundItem(): void {
+    const player = this.#player;
+    const world = this.#world;
+    const manager = this.#groundItems;
+    if (
+      !player
+      || !world
+      || !manager
+      || !this.#playerState.snapshot.alive
+      || this.#streamingPaused
+    ) return;
+
+    let nearest: ClassicGroundItemSnapshot | null = null;
+    let nearestDistanceSquared = Number.POSITIVE_INFINITY;
+    for (const item of manager.snapshots()) {
+      if (!manager.isMaterialized(item.id) || !this.#offlineGroundItems.get(item.id)) continue;
+      if (!isWithinClassicPickupRange(player.position, item.position)) continue;
+      const center = centeredGroundItemPosition(item.position);
+      if (!world.navigation.canTravelDirectly(player.position, center)) continue;
+      const dx = center.x - player.position.x;
+      const dy = center.y - player.position.y;
+      const distanceSquared = dx * dx + dy * dy;
+      if (
+        distanceSquared < nearestDistanceSquared
+        || (
+          distanceSquared === nearestDistanceSquared
+          && nearest !== null
+          && item.id.localeCompare(nearest.id) < 0
+        )
+      ) {
+        nearest = item;
+        nearestDistanceSquared = distanceSquared;
+      }
+    }
+    if (!nearest) return;
+    this.cancelGroundItemPickup();
+    this.requestGroundItemPickup(nearest);
+    // Space is an explicit pickup action: start the local request immediately
+    // instead of waiting for the next animation frame.
+    this.updateGroundItemPickup(0);
+  }
+
+  private requestGroundItemPickup(item: ClassicGroundItemSnapshot): void {
+    const player = this.#player;
+    const world = this.#world;
+    if (!player || !world || !this.#playerState.snapshot.alive) return;
+    if (!this.#offlineGroundItems.get(item.id)) {
+      this.#hud.addLog("Esse item depende da confirmação do servidor para ser coletado.", "system");
+      return;
+    }
+    const center = centeredGroundItemPosition(item.position);
+    const alreadyInRange = isWithinClassicPickupRange(player.position, item.position);
+    if (alreadyInRange && !world.navigation.canTravelDirectly(player.position, center)) {
+      this.#hud.addLog("Não há rota válida até esse item.", "system");
+      return;
+    }
+    if (!alreadyInRange && !player.moveTo(center)) {
+      this.#hud.addLog("Não há rota válida até esse item.", "system");
+      return;
+    }
+    this.closeNpcInteraction();
+    this.selectTarget(null);
+    this.breakInvisibility();
+    this.#groundItemPickupTargetId = item.id;
+    this.#groundItemPickupApproachRemaining = alreadyInRange
+      ? 0
+      : GROUND_ITEM_PICKUP_APPROACH_TIMEOUT_SECONDS;
+    this.#groundItemPickupStallRemaining = alreadyInRange
+      ? 0
+      : GROUND_ITEM_PICKUP_STALL_TIMEOUT_SECONDS;
+    this.#groundItemPickupLastDistance = alreadyInRange
+      ? 0
+      : Math.hypot(center.x - player.position.x, center.y - player.position.y);
+    this.#groundItemPickupOwnsMovement = !alreadyInRange;
+    this.#clickMarker.visible = false;
+  }
+
+  private updateGroundItemPickup(deltaSeconds: number): void {
+    this.#groundItemPickupCooldown = Math.max(
+      0,
+      this.#groundItemPickupCooldown - deltaSeconds,
+    );
+    const manager = this.#groundItems;
+    const player = this.#player;
+    if (!manager || !player) return;
+
+    // TMItem::Render releases objects outside the focused +/-18 cell square.
+    // The offline gateway has no server capable of resending them, therefore
+    // both its pending DTO and the visual are retired together here.
+    for (const item of manager.snapshots()) {
+      if (
+        Math.abs(Math.floor(player.position.x) - Math.floor(item.position.x)) <= GROUND_ITEM_STREAM_RADIUS
+        && Math.abs(Math.floor(player.position.y) - Math.floor(item.position.y)) <= GROUND_ITEM_STREAM_RADIUS
+      ) continue;
+      this.retireGroundItem(item.id);
+    }
+
+    const id = this.#groundItemPickupTargetId;
+    if (!id) return;
+    if (!this.#playerState.snapshot.alive || this.#streamingPaused) {
+      this.cancelGroundItemPickup();
+      return;
+    }
+    const item = manager.get(id);
+    if (!item || !this.#offlineGroundItems.get(id)) {
+      this.cancelGroundItemPickup();
+      return;
+    }
+    if (!isWithinClassicPickupRange(player.position, item.position)) {
+      const center = centeredGroundItemPosition(item.position);
+      const distance = Math.hypot(center.x - player.position.x, center.y - player.position.y);
+      this.#groundItemPickupApproachRemaining -= Math.max(0, deltaSeconds);
+      if (distance + 0.04 < this.#groundItemPickupLastDistance) {
+        this.#groundItemPickupLastDistance = distance;
+        this.#groundItemPickupStallRemaining = GROUND_ITEM_PICKUP_STALL_TIMEOUT_SECONDS;
+      } else if (!player.moving) {
+        this.#groundItemPickupStallRemaining -= Math.max(0, deltaSeconds);
+      }
+      if (
+        this.#groundItemPickupApproachRemaining <= 0
+        || this.#groundItemPickupStallRemaining <= 0
+      ) {
+        this.cancelGroundItemPickup();
+        this.#hud.addLog("A coleta foi cancelada porque o item não pôde ser alcançado.", "system");
+      }
+      return;
+    }
+    // MoveGet validates BASE_GetHitPosition(..., 8) before sending. The
+    // navigation segment check uses the same classic max-height threshold and
+    // prevents collection through a wall, blocked corner or bridge level.
+    if (!this.#world?.navigation.canTravelDirectly(
+      player.position,
+      centeredGroundItemPosition(item.position),
+    )) {
+      this.cancelGroundItemPickup();
+      this.#hud.addLog("A coleta foi cancelada porque a rota ficou bloqueada.", "system");
+      return;
+    }
+    if (this.#groundItemPickupCooldown > 0 || this.#groundItemPickupJobId) return;
+    void this.confirmGroundItemPickup(item);
+  }
+
+  private async confirmGroundItemPickup(item: ClassicGroundItemSnapshot): Promise<void> {
+    const id = item.id;
+    if (this.#groundItemPickupJobId || this.#groundItemPickupCooldown > 0) return;
+    const jobToken = ++this.#groundItemPickupJobToken;
+    const generation = ++this.#groundItemPickupGeneration;
+    this.#groundItemPickupJobId = id;
+    try {
+      // MoveGet checks CanAddItemInEmpty before sending MSG_GetItem. The local
+      // 1x1 potion mock can make the same capacity decision synchronously once
+      // its exact ItemList DTO has been resolved.
+      const inventoryItem = await offlineGroundItemToInventoryItem(item);
+      if (
+        generation !== this.#groundItemPickupGeneration
+        || this.#groundItemPickupTargetId !== id
+        || !this.#groundItems?.get(id)
+        || !this.#offlineGroundItems.get(id)
+      ) return;
+      if (!canAcceptInventoryItem(this.#playerState.snapshot, inventoryItem)) {
+        this.#groundItemPickupTargetId = null;
+        const stopPickupRoute = this.#groundItemPickupOwnsMovement;
+        this.#groundItemPickupOwnsMovement = false;
+        if (stopPickupRoute) this.#player?.stop();
+        this.#hud.addLog("Inventário cheio · libere um espaço para coletar o item.", "system");
+        return;
+      }
+
+      // This is the offline equivalent of sending MSG_GetItem. Only the
+      // returned delivery (our local CNFGetItem) is allowed to mutate Carry.
+      this.#groundItemPickupCooldown = GROUND_ITEM_PICKUP_COOLDOWN_SECONDS;
+      const delivery = await this.#offlineGroundItems.confirmPickup(id);
+      if (!delivery) return;
+      // A CNF means the server-side ground instance no longer exists. Remove
+      // presentation even if a later local invariant check fails, otherwise a
+      // dead, permanently uncollectable model would remain under the cursor.
+      this.#groundItems?.remove(id);
+      this.#offlineGroundItemResidency.delete(id);
+      if (this.#groundItemPickupTargetId === id) this.#groundItemPickupTargetId = null;
+      const stopPickupRoute = generation === this.#groundItemPickupGeneration
+        && this.#groundItemPickupOwnsMovement;
+      if (generation === this.#groundItemPickupGeneration) {
+        this.#groundItemPickupOwnsMovement = false;
+      }
+      if (stopPickupRoute) this.#player?.stop();
+      const added = this.#playerState.addItem(delivery.item, delivery.quantity);
+      if (added !== delivery.quantity) {
+        console.error(`Coleta ${id} confirmada sem espaço reservado no inventário`);
+        this.#hud.addLog("Falha de consistência ao receber o item coletado.", "system");
+        return;
+      }
+      this.#hud.addLog(`Coletado: ${delivery.item.name}.`, "reward");
+    } catch (error) {
+      console.error("Falha ao coletar item do chão", error);
+      if (generation === this.#groundItemPickupGeneration) {
+        this.#groundItemPickupTargetId = null;
+        const stopPickupRoute = this.#groundItemPickupOwnsMovement;
+        this.#groundItemPickupOwnsMovement = false;
+        if (stopPickupRoute) this.#player?.stop();
+        this.#hud.addLog("Não foi possível coletar o item.", "system");
+      }
+    } finally {
+      if (this.#groundItemPickupJobToken === jobToken) this.#groundItemPickupJobId = null;
+    }
+  }
+
+  private cancelGroundItemPickup(): void {
+    if (this.#groundItemPickupOwnsMovement) this.#player?.stop();
+    this.#groundItemPickupGeneration++;
+    this.#groundItemPickupTargetId = null;
+    this.#groundItemPickupApproachRemaining = 0;
+    this.#groundItemPickupStallRemaining = 0;
+    this.#groundItemPickupLastDistance = Number.POSITIVE_INFINITY;
+    this.#groundItemPickupOwnsMovement = false;
+    this.#pendingGroundItemId = null;
+  }
+
+  private retireGroundItem(id: string): void {
+    this.#groundItems?.remove(id);
+    this.#offlineGroundItems.remove(id);
+    this.#offlineGroundItemResidency.delete(id);
+    if (this.#groundItemPickupTargetId === id || this.#pendingGroundItemId === id) {
+      this.cancelGroundItemPickup();
+    }
+  }
+
+  private clearGroundItems(): void {
+    this.cancelGroundItemPickup();
+    this.#groundItemPickupJobToken++;
+    this.#groundItemPickupJobId = null;
+    this.#groundItems?.clear();
+    this.#offlineGroundItems.clear();
+    this.#offlineGroundItemResidency.clear();
+  }
+
   private updateNpcHover(deltaSeconds: number): void {
     this.#npcHoverRaycastCooldown = Math.max(0, this.#npcHoverRaycastCooldown - deltaSeconds);
     this.#npcHoverRefreshRemaining = Math.max(0, this.#npcHoverRefreshRemaining - deltaSeconds);
     const spawns = this.#world?.spawns ?? null;
+    const groundItems = this.#groundItems;
     if (
-      !spawns
+      (!spawns && !groundItems)
       || !this.#player
       || !this.#playerState.snapshot.alive
       || this.#streamingPaused
@@ -678,31 +1035,49 @@ export class GameApp {
     if (pointerState === null) return;
     this.#npcHoverRefreshRemaining = NPC_HOVER_REFRESH_INTERVAL_SECONDS;
     if (!pointerState) {
-      spawns.setFriendlyHover(null);
+      spawns?.setFriendlyHover(null);
+      groundItems?.setHovered(null);
       return;
     }
 
     this.#npcHoverRaycastCooldown = NPC_HOVER_DIRTY_INTERVAL_SECONDS;
     this.#raycaster.setFromCamera(this.#npcHoverPointer, this.#camera);
-    const hits = this.#raycaster.intersectObject(spawns.object, true);
     let friendlyId: string | null = null;
-    for (const candidate of hits) {
-      // Status sprites are presentation only; retail mouse-over belongs to the
-      // skinned body beneath the label.
-      if (candidate.object instanceof THREE.Sprite) continue;
-      const target = spawns.targetFromObject(candidate.object);
-      if (!target) continue;
-      if (target.alive && !target.hostile) friendlyId = target.id;
-      // The nearest actor always owns the hover, even when it is hostile.
-      break;
+    let actorOwnsHover = false;
+    if (spawns) {
+      const actorHits = this.#raycaster.intersectObject(spawns.object, true);
+      for (const candidate of actorHits) {
+        // Status sprites are presentation only; retail mouse-over belongs to the
+        // skinned body beneath the label.
+        if (candidate.object instanceof THREE.Sprite) continue;
+        const target = spawns.targetFromObject(candidate.object);
+        if (!target) continue;
+        actorOwnsHover = true;
+        if (target.alive && !target.hostile) friendlyId = target.id;
+        // The nearest actor always owns the hover, even when it is hostile.
+        break;
+      }
     }
-    spawns.setFriendlyHover(friendlyId);
+    spawns?.setFriendlyHover(friendlyId);
+
+    let groundItemId: string | null = null;
+    if (!actorOwnsHover && groundItems) {
+      const itemHits = this.#raycaster.intersectObject(groundItems.object, true);
+      for (const candidate of itemHits) {
+        const item = groundItems.itemFromObject(candidate.object);
+        if (!item) continue;
+        groundItemId = item.id;
+        break;
+      }
+    }
+    groundItems?.setHovered(groundItemId);
   }
 
   private clearNpcHover(): void {
     const worldSpawns = this.#world?.spawns ?? null;
     this.#boundSpawns?.setFriendlyHover(null);
     if (worldSpawns && worldSpawns !== this.#boundSpawns) worldSpawns.setFriendlyHover(null);
+    this.#groundItems?.setHovered(null);
   }
 
   private bindSpawnGameplay(): void {
@@ -711,6 +1086,7 @@ export class GameApp {
     this.#boundSpawns?.setFriendlyHover(null);
     this.#pendingBowAttacks.length = 0;
     this.#weakenedMonsters.clear();
+    this.#macroUnreachableTargets.clear();
     for (const unsubscribe of this.#spawnUnsubscribers) unsubscribe();
     this.#spawnUnsubscribers = [
       spawns.on("monsterAttack", (event) => this.receiveMonsterAttack(event)),
@@ -744,6 +1120,11 @@ export class GameApp {
     this.#attackCooldown = Math.max(0, this.#attackCooldown - deltaSeconds);
     this.#targetApproachCooldown = Math.max(0, this.#targetApproachCooldown - deltaSeconds);
     this.#macroDecisionCooldown = Math.max(0, this.#macroDecisionCooldown - deltaSeconds);
+    for (const [id, remaining] of this.#macroUnreachableTargets) {
+      const next = remaining - deltaSeconds;
+      if (next <= 0) this.#macroUnreachableTargets.delete(id);
+      else this.#macroUnreachableTargets.set(id, next);
+    }
     this.updateAutoCombatRecovery(deltaSeconds);
     if (!this.#boundSpawns) return;
     this.updatePendingBowAttacks(deltaSeconds);
@@ -766,6 +1147,9 @@ export class GameApp {
         return;
       }
     }
+    // MoveGet owns locomotion until the item cell is reached and the pickup
+    // acknowledgement arrives. Do not let C.C reacquire a monster meanwhile.
+    if (this.#groundItemPickupTargetId) return;
     // Preserve target selection/HUD but do not let combat face-lock the avatar
     // sideways while the two-button steering gesture owns locomotion.
     if (manualMouseForward) return;
@@ -842,6 +1226,7 @@ export class GameApp {
       if (
         macroControlsMovement
         && this.#autoCombatMode === "magic"
+        && this.#autoCombatPositionMode === "stationary"
       ) {
         // A short-range skill may be selected while another configured skill
         // can reach this same target. Discard only that macro decision and let
@@ -864,10 +1249,22 @@ export class GameApp {
       }
       if (this.#targetApproachCooldown <= 0) {
         const standOff = Math.max(1.2, attackRange - 0.85);
-        this.#player.moveTo({
+        const canApproach = this.#player.moveTo({
           x: target.position.x - (dx / distance) * standOff,
           y: target.position.y - (dy / distance) * standOff,
         });
+        if (!canApproach && macroControlsMovement && this.#macroOwnsTarget) {
+          this.#macroUnreachableTargets.set(
+            target.id,
+            MACRO_UNREACHABLE_TARGET_COOLDOWN_SECONDS,
+          );
+          if (this.#queuedSkillOrigin === "macro") {
+            this.#queuedSkillSlot = null;
+            this.#queuedSkillOrigin = null;
+          }
+          this.selectTarget(null);
+          this.#macroDecisionCooldown = 0;
+        }
         this.#targetApproachCooldown = 0.22;
       }
       return;
@@ -972,6 +1369,7 @@ export class GameApp {
     this.#etherealExplosionEffects.setEnabled(this.#effectsEnabled);
     this.#levelUpEffects.setEnabled(this.#effectsEnabled);
     this.#inventoryPreview?.setEffectsEnabled(this.#effectsEnabled);
+    this.#groundItems?.setEffectsEnabled(this.#effectsEnabled);
     const status = document.querySelector<HTMLElement>("#effects-status");
     status?.classList.toggle("is-active", this.#effectsEnabled);
     const label = status?.querySelector("span");
@@ -1166,10 +1564,14 @@ export class GameApp {
   }
 
   private autoCombatAcquisitionRadius(): number {
-    if (this.#autoCombatMode === "magic" || this.#autoCombatPositionMode === "stationary") {
-      return this.autoCombatImmediateRange();
+    const immediate = this.autoCombatImmediateRange();
+    if (this.#autoCombatPositionMode === "stationary") return immediate;
+    if (this.#autoCombatMode === "magic" && this.macroOffensiveSkills().length === 0) {
+      return immediate;
     }
-    return 8;
+    // The web `>>` profile is deliberately continuous: unlike stationary it
+    // may acquire beyond attack range and hand the stand-off point to A*.
+    return Math.max(24, immediate + 8);
   }
 
   private returnToAutoCombatAnchor(): void {
@@ -2030,6 +2432,7 @@ export class GameApp {
     let nearestDistance = Math.max(0, radius);
     for (const target of this.#boundSpawns.snapshots()) {
       if (!target.alive || !target.hostile) continue;
+      if (forMacro && this.#macroUnreachableTargets.has(target.id)) continue;
       if (anchor && Math.hypot(target.position.x - anchor.x, target.position.y - anchor.y) > 10) continue;
       const distance = Math.hypot(target.position.x - this.#player.position.x, target.position.y - this.#player.position.y);
       if (distance >= nearestDistance) continue;
@@ -2140,6 +2543,22 @@ export class GameApp {
     }
   }
 
+  private receiveMasterCarbBuffs(): void {
+    const activated = grantClassicMasterCarbBuffs(this.#skills);
+    const expected = CLASSIC_MASTER_CARB_BUFFS.length;
+    if (activated.length !== expected) {
+      this.#hud.addLog(
+        `Mestre Carb · ${activated.length}/${expected} buffs puderam ser aplicados.`,
+        "system",
+      );
+      return;
+    }
+    this.#buffVisualPulseRemaining.clear();
+    this.#player?.setInvisible(this.#skills.hasBuff(95));
+    this.#hud.setBuffs(this.#skills.activeBuffs());
+    this.#hud.addLog(`Mestre Carb · ${expected} buffs renovados por 15 min.`, "reward");
+  }
+
   private receiveMonsterAttack(event: ClassicMonsterAttackEvent): void {
     // Invisible actors are not selectable by mobs in the classic client. This
     // is distinct from invulnerability: any action removes affect 28 first.
@@ -2170,6 +2589,7 @@ export class GameApp {
     this.#player?.setInvisible(false);
     this.#respawnRemaining = 4.5;
     this.clearNpcHover();
+    this.cancelGroundItemPickup();
     this.resetGroundPortalPrompt();
     this.closeNpcInteraction();
     this.#selectedTargetId = null;
@@ -2194,48 +2614,35 @@ export class GameApp {
       );
     }
 
-    if (event.seed % 100 < 34) {
-      const added = this.#playerState.addItem({
-        key: "pocao-cura-pequena",
-        name: "Poção de Cura",
-        description: "Recupera 50 pontos de HP.",
-        rarity: "common",
-        maxStack: 50,
-        value: 35,
-        kind: "consumable",
-        classicIndex: 400,
-        previewModelType: 53,
-        heal: 50,
-      });
-      if (added > 0) this.#hud.addLog("Drop: Poção de Cura.", "reward");
+    // The recovered client contains ItemList presentation data but no server
+    // monster drop tables. Keep the old potion demo explicitly isolated and
+    // materialize it as MSG_CreateItem-style ground state instead of silently
+    // inserting invented loot into Carry.
+    const groundItem = this.#offlineGroundItems.receiveMonsterDrop(event);
+    if (!groundItem) return;
+    const manager = this.#groundItems;
+    if (!manager) {
+      this.#offlineGroundItems.remove(groundItem.id);
+      return;
     }
-    if (event.seed % 100 >= 34 && event.seed % 100 < 58) {
-      const added = this.#playerState.addItem({
-        key: "pocao-mana-pequena",
-        name: "Poção de Mana",
-        description: "Recupera 50 pontos de MP.",
-        rarity: "common",
-        maxStack: 50,
-        value: 35,
-        kind: "consumable",
-        classicIndex: 405,
-        previewModelType: 53,
-        mana: 50,
-      });
-      if (added > 0) this.#hud.addLog("Drop: Poção de Mana.", "reward");
+    if (!this.#offlineGroundItemResidency.has(groundItem.id)) {
+      while (this.#offlineGroundItemResidency.size >= OFFLINE_GROUND_ITEM_RESIDENT_CAPACITY) {
+        const oldestId = this.#offlineGroundItemResidency.values().next().value;
+        if (typeof oldestId !== "string") break;
+        this.retireGroundItem(oldestId);
+      }
     }
-    if (event.seed % 29 === 0) {
-      const added = this.#playerState.addItem({
-        key: "fragmento-wyd",
-        name: "Fragmento de Oriharucon",
-        description: "Material raro encontrado em monstros.",
-        rarity: "rare",
-        maxStack: 20,
-        value: 800,
-        kind: "material",
-      });
-      if (added > 0) this.#hud.addLog("Drop raro: Fragmento de Oriharucon.", "reward");
-    }
+    this.#offlineGroundItemResidency.add(groundItem.id);
+    void manager.upsert(groundItem).then(() => {
+      if (!manager.get(groundItem.id) || !this.#offlineGroundItems.get(groundItem.id)) return;
+      const metadata = manager.metadata(groundItem.id);
+      if (!metadata || !manager.isMaterialized(groundItem.id)) {
+        this.retireGroundItem(groundItem.id);
+        this.#hud.addLog(`Drop #${groundItem.classicIndex} sem recurso visual importado.`, "system");
+        return;
+      }
+      this.#hud.addLog(`Drop no chão: ${metadata.name}.`, "reward");
+    });
   }
 
   private respawnPlayer(): void {
@@ -2368,6 +2775,7 @@ export class GameApp {
     const previousKey = this.#activeClassKey;
     const requestId = ++this.#classLoadId;
     this.#classSwitchInFlight = true;
+    this.cancelGroundItemPickup();
     this.resetGroundPortalPrompt();
     this.closeNpcInteraction();
     if (this.#queuedSkillOrigin === "macro") {
@@ -2397,10 +2805,11 @@ export class GameApp {
         return;
       }
 
+      const inheritedBuffs = this.#skills.exportBuffs();
       this.#activeClassKey = definition.key;
       this.clearBeastMasterSummons();
       this.#skills.clear();
-      this.#skills = new ClassSkillSystem(definition.key);
+      this.#skills = new ClassSkillSystem(definition.key, inheritedBuffs);
       this.#pendingBowAttacks.length = 0;
       this.#pendingSkillEvents.length = 0;
       this.#weakenedMonsters.clear();
@@ -2417,7 +2826,7 @@ export class GameApp {
       this.#transKnightSkillEffects.clear();
       this.#beastMasterSkillEffects.clear();
       this.#etherealExplosionEffects.clear();
-      this.#player?.setInvisible(false);
+      this.#player?.setInvisible(this.#skills.hasBuff(95));
       this.#playerState.setName(definition.name);
       this.#hud.configureSkills(
         this.#skills.skills.map((skill) => ({ ...skill, offensive: isOffensiveBarSkill(skill) })),
@@ -2428,7 +2837,7 @@ export class GameApp {
       ];
       this.#macroSkillSlotsByClass.set(definition.key, [...this.#macroSkillSlots]);
       this.#hud.setAutoCombat(this.#autoCombatMode, this.#macroSkillSlots);
-      this.#hud.setBuffs([]);
+      this.#hud.setBuffs(this.#skills.activeBuffs());
       this.#hud.setActiveSkillClass(definition.key);
       select.value = definition.key;
       if (status) status.textContent = `${definition.name} · ${definition.defaultWeapon.name}`;
@@ -2649,6 +3058,7 @@ export class GameApp {
     this.#weakenedMonsters.clear();
     this.#queuedSkillSlot = null;
     this.#queuedSkillOrigin = null;
+    this.cancelGroundItemPickup();
     this.clearNpcHover();
     this.resetGroundPortalPrompt();
     this.closeNpcInteraction();
@@ -2667,6 +3077,7 @@ export class GameApp {
     try {
       await this.#world.ensureCurrent(destination, true);
       if (requestId !== this.#teleportId) return;
+      this.clearGroundItems();
       this.#player.teleport(destination);
       this.refreshAutoCombatPositionAnchor(destination);
       this.#cameraRig.update(this.#player.object.position, 1);
@@ -2767,6 +3178,24 @@ function drawMinimapPlaceholder(canvas: HTMLCanvasElement, label: string): void 
   context.font = "600 10px Inter, sans-serif";
   context.textAlign = "center";
   context.fillText(label, canvas.width / 2, canvas.height / 2 + 3);
+}
+
+function centeredGroundItemPosition(position: WydPosition): WydPosition {
+  return { x: Math.floor(position.x) + 0.5, y: Math.floor(position.y) + 0.5 };
+}
+
+/** BASE_GetDistance's 0..1 neighbourhood from the classic lookup table. */
+function isWithinClassicPickupRange(player: WydPosition, item: WydPosition): boolean {
+  return Math.abs(Math.floor(player.x) - Math.floor(item.x)) <= 1
+    && Math.abs(Math.floor(player.y) - Math.floor(item.y)) <= 1;
+}
+
+function canAcceptInventoryItem(snapshot: PlayerSnapshot, item: InventoryItem): boolean {
+  const maxStack = Math.max(1, Math.trunc(item.maxStack));
+  return snapshot.inventory.some((stack) => (
+    stack === null
+    || (stack.item.key === item.key && stack.quantity < maxStack)
+  ));
 }
 
 function createClickMarker(): THREE.Mesh {

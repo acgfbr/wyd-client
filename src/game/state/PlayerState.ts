@@ -198,28 +198,28 @@ export class PlayerState {
       100,
     );
     this.addItem({
-      key: "pocao-cura-pequena",
+      key: "classic-item-400",
       name: "Poção de Cura",
       description: "Recupera 50 pontos de HP.",
       rarity: "common",
       maxStack: 50,
-      value: 35,
+      value: 150,
       kind: "consumable",
       classicIndex: 400,
       previewModelType: 53,
       heal: 50,
     }, 5, false);
     this.addItem({
-      key: "pocao-mana-pequena",
+      key: "classic-item-405",
       name: "Poção de Mana",
       description: "Recupera 50 pontos de MP.",
       rarity: "common",
       maxStack: 50,
-      value: 35,
+      value: 200,
       kind: "consumable",
       // UseMPotion accepts the classic 405..409 family; 405 is its first tier.
       classicIndex: 405,
-      previewModelType: 53,
+      previewModelType: 56,
       mana: 50,
     }, 5, false);
     const skytalos: InventoryItem = {

@@ -18,9 +18,12 @@ reutilizado.
 - Oito evocações naturais do BeastMaster; cada uso materializa um grupo de 10.
 - 14 montarias clássicas nível 120, incluindo Unicórnio e Grifo.
 - NPCs e monstros com animação, autonomia, separação, combate, morte e respawn.
+- Drops materializados no mundo, coleta por proximidade e nomes globais opcionais.
 - Movimento por WASD/clique, câmera clássica, zoom amplo e modo G.
 - C.C clássico com modos físico, mágico e suporte, arco, dano/crítico, skills e
   buffs da Huntress.
+- Mestre Carb com interação instantânea e os estados/ícones dos 32 buffs de
+  classe/master do `SkillData.bin` renovados por 15 minutos.
 - HUD clássico e inventário 7.54 com quatro bolsas, drag/drop, equipamento e
   preview 3D por clique, além do catálogo de skills e seletor de mapas.
 
@@ -192,6 +195,8 @@ mutação de inventário continuam sendo responsabilidades do futuro servidor.
 | `R` | Montar/desmontar |
 | `F` | Alternar C.C: desligado → físico → mágico → suporte |
 | Clique em `C.C` | Abrir/fechar a caixa clássica de configuração |
+| `Espaço` | Coletar o drop materializado mais próximo dentro do alcance clássico |
+| `Z` | Ligar/desligar os nomes de todos os drops |
 | `1`–`9` | Usar skills da barra |
 | `I` | Abrir/fechar inventário, trajes e montarias |
 | Clique em um item | Prender o preview 3D ao cursor; outro clique solta/move/equipa |
@@ -200,6 +205,13 @@ mutação de inventário continuam sendo responsabilidades do futuro servidor.
 | Abas de bolsa | Alternar entre as quatro páginas de 15 espaços |
 | `K` | Abrir/fechar catálogo de skills |
 | `V` | Ligar/desligar todos os efeitos visuais |
+
+### Loot offline
+
+Enquanto não há servidor autoritativo, o fallback local pode materializar
+**Poção de HP** (`#400`), **Poção de MP** (`#405`), **Poeira de Oriharucon**
+(`#412`) e **Poeira de Lactolerium** (`#413`). As probabilidades e a tabela de
+drop são mocks exclusivos do modo offline; o servidor deverá substituí-las.
 
 ### Caixa C.C
 

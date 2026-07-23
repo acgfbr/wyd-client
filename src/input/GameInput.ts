@@ -31,11 +31,14 @@ export class GameInput {
   onMountToggle?: () => void;
   onAutoCombatToggle?: () => void;
   onEffectsToggle?: () => void;
+  onNearbyGroundItemPickup?: () => void;
+  onGroundItemLabelsToggle?: () => void;
   onSkill?: (slot: number) => void;
 
   constructor(private readonly element: HTMLElement) {
     window.addEventListener("keydown", (event) => {
       if (isTextEntry(event.target)) return;
+      if (event.code === "Space" && isNativeSpaceControl(event.target)) return;
       this.#keys.add(event.code);
       if (event.code === "KeyG" && !event.repeat) this.onSpeedToggle?.();
       if (event.code === "KeyI" && !event.repeat) this.onInventoryToggle?.();
@@ -44,6 +47,11 @@ export class GameInput {
       if (event.code === "KeyR" && !event.repeat) this.onMountToggle?.();
       if (event.code === "KeyF" && !event.repeat) this.onAutoCombatToggle?.();
       if (event.code === "KeyV" && !event.repeat) this.onEffectsToggle?.();
+      if (event.code === "Space") {
+        event.preventDefault();
+        if (!event.repeat) this.onNearbyGroundItemPickup?.();
+      }
+      if (event.code === "KeyZ" && !event.repeat) this.onGroundItemLabelsToggle?.();
       if (!event.repeat && /^Digit[1-9]$/.test(event.code)) this.onSkill?.(Number(event.code.slice(-1)));
     });
     window.addEventListener("keyup", (event) => this.#keys.delete(event.code));
@@ -254,4 +262,9 @@ function isTextEntry(target: EventTarget | null): boolean {
     || target instanceof HTMLTextAreaElement
     || target instanceof HTMLSelectElement
     || (target instanceof HTMLElement && target.isContentEditable);
+}
+
+function isNativeSpaceControl(target: EventTarget | null): boolean {
+  return target instanceof HTMLElement
+    && target.closest("button, a, [role='button'], [role='menuitem']") !== null;
 }
