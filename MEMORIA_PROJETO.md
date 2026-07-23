@@ -70,7 +70,7 @@ corpus para `public/game-data/classic`; o runtime consome apenas esse pacote.
 | `SkillData.bin` | 248 skills | dados de apresentacao, nao formula de servidor |
 | `ItemList.bin` | 6.500 itens | registro final auditado abaixo |
 | `ItemPrice.bin` | overrides estaticos | preco nao autoritativo no frontend |
-| `NPCGener.txt` + `npcdb` | templates/geradores/Carry | um template segue nao resolvido: `Tower_de_Thor` |
+| `NPCGener.txt` + `npcdb` | templates/geradores/Carry | 377 resolvidos; `Tower_de_Thor` e alias comprovado de `Tower_of_Thor` |
 
 Offsets confirmados neste corpus para o final do registro de `ItemList.bin`:
 `unique@132`, `reserved@134`, `position@136`, `extra@138`, `link@140` e
@@ -207,6 +207,21 @@ de atributo e `+3 ATQ`. Buffs comuns duram 180 s; Mestre Carb renova os 32
 estados reais identificados por 900 s. Esses valores sao politicas de frontend
 ate o servidor substituir a simulacao.
 
+As quests temporizadas Cemiterio e Cabuncle possuem um contador local abaixo
+do minimapa, alinhado ao relogio em janelas globais de dez minutos. Cemiterio
+usa os geradores `3606..3618` no retangulo `2381..2422 x 2078..2127`;
+Cabuncle usa `3619..3628` em `2230..2255 x 1703..1725`. Os monstros desses
+geradores nao adquirem o jogador fora da propria area e abandonam a perseguicao
+quando ele sai. Isso e somente a protecao coerente possivel no modo offline:
+no multiplayer, reset, inscricao na instancia e autorizacao de alvo pertencem
+ao servidor. O Coveiro, gerador `3524` em `2375,2104`, carrega um segundo
+billboard acima da placa de nome/HP com o mesmo contador do minimapa; ele muda
+de verde para amarelo no ultimo minuto e atualiza a textura uma vez por segundo.
+O corpus identifica a
+`Vela_do_Coveiro #4038`, a `Varinha_do_Carbunkle #701` e o requisito textual
+de dez varinhas; cobranca de entrada, drops e recompensa de EXP ainda nao
+podem ser derivados como regras autoritativas.
+
 ## Inventario, comercio e drops
 
 O inventario usa o recorte real `227x421`, quatro bolsas sobrepostas de `5x3`
@@ -245,6 +260,9 @@ refinamento, Ancient e preco estatico quando aplicavel.
 - Tiles de sujeira desconectados por composicao tratada como decal quadrado.
 - Miniaturas repetidas na grama por decodificacao/transformacao de objeto.
 - Buracos pretos causados por alpha/efeitos/agua ausentes.
+- Em `2164,2102`, um prop `type 444` de Field1616 em `height -2,8` carimbava
+  `127` depois do deck da ponte em `height 0,1`. A composição ignora apenas
+  esse mask enterrado, mantendo o objeto visual e a pista caminhável contínua.
 - Fonte com UV lateral em vez de fluxo descendente.
 - Fogueira com frames DDS invertidos verticalmente.
 - Player passando sob pontes ou travando em celula isolada de corrimao.
@@ -263,6 +281,9 @@ refinamento, Ancient e preco estatico quando aplicavel.
 ## Limitacoes e riscos conhecidos
 
 - Homologacao visual ainda e necessaria em 1024x768, widescreen e iPhone.
+- O cache persistente de primeira execução ainda não foi implementado. Ele deve
+  ser versionado, retomável e compatível com quota/expulsão do Safari; cache em
+  disco reduz rede, mas não elimina parsing, upload para GPU nem streaming.
 - Reload real, bfcache e contadores GEO/TEX antes/depois de trocas pesadas
   precisam de baseline manual.
 - Nem todas as 248 skills possuem definicao jogavel e renderer fiel; a matriz
@@ -270,7 +291,8 @@ refinamento, Ancient e preco estatico quando aplicavel.
 - Audio possui 333 entradas SFX e 13 musicas importadas. O `mguardatt.wav`
   faltante no desktop veio do cliente mobile por correspondencia exata de
   nome; quatro referencias seguem ausentes, sem substituicao aproximada. O BGM segue o
-  roteamento classico, inicia desligado e `M` alterna apenas a musica. Ataque,
+  roteamento classico, inicia desligado e `M` alterna apenas a musica. `B` e o
+  menu alternam SFX separadamente, encerrando tambem vozes e loops ativos. Ataque,
   skill, impacto, level up e coleta usam IDs recuperados do cliente. Passos
   seguem os pares por piso de `TMHuman::AnimationFrame`; os 82 IDs distintos
   usados pelas acoes de NPCs/monstros no `AniSound4.txt` estao presentes e

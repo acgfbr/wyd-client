@@ -25,12 +25,32 @@ export function composeClassicCollisionMask(
   const recordCount = Math.min(records.length, MAX_CLASSIC_FIELD_OBJECTS);
   for (let index = 0; index < recordCount; index++) {
     const record = records[index];
-    if (record && classicObjectRegistersMask(record.type)) {
+    if (
+      record
+      && classicObjectRegistersMask(record.type)
+      && !isBuriedArmiaBridgeMask(block, record)
+    ) {
       registerClassicObjectMask(values, record, data.objectMasks.values);
     }
   }
   applyClassicAttributes(values, block.column, block.row, data.attributes.values, attributes);
   return { values, attributes, complete: true };
+}
+
+/**
+ * Field1616 contains one type-444 prop at local 116.5/54.5, height -2.8,
+ * underneath the already registered bridge deck (height 0.1). Its mask writes
+ * 127 into world cell 2164/2102 after the deck, leaving a single blocked pixel
+ * in an otherwise continuous three-cell-wide crossing. The visual prop remains;
+ * only that buried collision stamp is ignored so actors stay on the deck.
+ */
+function isBuriedArmiaBridgeMask(block: TrnBlock, record: MapObjectRecord): boolean {
+  return block.column === 16
+    && block.row === 16
+    && record.type === 444
+    && Math.abs(record.localX - 116.5) < 0.01
+    && Math.abs(record.localY - 54.5) < 0.01
+    && record.height < -2.7;
 }
 
 /** Mirrors the early-continue branches in TMObjectContainer::Load. */

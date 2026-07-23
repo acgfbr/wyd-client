@@ -80,6 +80,12 @@ import { ClassicInventoryPreview } from "../render/inventory/ClassicInventoryPre
 import { configureClassicDdsTextureSupport } from "../render/textures/ClassicDdsTextureLoader";
 import { ClassicAudio } from "../audio/ClassicAudio";
 import {
+  CLASSIC_TIMED_QUESTS,
+  classicQuestResetSecondsRemaining,
+  formatClassicQuestReset,
+  isInsideClassicTimedQuest,
+} from "../game/quests/ClassicTimedQuests";
+import {
   connectedFieldRegions,
   fieldKey,
   fieldMapIdentity,
@@ -173,6 +179,7 @@ export class GameApp {
   #minimap?: Minimap;
   #currentFieldKey = "";
   #minimapLoadId = 0;
+  #questResetRenderedSecond = -1;
   #teleportId = 0;
   #streamingPaused = false;
   #boundSpawns: ClassicSpawnManager | null = null;
@@ -298,13 +305,32 @@ export class GameApp {
     this.#input.onMountToggle = () => this.toggleMount();
     this.#input.onAutoCombatToggle = () => this.cycleAutoCombatMode();
     this.#input.onEffectsToggle = () => this.toggleEffects();
-    this.#input.onMusicToggle = () => {
+    const toggleMusic = () => {
       const enabled = this.#audio.toggleMusic();
+      this.#hud.setAudioToggleState(enabled, this.#audio.soundEffectsEnabled);
       this.#hud.addLog(
         enabled ? "Música ativada (M)." : "Música desativada (M).",
         "system",
       );
     };
+    const toggleSoundEffects = () => {
+      const enabled = this.#audio.toggleSoundEffects();
+      this.#hud.setAudioToggleState(this.#audio.musicEnabled, enabled);
+      this.#hud.addLog(
+        enabled
+          ? "SFX ativados (B)."
+          : "SFX desativados (B) · ataques, skills, buffs, passos e ambiente silenciados.",
+        "system",
+      );
+    };
+    this.#input.onMusicToggle = toggleMusic;
+    this.#input.onSoundEffectsToggle = toggleSoundEffects;
+    this.#hud.onMusicToggle = toggleMusic;
+    this.#hud.onSoundEffectsToggle = toggleSoundEffects;
+    this.#hud.setAudioToggleState(
+      this.#audio.musicEnabled,
+      this.#audio.soundEffectsEnabled,
+    );
     this.#input.onNearbyGroundItemPickup = () => this.pickupNearestGroundItem();
     this.#input.onGroundItemLabelsToggle = () => {
       this.#groundItemLabelsVisible = !this.#groundItemLabelsVisible;
@@ -595,6 +621,7 @@ export class GameApp {
       this.activateField(this.#player.position);
       const coordinates = document.querySelector<HTMLElement>("#coordinates");
       if (coordinates) coordinates.textContent = `${Math.floor(this.#player.position.x)}, ${Math.floor(this.#player.position.y)}`;
+      this.updateQuestResetTracker(this.#player.position);
       this.#minimap?.update(this.#player.position, this.#player.object.rotation.y);
     }
     this.updatePersistentBuffEffects(dt);
@@ -607,6 +634,25 @@ export class GameApp {
     this.#inventoryPreview?.render();
     this.#telemetry.end();
   };
+
+  private updateQuestResetTracker(playerPosition: WydPosition): void {
+    const nowMilliseconds = Date.now();
+    const renderedSecond = Math.floor(nowMilliseconds / 1_000);
+    if (renderedSecond === this.#questResetRenderedSecond) return;
+    this.#questResetRenderedSecond = renderedSecond;
+    const resetText = formatClassicQuestReset(
+      classicQuestResetSecondsRemaining(nowMilliseconds),
+    );
+    for (const quest of CLASSIC_TIMED_QUESTS) {
+      const row = document.querySelector<HTMLElement>(
+        `[data-quest-key="${quest.key}"]`,
+      );
+      if (!row) continue;
+      row.classList.toggle("is-current", isInsideClassicTimedQuest(quest, playerPosition));
+      const counter = row.querySelector<HTMLElement>("[data-quest-reset]");
+      if (counter) counter.textContent = resetText;
+    }
+  }
 
   private readonly groundClick = (pointer: THREE.Vector2): void => {
     this.#pendingNpcId = null;

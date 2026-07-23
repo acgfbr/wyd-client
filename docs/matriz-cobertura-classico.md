@@ -1,6 +1,6 @@
 # Matriz automatica de cobertura do cliente classico
 
-Gerado por `bun run audit:coverage` em 2026-07-23T20:54:22.447Z. Este arquivo e
+Gerado por `bun run audit:coverage` em 2026-07-23T21:15:06.381Z. Este arquivo e
 derivado dos artefatos importados e do runtime; nao deve ser editado
 manualmente. A analise e as decisoes ficam em `auditoria-threejs-cobertura.md`.
 
@@ -62,8 +62,8 @@ Nenhum arquivo referenciado pelo manifesto esta ausente.
 | IDs distintos de ação do AniSound | 82 |
 | IDs de ação do AniSound ausentes | 0 |
 
-Templates de NPC/monstro nao resolvidos: 1.
-Templates comerciais nao resolvidos: 1.
+Templates de NPC/monstro nao resolvidos: 0.
+Templates comerciais nao resolvidos: 0.
 
 ## Player, looks, montarias e evocacoes
 

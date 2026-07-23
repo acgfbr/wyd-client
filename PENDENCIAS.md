@@ -152,9 +152,13 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
    esquerdo mantido retargeta o chão, esquerdo+direito avança e esterça pela
    câmera, e ambos funcionam independentemente da ordem em que são
    pressionados. O gargalo relatado em `2163,2102` foi isolado no bloqueio
-   `type 444` da célula vizinha `2164,2102`; o movimento manual agora contorna
-   somente obstáculos unitários com rota curta e máscara autoritativa, nos dois
-   sentidos. O clique continua usando A*. A ponte foi testada e aprovada; fica
+   `type 444` da célula vizinha `2164,2102`. Uma inspeção posterior da máscara
+   composta mostrou que esse objeto está em `height -2,8`, abaixo do deck já
+   registrado em `height 0,1`, e sobrescrevia sozinho a pista com `127`. O
+   compositor agora ignora somente esse carimbo enterrado de Field1616; o
+   objeto visual permanece e a faixa `2101..2103` fica contínua. O microdesvio
+   manual genérico continua limitado a obstáculos unitários. A ponte deve ser
+   homologada novamente nesse ponto; fica
    proibido reabrir sua revisão global sem uma regressão nova e reproduzível.
 2. Streaming antecipado de mundo e criaturas — **implementação concluída**.
    Terreno antecipa somente na direção do movimento (até 60 unidades), mantém
@@ -293,8 +297,24 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
    (`EF36 << 8 | EF37`) e usa a string original `Messages[65]`,
    `Bronze %d`, no nome exibido no chão. Criação, confirmação da coleta e
    alteração de saldo não foram falsificadas: continuam aguardando o protocolo
-   autoritativo. Ainda faltam ownership, decaimento/ressincronização de
-   servidor e drop tables autoritativas. NPCs amistosos mantêm o passeio
+   autoritativo. As quests temporizadas Cemitério e Cabuncle agora aparecem
+   abaixo do minimapa com o próximo reset em `MM:SS`. O fallback offline alinha
+   todos os clientes em fronteiras de relógio de 10 minutos, em vez de reiniciar
+   a contagem ao recarregar. O Coveiro do gerador `3524`, em `2375,2104`,
+   também exibe acima do nome uma placa 3D com o mesmo relógio, moldura dourada
+   e alerta amarelo no último minuto; a textura só é redesenhada quando o
+   segundo muda. Os retângulos de combate vêm dos `StartX/StartY`
+   e `StartRange=3` dos geradores `3606..3618` e `3619..3628`; esses monstros
+   só adquirem o player dentro do próprio retângulo e retornam à origem quando
+   ele sai. No multiplayer, relógio, participação/instância e elegibilidade de
+   alvo devem vir do servidor, não da posição declarada pelo cliente.
+   Permanecem pendentes a cobrança/validação de entrada pelo Coveiro, a
+   progressão das quests, a tabela autoritativa de drops e o consumo/recompensa
+   de EXP dos itens. O corpus já identifica `Vela_do_Coveiro #4038`,
+   `Varinha_do_Carbunkle #701`, as mensagens de nível `40..115`/`51..100` e o
+   requisito de dez varinhas, mas não revela sozinho as fórmulas do servidor.
+   Ainda faltam ownership, decaimento/ressincronização de servidor e drop
+   tables autoritativas. NPCs amistosos mantêm o passeio
    curto já implementado, e o Griupan segue homologado como familiar padrão.
 10. HUD, áudio, efeitos e revisão manual dos mapas — **parcial**. A HUD recebeu
     o primeiro passe de escala/composição baseado na captura 7.54 fornecida:
@@ -323,7 +343,10 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
     de áudio também foi integrada: `soundlist.txt` gera um catálogo lazy com
     333 entradas de SFX, os 13 MP3 seguem a ordem exata de `DirShow.cpp` e o
     BGM usa o roteamento não-war recuperado de `TMFieldScene.cpp`; começa
-    desligado e a tecla `M` alterna somente a música, sem silenciar os efeitos.
+    desligado e a tecla `M` alterna somente a música. A tecla `B` e o botão
+    correspondente no menu alternam todos os SFX separadamente — ataques,
+    impactos, skills, buffs, passos e loops ambientais — e encerram
+    imediatamente as vozes/loops ativos ao silenciar.
     Ataques usam os pares de arma de `TMHuman::PlayAttackSound`, e skills,
     impactos e level up já disparam os IDs recuperados de `TMHuman.cpp` e dos
     controladores `TMSkill*`; a coleta confirmada usa o som `31` do fluxo
@@ -341,7 +364,7 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
     concluída; clima global futuro só deve ser ligado quando o respectivo
     sistema de weather existir. Ainda falta concluir a revisão visual final
     dos mapas.
-11. Distribuição web — **concluído para o escopo atual**. O build de produção
+11. Distribuição web — **parcial; cache inicial persistente pendente**. O build de produção
     não publica sourcemaps, remove comentários legais/`debugger`/`console.debug`,
     minifica identificadores/sintaxe/espaços e usa nomes de assets por hash. O
     bootstrap mobile prepara somente os renderers da classe ativa; a troca de
@@ -350,6 +373,16 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
     README documenta o limite dessa proteção, instalação e comandos somente com
     Bun, preparo dos assets, erros comuns, iPhone/Vercel e a galeria de capturas
     reais, incluindo as quatro classes, evocações e os 111 mapas.
+    Falta criar uma primeira execução assistida que mostre bytes/arquivos,
+    progresso, velocidade e estado retomável enquanto persiste um pacote
+    essencial versionado em `CacheStorage`. Visitas seguintes devem validar a
+    versão e servir terreno, objetos, texturas, personagens e catálogos desse
+    cache, mantendo o streaming normal para mapas não baixados. A UI deve pedir
+    persistência quando suportada, permitir cancelar/retomar/limpar e detectar
+    quota antes de iniciar. Não baixar silenciosamente todo o pacote de cerca de
+    264 MB: Safari/iPhone pode expulsar dados sob pressão e `CacheStorage` não
+    substitui memória GPU; falha ou asset corrompido deve cair para rede e
+    regravar somente a entrada afetada.
 12. Auditoria técnica final e cobertura do cliente clássico. Revisar o runtime
     contra as melhores práticas atuais do Three.js — ciclo de vida/dispose,
     cache e compartilhamento de GPU, draw calls/instancing, streaming, LOD,

@@ -151,6 +151,8 @@ export class GameHud {
   onNpcInteractionClose: (() => void) | null = null;
   onGroundPortalConfirm: ((portal: ClassicGroundPortal) => void) | null = null;
   onGroundPortalClose: ((portal: ClassicGroundPortal) => void) | null = null;
+  onMusicToggle: (() => void) | null = null;
+  onSoundEffectsToggle: (() => void) | null = null;
   readonly #target = requireElement<HTMLElement>("#target-status");
   readonly #targetName = requireElement<HTMLElement>("#target-name");
   readonly #targetLevel = requireElement<HTMLElement>("#target-level");
@@ -610,6 +612,17 @@ export class GameHud {
     this.#gameMenu.classList.toggle("is-visible", visible);
     this.#gameMenu.setAttribute("aria-hidden", String(!visible));
     return visible;
+  }
+
+  setAudioToggleState(musicEnabled: boolean, soundEffectsEnabled: boolean): void {
+    const music = document.querySelector<HTMLElement>("#game-menu-music-state");
+    const soundEffects = document.querySelector<HTMLElement>("#game-menu-sfx-state");
+    if (music) music.textContent = `Música: ${musicEnabled ? "ON" : "OFF"}`;
+    if (soundEffects) soundEffects.textContent = `SFX: ${soundEffectsEnabled ? "ON" : "OFF"}`;
+    const status = document.querySelector<HTMLElement>("#sound-status");
+    status?.classList.toggle("is-active", soundEffectsEnabled);
+    const statusLabel = status?.querySelector("span");
+    if (statusLabel) statusLabel.textContent = soundEffectsEnabled ? "SFX ON" : "SFX OFF";
   }
 
   toggleAutoCombatPanel(force?: boolean): boolean {
@@ -1865,6 +1878,8 @@ export class GameHud {
     if (action === "inventory") this.toggleInventory(true);
     if (action === "skills") this.toggleSkills(true);
     if (action === "macro") this.toggleAutoCombatPanel(true);
+    if (action === "music-toggle") this.onMusicToggle?.();
+    if (action === "sfx-toggle") this.onSoundEffectsToggle?.();
     if (action === "server") {
       this.addLog("Selecionar servidor aguarda a camada de rede.", "system");
     }

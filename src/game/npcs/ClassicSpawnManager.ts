@@ -26,6 +26,12 @@ import {
   classifyClassicNpcInteraction,
 } from "./ClassicNpcInteraction";
 import { MonsterCatalog, type MonsterGenerator, type MonsterTemplate } from "./MonsterCatalog";
+import {
+  classicQuestResetSecondsRemaining,
+  classicTimedQuestForGenerator,
+  formatClassicQuestReset,
+  isInsideClassicTimedQuest,
+} from "../quests/ClassicTimedQuests";
 
 export type {
   ClassicActorSoundEvent,
@@ -151,6 +157,10 @@ interface SpawnedActor {
   readonly label: THREE.Sprite;
   readonly labelTexture: THREE.CanvasTexture;
   readonly labelMaterial: THREE.SpriteMaterial;
+  readonly questResetLabel: THREE.Sprite | null;
+  readonly questResetLabelTexture: THREE.CanvasTexture | null;
+  readonly questResetLabelMaterial: THREE.SpriteMaterial | null;
+  questResetRenderedSeconds: number;
 }
 
 interface ActorAffectMaterial {
@@ -483,6 +493,7 @@ export class ClassicSpawnManager {
     if (this.#selectedHostileId) this.refreshHostileOutline(this.#selectedHostileId);
     const animateDistanceSquared = FIELD_WORLD_SIZE * FIELD_WORLD_SIZE * 2.25;
     const nowSeconds = this.routeClockSeconds();
+    const questResetSeconds = classicQuestResetSecondsRemaining();
     const previousPositions = this.#actors.map((actor) => ({ ...actor.position }));
     for (const actor of this.#actors) {
       this.updateActorGameplay(
@@ -519,6 +530,13 @@ export class ClassicSpawnManager {
       }
       this.updateActorSound(actor, nowSeconds, playerPosition, fieldVisible);
       actor.label.visible = fieldVisible && isActorAlive(actor) && distanceSquared <= 40 * 40;
+      if (actor.questResetLabel) {
+        actor.questResetLabel.visible = actor.label.visible;
+        if (actor.questResetRenderedSeconds !== questResetSeconds) {
+          actor.questResetRenderedSeconds = questResetSeconds;
+          updateQuestResetSprite(actor, questResetSeconds);
+        }
+      }
       updateHitFeedback(actor, deltaSeconds);
       updateActorAffects(actor, deltaSeconds);
       const scene = toScene(actor.position, this.environment.origin);
@@ -606,7 +624,10 @@ export class ClassicSpawnManager {
       if (actor.actionLockRemaining <= 0) advanceActor(actor, delta);
       return;
     }
-    this.updateHostileActor(actor, delta, playerPosition, nowSeconds);
+    const timedQuest = classicTimedQuestForGenerator(actor.generator.id);
+    const playerEligibleForAggro = timedQuest === null
+      || isInsideClassicTimedQuest(timedQuest, playerPosition);
+    this.updateHostileActor(actor, delta, playerPosition, nowSeconds, playerEligibleForAggro);
   }
 
   private updateHostileActor(
@@ -614,12 +635,18 @@ export class ClassicSpawnManager {
     deltaSeconds: number,
     playerPosition: WydPosition,
     nowSeconds: number,
+    playerEligibleForAggro: boolean,
   ): void {
     const playerDistance = distanceBetween(actor.position, playerPosition);
     const playerFromHome = distanceBetween(actor.homePosition, playerPosition);
     const actorFromHome = distanceBetween(actor.homePosition, actor.position);
 
-    if (actor.aiMode === "route" && playerDistance <= actor.perceptionRadius) actor.aiMode = "chase";
+    if (
+      playerEligibleForAggro
+      && actor.aiMode === "route"
+      && playerDistance <= actor.perceptionRadius
+    ) actor.aiMode = "chase";
+    if (!playerEligibleForAggro && actor.aiMode === "chase") actor.aiMode = "return";
     if (actor.aiMode === "chase" && (playerFromHome > actor.leashRadius || actorFromHome > actor.leashRadius)) {
       actor.aiMode = "return";
     }
@@ -885,6 +912,10 @@ export class ClassicSpawnManager {
       actor.add(lease.model.object);
       const label = createStatusSprite(template, lease.model.object, scale);
       actor.add(label.sprite);
+      const questResetLabel = spec.generator.id === 3524 && template.key === "Coveiro"
+        ? createQuestResetSprite(label.sprite.position.y)
+        : null;
+      if (questResetLabel) actor.add(questResetLabel.sprite);
       for (const mesh of lease.model.meshes) mesh.userData[TARGET_ID_USER_DATA_KEY] = id;
       const spawned: SpawnedActor = {
         id,
@@ -937,7 +968,12 @@ export class ClassicSpawnManager {
         label: label.sprite,
         labelTexture: label.texture,
         labelMaterial: label.material,
+        questResetLabel: questResetLabel?.sprite ?? null,
+        questResetLabelTexture: questResetLabel?.texture ?? null,
+        questResetLabelMaterial: questResetLabel?.material ?? null,
+        questResetRenderedSeconds: questResetLabel ? classicQuestResetSecondsRemaining() : -1,
       };
+      if (questResetLabel) updateQuestResetSprite(spawned, spawned.questResetRenderedSeconds);
       if (isActorAlive(spawned)) seekActorRoute(spawned, nowSeconds);
       else applyDeadActorVisual(spawned, nowSeconds);
       updateStatusSprite(spawned);
@@ -1930,6 +1966,91 @@ function drawStatusCanvas(canvas: HTMLCanvasElement, name: string, hp: number, m
   }
 }
 
+function createQuestResetSprite(
+  statusLabelY: number,
+): { readonly sprite: THREE.Sprite; readonly texture: THREE.CanvasTexture; readonly material: THREE.SpriteMaterial } {
+  const canvas = document.createElement("canvas");
+  canvas.width = 512;
+  canvas.height = 96;
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.minFilter = THREE.LinearFilter;
+  const material = new THREE.SpriteMaterial({
+    map: texture,
+    depthTest: false,
+    depthWrite: false,
+    transparent: true,
+  });
+  const sprite = new THREE.Sprite(material);
+  sprite.name = "cemetery-quest-reset";
+  sprite.scale.set(5.4, 1.02, 1);
+  sprite.position.y = statusLabelY + 1.18;
+  sprite.renderOrder = 1_001;
+  return { sprite, texture, material };
+}
+
+function updateQuestResetSprite(actor: SpawnedActor, secondsRemaining: number): void {
+  const canvas = actor.questResetLabelTexture?.image as HTMLCanvasElement | undefined;
+  const context = canvas?.getContext("2d");
+  if (!canvas || !context) return;
+  context.clearRect(0, 0, canvas.width, canvas.height);
+
+  const gradient = context.createLinearGradient(0, 9, 0, 88);
+  gradient.addColorStop(0, "rgba(43, 38, 24, .96)");
+  gradient.addColorStop(0.5, "rgba(11, 14, 12, .94)");
+  gradient.addColorStop(1, "rgba(4, 6, 5, .92)");
+  roundedRectangle(context, 73, 8, 366, 78, 17);
+  context.fillStyle = gradient;
+  context.fill();
+  context.lineWidth = 4;
+  context.strokeStyle = "rgba(18, 14, 7, .98)";
+  context.stroke();
+
+  roundedRectangle(context, 78, 13, 356, 68, 13);
+  context.lineWidth = 2;
+  context.strokeStyle = "#b99a45";
+  context.stroke();
+
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  context.font = "700 17px Arial, sans-serif";
+  context.lineWidth = 5;
+  context.strokeStyle = "rgba(0, 0, 0, .95)";
+  context.strokeText("CEMITÉRIO · PRÓXIMO RESET", 256, 31);
+  context.fillStyle = "#d6c07a";
+  context.fillText("CEMITÉRIO · PRÓXIMO RESET", 256, 31);
+
+  const reset = formatClassicQuestReset(secondsRemaining);
+  context.shadowColor = "rgba(115, 242, 99, .75)";
+  context.shadowBlur = 12;
+  context.font = "800 31px Arial, sans-serif";
+  context.lineWidth = 6;
+  context.strokeStyle = "rgba(0, 0, 0, .95)";
+  context.strokeText(reset, 256, 61);
+  context.fillStyle = secondsRemaining <= 60 ? "#ffd25f" : "#91ef76";
+  context.fillText(reset, 256, 61);
+  context.shadowBlur = 0;
+  actor.questResetLabelTexture!.needsUpdate = true;
+}
+
+function roundedRectangle(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number,
+): void {
+  const safeRadius = Math.min(radius, width / 2, height / 2);
+  context.beginPath();
+  context.moveTo(x + safeRadius, y);
+  context.arcTo(x + width, y, x + width, y + height, safeRadius);
+  context.arcTo(x + width, y + height, x, y + height, safeRadius);
+  context.arcTo(x, y + height, x, y, safeRadius);
+  context.arcTo(x, y, x + width, y, safeRadius);
+  context.closePath();
+}
+
 function updateStatusSprite(actor: SpawnedActor): void {
   const canvas = actor.labelTexture.image as HTMLCanvasElement;
   if (!canvas || typeof canvas.getContext !== "function") return;
@@ -2031,6 +2152,8 @@ function disposeActor(actor: SpawnedActor): void {
   actor.lease.release();
   actor.labelMaterial.dispose();
   actor.labelTexture.dispose();
+  actor.questResetLabelMaterial?.dispose();
+  actor.questResetLabelTexture?.dispose();
 }
 
 function nextFrame(): Promise<void> {

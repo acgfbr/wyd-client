@@ -48,6 +48,13 @@ const faceLookCopySkins = new Set([
   20, 39, 21, 22, 23, 24, 40, 3, 4, 25, 28, 29, 2, 6, 7, 8,
   30, 31, 33, 36, 12, 43, 10, 5, 45, 46, 47, 53, 54, 55, 56, 57,
 ]);
+// NPCGener entry 23 pairs Tower_of_Thor with Tower_de_Thor, while npcdb only
+// contains Tower_of_Thor. Entries 24/25 use Tower_of_Thor for both roles and
+// all three are the same stationary tower family, proving this lone spelling
+// variant is an authored alias rather than a missing visual.
+const npcDatabaseAliases = new Map([
+  ["tower_de_thor", "tower_of_thor"],
+]);
 
 await mkdir(fieldsRoot, { recursive: true });
 await mkdir(texturesRoot, { recursive: true });
@@ -836,7 +843,11 @@ function readCString(data, offset, length) {
 }
 
 function resolveNpcDatabaseFile(files, name) {
-  return files.get(name.toLowerCase()) ?? files.get(name.replace(/_+$/, "").toLowerCase());
+  const normalized = name.toLowerCase();
+  const alias = npcDatabaseAliases.get(normalized);
+  return files.get(normalized)
+    ?? files.get(name.replace(/_+$/, "").toLowerCase())
+    ?? (alias ? files.get(alias) : undefined);
 }
 
 function numberOrNull(value) {

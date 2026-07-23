@@ -32,6 +32,7 @@ export class GameInput {
   onAutoCombatToggle?: () => void;
   onEffectsToggle?: () => void;
   onMusicToggle?: () => void;
+  onSoundEffectsToggle?: () => void;
   onNearbyGroundItemPickup?: () => void;
   onGroundItemLabelsToggle?: () => void;
   onSkill?: (slot: number) => void;
@@ -153,6 +154,7 @@ export class GameInput {
     if (event.code === "KeyF" && !event.repeat) this.onAutoCombatToggle?.();
     if (event.code === "KeyV" && !event.repeat) this.onEffectsToggle?.();
     if (event.code === "KeyM" && !event.repeat) this.onMusicToggle?.();
+    if (event.code === "KeyB" && !event.repeat) this.onSoundEffectsToggle?.();
     if (event.code === "Space") {
       event.preventDefault();
       if (!event.repeat) this.onNearbyGroundItemPickup?.();

@@ -1,5 +1,6 @@
 import "./style.css";
 import { GameApp } from "./app/GameApp";
+import { CLASSIC_TIMED_QUESTS } from "./game/quests/ClassicTimedQuests";
 
 const app = document.querySelector<HTMLElement>("#app");
 
@@ -32,6 +33,15 @@ app.innerHTML = `
       <div><span>TRIS</span><b id="telemetry-triangles">—</b></div>
       <small>* THREAD não é CPU real · GEO/TEX/CALLS/TRIS vêm do WebGLRenderer</small>
     </section>
+    <section id="quest-reset-tracker" class="quest-reset-tracker" aria-label="Próximos resets das quests">
+      <header><span>QUESTS</span><small>RESET 10 MIN</small></header>
+      ${CLASSIC_TIMED_QUESTS.map((quest) => `
+        <div data-quest-key="${quest.key}">
+          <span>${quest.name}</span>
+          <b data-quest-reset>10:00</b>
+        </div>
+      `).join("")}
+    </section>
   </aside>
 
   <aside id="map-teleport" class="map-teleport">
@@ -46,6 +56,7 @@ app.innerHTML = `
     <div id="mount-status" class="mount-status"><kbd>R</kbd><span>Montaria</span></div>
     <div id="auto-combat" class="auto-combat"><kbd>F</kbd><span>Auto OFF</span></div>
     <div id="effects-status" class="effects-status is-active" title="Liga/desliga os efeitos visuais"><kbd>V</kbd><span>FX ON</span></div>
+    <div id="sound-status" class="sound-status is-active" title="Liga/desliga ataque, skill, buff, passos e sons ambientais"><kbd>B</kbd><span>SFX ON</span></div>
   </div>
 
   <section id="buff-status" class="buff-status" aria-label="Buffs ativos"></section>
@@ -118,6 +129,8 @@ app.innerHTML = `
     <button type="button" data-game-menu-action="inventory">Inventário <kbd>I</kbd></button>
     <button type="button" data-game-menu-action="skills">Skills <kbd>K</kbd></button>
     <button type="button" data-game-menu-action="macro">Configurar C.C <kbd>F</kbd></button>
+    <button type="button" data-game-menu-action="music-toggle"><span id="game-menu-music-state">Música: OFF</span> <kbd>M</kbd></button>
+    <button type="button" data-game-menu-action="sfx-toggle"><span id="game-menu-sfx-state">SFX: ON</span> <kbd>B</kbd></button>
     <div class="game-menu-divider"><span>Sistema clássico</span></div>
     <button type="button" data-game-menu-action="server">Selecionar servidor <em>REDE</em></button>
     <button type="button" data-game-menu-action="character-select">Selecionar personagem <em>REDE</em></button>
@@ -255,7 +268,7 @@ app.innerHTML = `
     <div data-tooltip-lines hidden></div>
   </aside>
 
-  <div class="controls-hint"><span>WASD</span> mover · <span>Q/E</span> câmera · <span>RODA</span> zoom · <span>ESPAÇO</span> coletar · <span>Z</span> nomes dos drops · <span>C</span> personagem · <span>I</span> inventário · <span>K</span> skills · <span>G</span> GM · <span>R</span> montaria · <span>F</span> auto-combate · <span>V</span> efeitos · <span>M</span> música</div>
+  <div class="controls-hint"><span>WASD</span> mover · <span>Q/E</span> câmera · <span>RODA</span> zoom · <span>ESPAÇO</span> coletar · <span>Z</span> nomes dos drops · <span>C</span> personagem · <span>I</span> inventário · <span>K</span> skills · <span>G</span> GM · <span>R</span> montaria · <span>F</span> auto-combate · <span>V</span> efeitos · <span>M</span> música · <span>B</span> SFX</div>
 `;
 
 function showBootError(error: unknown): void {

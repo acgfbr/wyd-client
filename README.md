@@ -30,6 +30,8 @@ Documentação de arquitetura:
   transformações clássicas com rig e animações próprios.
 - 14 montarias clássicas nível 120, incluindo Unicórnio e Grifo.
 - NPCs e monstros com animação, autonomia, separação, combate, morte e respawn.
+- Cemitério e Cabuncle com contador sincronizado para o próximo reset de 10
+  minutos; os monstros dessas quests só adquirem o player dentro da área.
 - Drops materializados no mundo, coleta por proximidade e nomes globais opcionais.
 - Bolsa e cargo respeitam o `EF_GRID` clássico para itens de `1×1` até `2×4`.
 - Movimento por WASD/clique, câmera clássica, zoom amplo e modo G.
@@ -235,6 +237,7 @@ servidor.
 | `K` | Abrir/fechar catálogo de skills |
 | `V` | Ligar/desligar todos os efeitos visuais |
 | `M` | Ligar/desligar somente a música (desligada por padrão) |
+| `B` | Ligar/desligar todos os SFX: ataque, skill, buff, passos e ambiente |
 
 ### Loot offline
 

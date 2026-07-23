@@ -231,6 +231,40 @@ button, select { font: inherit; }
 .runtime-telemetry b { overflow: hidden; color: #e4d9b7; font-size: 10px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 .runtime-telemetry div:first-child b { color: #b9d9a1; }
 .runtime-telemetry small { grid-column: 1 / -1; color: #777369; font-size: 7px; line-height: 9px; text-align: center; }
+.quest-reset-tracker {
+  padding: 6px 8px 7px;
+  border-top: 1px solid #4b463b;
+  background: linear-gradient(rgb(24 22 17 / 97%), rgb(7 8 8 / 97%));
+  font-variant-numeric: tabular-nums;
+  text-shadow: 1px 1px #000;
+}
+.quest-reset-tracker header,
+.quest-reset-tracker div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 7px;
+}
+.quest-reset-tracker header {
+  margin-bottom: 4px;
+  padding-bottom: 3px;
+  border-bottom: 1px solid rgb(112 96 60 / 42%);
+}
+.quest-reset-tracker header span { color: #c3aa64; font-size: 8px; font-weight: 700; }
+.quest-reset-tracker header small { color: #716d62; font-size: 6px; }
+.quest-reset-tracker div { min-height: 15px; color: #aaa28e; font-size: 8px; }
+.quest-reset-tracker div b { color: #e4d39b; font-size: 10px; }
+.quest-reset-tracker div.is-current { color: #f0dfaa; }
+.quest-reset-tracker div.is-current::before {
+  width: 4px;
+  height: 4px;
+  margin-right: -2px;
+  border-radius: 50%;
+  background: #70c54d;
+  box-shadow: 0 0 4px #6bd344;
+  content: "";
+}
+.quest-reset-tracker div.is-current b { color: #9ce979; }
 
 .map-teleport {
   position: fixed;
@@ -274,7 +308,7 @@ button, select { font: inherit; }
   gap: 4px;
   pointer-events: none;
 }
-.speed-boost, .mount-status, .auto-combat, .effects-status {
+.speed-boost, .mount-status, .auto-combat, .effects-status, .sound-status {
   display: flex;
   align-items: center;
   gap: 5px;
@@ -286,7 +320,7 @@ button, select { font: inherit; }
   text-transform: uppercase;
   box-shadow: 2px 2px 0 rgb(0 0 0 / 45%);
 }
-.speed-boost kbd, .mount-status kbd, .auto-combat kbd, .effects-status kbd, .controls-hint span, .inventory-panel kbd {
+.speed-boost kbd, .mount-status kbd, .auto-combat kbd, .effects-status kbd, .sound-status kbd, .controls-hint span, .inventory-panel kbd {
   border: 1px outset #786c54;
   border-radius: 0;
   background: #181a19;
@@ -294,7 +328,7 @@ button, select { font: inherit; }
   font: 700 9px Tahoma, sans-serif;
   box-shadow: inset 0 0 2px #000;
 }
-.speed-boost kbd, .mount-status kbd, .auto-combat kbd, .effects-status kbd { min-width: 20px; padding: 2px 4px; text-align: center; }
+.speed-boost kbd, .mount-status kbd, .auto-combat kbd, .effects-status kbd, .sound-status kbd { min-width: 20px; padding: 2px 4px; text-align: center; }
 .speed-boost.is-active { border-color: #c39631; color: #ffe09a; box-shadow: inset 0 0 8px #6b3f06, 2px 2px 0 rgb(0 0 0 / 45%); }
 .speed-boost.is-active kbd { background: #653f0e; color: #fff0bd; }
 .mount-status.is-active { border-color: #698c9e; color: #b9e8ff; box-shadow: inset 0 0 8px #183b50, 2px 2px 0 rgb(0 0 0 / 45%); }
@@ -303,6 +337,8 @@ button, select { font: inherit; }
 .auto-combat.is-active kbd { background: #385d18; color: #ebffc4; }
 .effects-status.is-active { border-color: #796f9c; color: #ddd1ff; box-shadow: inset 0 0 8px #2f2752, 2px 2px 0 rgb(0 0 0 / 45%); }
 .effects-status.is-active kbd { background: #463a70; color: #f2edff; }
+.sound-status.is-active { border-color: #6f8f7b; color: #d2f3dc; box-shadow: inset 0 0 8px #21462e, 2px 2px 0 rgb(0 0 0 / 45%); }
+.sound-status.is-active kbd { background: #2e5a3c; color: #e5ffec; }
 
 .buff-status {
   position: fixed;
@@ -1902,6 +1938,10 @@ button, select { font: inherit; }
   .runtime-telemetry span { font-size: 7px; }
   .runtime-telemetry b { font-size: 8px; }
   .runtime-telemetry small { display: none; }
+  .quest-reset-tracker { padding: 5px 7px; }
+  .quest-reset-tracker header small { display: none; }
+  .quest-reset-tracker div { font-size: 7px; }
+  .quest-reset-tracker div b { font-size: 8px; }
   .location-panel strong { display: none; }
   .target-status { top: 92px; width: 340px; background-size: 340px 39px; }
   .target-heading { top: 3px; right: 38px; left: 38px; }

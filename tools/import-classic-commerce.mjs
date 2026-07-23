@@ -32,6 +32,11 @@ const CLIENT_STATIC_PRICE_OVERRIDES = [
   { itemIndex: 419, price: 400_000 },
   { itemIndex: 420, price: 800_000 },
 ];
+// NPCGener entry 23 spells the follower Tower_de_Thor; npcdb and the two
+// adjacent stationary-tower generators consistently use Tower_of_Thor.
+const npcDatabaseAliases = new Map([
+  ["tower_de_thor", "tower_of_thor"],
+]);
 
 const projectRoot = path.resolve(import.meta.dirname, "..");
 const clientRoot = path.resolve(process.argv[2] ?? path.resolve(projectRoot, "../tjs/Origem"));
@@ -400,7 +405,11 @@ async function caseInsensitiveFiles(directory) {
 }
 
 function resolveNpcDatabaseFile(files, name) {
-  return files.get(name.toLowerCase()) ?? files.get(name.replace(/_+$/, "").toLowerCase());
+  const normalized = name.toLowerCase();
+  const alias = npcDatabaseAliases.get(normalized);
+  return files.get(normalized)
+    ?? files.get(name.replace(/_+$/, "").toLowerCase())
+    ?? (alias ? files.get(alias) : undefined);
 }
 
 function readCString(data, offset, length) {

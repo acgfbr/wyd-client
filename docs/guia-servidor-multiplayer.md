@@ -230,6 +230,24 @@ auditada e autorizada pelo servidor.
   tabela, imposto, estoque e saldo.
 - Toda criação/destruição de item e moeda gera ledger auditável.
 
+### Quests temporizadas e instâncias
+
+O frontend já apresenta Cemitério e Cabuncle em ciclos locais de dez minutos,
+mas o servidor deve publicar `serverNow`, `cycleStartedAt`, `cycleEndsAt` e um
+`questInstanceId`. A entrada precisa validar nível, classe/Arch, item ou moeda
+exigidos e capacidade antes de consumir qualquer recurso, tudo na mesma
+transação idempotente. O personagem recebe uma participação vinculada à
+instância; apenas participantes vivos e presentes podem entrar na lista de
+ameaça dos monstros daquela quest. Sair, desconectar, expirar o ciclo ou trocar
+de Field remove o alvo e manda a criatura retornar, sem confiar na posição ou
+no relógio enviados pelo navegador.
+
+Drops de quest, itens que concedem EXP ao usar e a recompensa final também são
+eventos autoritativos. O catálogo do cliente prova a existência da
+`Vela_do_Coveiro #4038` e da `Varinha_do_Carbunkle #701`, mas não prova custo,
+chance, EXP nem regra de consumo. Essas tabelas devem ser confrontadas com o
+servidor-base antes de virar configuração de produção.
+
 ## Persistência mínima
 
 Tabelas iniciais:
@@ -340,7 +358,9 @@ PORT=8080
 5. Migrar ataque básico, morte/respawn e barra HP/MP.
 6. Migrar inventário/equipamento/drop com revisão e idempotência.
 7. Migrar skills, buffs, summons e loot.
-8. Adicionar comércio, chat, party, guild, portais e quests.
+8. Adicionar comércio, chat, party, guild, portais e quests; para Cemitério e
+   Cabuncle, migrar o contador local para tempo/instância autoritativos e
+   restringir a ameaça aos participantes registrados.
 9. Fazer carga, segurança, observabilidade, backups e deploy.
 10. Só então avaliar gateway TCP compatível com o executável clássico.
 

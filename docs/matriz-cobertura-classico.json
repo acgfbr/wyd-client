@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-23T20:54:22.447Z",
+  "generatedAt": "2026-07-23T21:15:06.381Z",
   "command": "bun run audit:coverage",
   "source": "WYD classic",
   "referencedFiles": {
@@ -27,9 +27,7 @@
     "itemRecords": 369,
     "visualFamilies": 47,
     "skinnedObjects": 49,
-    "unresolvedTemplates": [
-      "Tower_de_Thor"
-    ]
+    "unresolvedTemplates": []
   },
   "player": {
     "classes": [
@@ -74,7 +72,7 @@
     "iconMappings": 6500,
     "iconAtlases": 14,
     "referencedNpcTemplates": 377,
-    "unresolvedNpcTemplates": 1,
+    "unresolvedNpcTemplates": 0,
     "commerceRelevantNpcTemplates": 79
   },
   "skills": {
@@ -446,7 +444,7 @@
       "label": "Monstros/NPCs",
       "directory": "monsters",
       "files": 1340,
-      "bytes": 38973074,
+      "bytes": 38973865,
       "extensions": {
         ".ani": 555,
         ".bon": 47,
@@ -528,7 +526,7 @@
       "label": "Comercio",
       "directory": "commerce",
       "files": 1,
-      "bytes": 4135236,
+      "bytes": 4135221,
       "extensions": {
         ".json": 1
       }

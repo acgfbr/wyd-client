@@ -87,6 +87,7 @@ export class ClassicAudio {
   #disposed = false;
   // WYD installations commonly start with BGM disabled. SFX remain enabled.
   #musicEnabled = false;
+  #soundEffectsEnabled = true;
   #requestedMusicIndex: number | null = null;
   #activeMusicIndex: number | null = null;
 
@@ -116,6 +117,29 @@ export class ClassicAudio {
       return false;
     }
     if (this.#unlocked) void this.playRequestedMusic();
+    return true;
+  }
+
+  get soundEffectsEnabled(): boolean {
+    return this.#soundEffectsEnabled;
+  }
+
+  toggleSoundEffects(): boolean {
+    this.#soundEffectsEnabled = !this.#soundEffectsEnabled;
+    if (!this.#soundEffectsEnabled) {
+      for (const loop of this.#ambientLoops.values()) releaseAudio(loop);
+      this.#ambientLoops.clear();
+      for (const voice of this.#voices) releaseAudio(voice);
+      this.#voices.clear();
+      return false;
+    }
+    if (this.#unlocked) {
+      for (const index of this.#ambientDesired.keys()) {
+        if (!this.#ambientLoops.has(index) && !this.#ambientLoads.has(index)) {
+          void this.startAmbientLoop(index);
+        }
+      }
+    }
     return true;
   }
 
@@ -182,7 +206,7 @@ export class ClassicAudio {
       }
       loop.volume = Math.min(1, volume);
     }
-    if (!this.#unlocked || this.#disposed) return;
+    if (!this.#unlocked || this.#disposed || !this.#soundEffectsEnabled) return;
     for (const index of desired.keys()) {
       if (this.#ambientLoops.has(index) || this.#ambientLoads.has(index)) continue;
       void this.startAmbientLoop(index);
@@ -204,10 +228,10 @@ export class ClassicAudio {
   }
 
   async playSound(index: number, volume = 0.32): Promise<boolean> {
-    if (this.#disposed) return false;
+    if (this.#disposed || !this.#soundEffectsEnabled) return false;
     const catalog = await this.loadCatalog();
     const entry = catalog?.sounds.find((candidate) => candidate.index === index);
-    if (!entry || this.#disposed) return false;
+    if (!entry || this.#disposed || !this.#soundEffectsEnabled) return false;
     const sameSound = [...this.#voices].filter(
       (voice) => voice.dataset.classicSoundIndex === String(index),
     );
@@ -264,9 +288,11 @@ export class ClassicAudio {
     window.removeEventListener("pointerdown", this.unlock, { capture: true });
     window.removeEventListener("keydown", this.unlock, { capture: true });
     if (this.#musicEnabled) void this.playRequestedMusic();
-    for (const index of this.#ambientDesired.keys()) {
-      if (!this.#ambientLoops.has(index) && !this.#ambientLoads.has(index)) {
-        void this.startAmbientLoop(index);
+    if (this.#soundEffectsEnabled) {
+      for (const index of this.#ambientDesired.keys()) {
+        if (!this.#ambientLoops.has(index) && !this.#ambientLoads.has(index)) {
+          void this.startAmbientLoop(index);
+        }
       }
     }
   };
@@ -327,6 +353,7 @@ export class ClassicAudio {
         || volume <= 0.002
         || !this.#unlocked
         || this.#disposed
+        || !this.#soundEffectsEnabled
         || this.#ambientLoops.has(index)
       ) return;
       const loop = new Audio(classicAudioUrl(entry.file));
@@ -335,7 +362,11 @@ export class ClassicAudio {
       loop.volume = Math.min(1, volume);
       try {
         await loop.play();
-        if (this.#disposed || !this.#ambientDesired.has(index)) {
+        if (
+          this.#disposed
+          || !this.#soundEffectsEnabled
+          || !this.#ambientDesired.has(index)
+        ) {
           releaseAudio(loop);
           return;
         }
