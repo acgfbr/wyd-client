@@ -223,6 +223,11 @@ for (const index of [1, 2, 3, 8, 9]) {
 // O TMHouse 474 desenha a hélice como GetCommonMesh(dwObjType + 1), portanto
 // o MSA 475 é uma dependência indireta e não aparece nos records DAT.
 usedObjectTypes.add(475);
+// TMHouse types 251..254 render the following MeshList entry as a removable
+// roof. Those companion rows do not need to exist as standalone DAT records.
+for (let ownerType = 251; ownerType <= 254; ownerType++) {
+  if (usedObjectTypes.has(ownerType)) usedObjectTypes.add(ownerType + 1);
+}
 // Partes auxiliares renderizadas por TMHouse::Render e ausentes dos DATs.
 // 615/1770 também são adicionadas explicitamente para clones limpos em que
 // não apareçam por acaso como registros independentes de outro Field.
@@ -269,6 +274,18 @@ usedObjectTypes.add(2840); // Effect/destiny.msa — Destino
 // TMObjectContainer instancia também 1979 (brilho/scroll) e 1981 (overlay).
 usedObjectTypes.add(1979);
 usedObjectTypes.add(1981);
+// Seis estruturas mantêm sua MSA opaca no TMObject e acrescentam uma malha
+// TMEffectMesh indireta, ausente do DAT.
+for (const [ownerType, effectType] of [
+  [1528, 1555],
+  [1540, 1556],
+  [1541, 1557],
+  [1542, 1558],
+  [1543, 1559],
+  [1597, 1598],
+]) {
+  if (usedObjectTypes.has(ownerType)) usedObjectTypes.add(effectType);
+}
 for (const [ownerType, waterType] of houseWaterCompanions) {
   if (usedObjectTypes.has(ownerType)) usedObjectTypes.add(waterType);
 }

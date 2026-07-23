@@ -1,12 +1,12 @@
 # Matriz automatica de cobertura do cliente classico
 
-Gerado por `bun run audit:coverage` em 2026-07-23T22:45:48.841Z. Este arquivo e
+Gerado por `bun run audit:coverage` em 2026-07-23T23:35:02.469Z. Este arquivo e
 derivado dos artefatos importados e do runtime; nao deve ser editado
 manualmente. A analise e as decisoes ficam em `auditoria-threejs-cobertura.md`.
 
 ## Integridade dos imports
 
-- 2295 caminhos unicos referenciados pelo manifesto.
+- 2303 caminhos unicos referenciados pelo manifesto.
 - 0 caminhos referenciados ausentes.
 - 111 Fields: 111 TRN,
   108 DAT declarados e 103
@@ -24,7 +24,7 @@ Nenhum arquivo referenciado pelo manifesto esta ausente.
 | Fields/TRN | `fields` | 111 | 5.2 MiB | .trn 111 |
 | Objetos/DAT | `objects` | 108 | 3.6 MiB | .dat 108 |
 | Minimapas/WYT | `minimaps` | 103 | 4.8 MiB | .wyt 103 |
-| Modelos de mapa | `models` | 1232 | 35.3 MiB | .dds 351, .msa 881 |
+| Modelos de mapa | `models` | 1240 | 35.4 MiB | .dds 351, .msa 889 |
 | Texturas de ambiente | `textures/env` | 238 | 2.5 MiB | .dds 238 |
 | Texturas de efeitos | `textures/effects` | 495 | 15.7 MiB | .dds 495 |
 | Texturas de agua | `textures/water` | 5 | 67.0 KiB | .dds 5 |
@@ -46,7 +46,7 @@ Nenhum arquivo referenciado pelo manifesto esta ausente.
 | Texturas de terreno/ambiente | 238 |
 | Texturas de efeitos | 495 |
 | Texturas de agua | 5 |
-| Modelos de objetos | 881 |
+| Modelos de objetos | 889 |
 | Templates de NPC/monstro | 377 |
 | Geradores de NPC/monstro | 3937 |
 | Familias visuais | 47 |

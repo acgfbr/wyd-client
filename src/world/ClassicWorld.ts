@@ -105,6 +105,7 @@ export class ClassicWorld {
       origin,
       (position) => this.heightAt(position),
       (position) => this.colorAt(position),
+      (position) => this.attributeAt(position),
       this.models,
     );
     for (const field of assets.manifest.fields) {
@@ -198,7 +199,7 @@ export class ClassicWorld {
       predictiveLead(previous, position, deltaSeconds),
     );
     this.retryObjectLoads();
-    this.#mapObjects.update(deltaSeconds);
+    this.#mapObjects.update(deltaSeconds, position);
     this.#spawns?.update(deltaSeconds, position);
   }
 

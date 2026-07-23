@@ -50,6 +50,27 @@ escopo atual.
   `147,3781`, `614` em `377,3803`, `1750` em `803,4055`, `1739` em
   `1684,3674` e `1711` em `1796,3640`. As três peças do `607` devem girar em
   sentidos opostos; as demais partes devem acompanhar posição/ângulo da base.
+- Em Armia, conferir o teto `252` da casa `251` em `2102,2114` e o teto `254`
+  da casa `253` em `2072,2110`: longe devem ficar opacos, a menos de seis
+  unidades devem ficar translúcidos e, ao cruzar a área interna marcada pelo
+  `AttributeMap`, devem desaparecer para revelar o personagem.
+- Conferir um objeto `1855` em `3740,2978` (Field `29,23`): ao entrar no
+  quadrado de seis unidades ele deve ativar a transparência da própria textura
+  sem sumir; ao sair, deve restaurar o material opaco.
+- Conferir as partículas `TMHouse` em `225,3776` (`195`), `2531,1743` (`292`),
+  `1926,4006` (`1526`), `657,3732` (`2005`) e `147,3781` (`607`). Devem nascer
+  nos bocais/offsets da malha, repetir sem acumular objetos ou memória e sumir
+  imediatamente com `V`. Um `1665` em `1291,1673` deve continuar sem respingo,
+  pois esse branch retorna antes de criar partículas no cliente.
+- Conferir os overlays de cenário em `1075,3514` (`1528→1555`),
+  `1939,3979` (`1540→1556`), `1945,4031` (`1541→1557`), `1966,4017`
+  (`1542→1558`), `1045,3478` (`1543→1559`) e `3732,3563`
+  (`1597→1598`). A base deve permanecer opaca e o overlay escuro/emissivo deve
+  coincidir com sua posição e ângulo, desaparecendo com `V`.
+- Conferir `TMBike` em `1984,3981` (`1549`), `1978,3992` (`1550`) e
+  `1169,4019` (`1551`): devem completar a oscilação `-3..+3` em 20 segundos
+  pelo eixo indicado pelo ângulo, sem criar clones ou deslocar a posição-base
+  após descarregar/recarregar o Field.
 
 ## Criterio de fechamento
 

@@ -376,8 +376,30 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
     A família `TMHouse` também foi cruzada: 430 bases recuperaram suas partes
     indiretas `608/609`, `615`, `1770`, `1771` e `1772`; o portão `607`
     contra-rotaciona três peças no ciclo de `20 s`. Importador, leases e
-    descarte por Field incluem essas partes. Permanece a homologação visual dos
-    materiais substituídos por texture-set nos tipos `614/1711/1739/1750`.
+    descarte por Field incluem essas partes. As bases `251..254` agora também
+    carregam seu teto `tipo + 1`: ele fica translúcido dentro do raio clássico
+    de seis unidades e some quando o bit `0x08` do `AttributeMap` confirma que
+    o jogador entrou em uma construção. Permanece a homologação visual dos
+    tetos `252/254` em Armia e dos materiais substituídos por texture-set nos
+    tipos `614/1711/1739/1750`.
+    Os 52 objetos `1855` também receberam o branch de proximidade original:
+    dentro de seis unidades alternam para `SRC=ONE/DST=INVSRCALPHA`, sem
+    aplicar opacidade arbitrária e sem contaminar os materiais compartilhados.
+    O composite `610/611/612` foi confirmado no código, mas nenhum dos 108 DAT
+    possui uma base `610`; fica documentado, sem criar objetos inexistentes.
+    As emissões de `TMHouse::FrameMove` também foram reconstruídas em batch
+    GPU por Field: 52 fontes e 225 cachoeiras ativas usam a textura `151`,
+    respeitando bocais, ângulos, offsets, intervalos e duração; os cinco `607`
+    combinam o billboard `0/151` e a partícula `56`, incluindo o branch dungeon
+    `2`. `1520/1535/1695/1665` permanecem sem respingo conforme os retornos e
+    contagens zero do próprio cliente. A tecla `V`, streaming e descarte
+    abrangem os novos batches.
+    O dispatcher completo revelou ainda 697 bases `1528/1540..1543/1597` com
+    overlays indiretos `1555..1559/1598`; as seis malhas emissivas foram
+    importadas e agora acompanham posição/ângulo da base. As 62 plataformas
+    `TMBike` (`1549..1551`) também reproduzem a senoide clássica de `20 s`,
+    amplitude `±3` e seleção de eixo pelo ângulo. Falta homologar visualmente
+    esses dois lotes nas coordenadas registradas no checklist.
 11. Distribuição web — **implementação concluída; homologação manual pendente**. O build de produção
     não publica sourcemaps, remove comentários legais/`debugger`/`console.debug`,
     minifica identificadores/sintaxe/espaços e usa nomes de assets por hash. O
@@ -431,13 +453,13 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
     a manter esse contrato. A matriz automatica por
     arquivo importado foi concluida: `bun run audit:coverage` cruza o manifesto,
     o corpus fisico e as definicoes TypeScript do runtime, gerando Markdown e
-    JSON em `docs/matriz-cobertura-classico.*`. O snapshot atual valida 2.295
+    JSON em `docs/matriz-cobertura-classico.*`. O snapshot atual valida 2.303
     caminhos declarados sem faltantes, 111 TRN, 108 DAT declarados, 103
     minimapas declarados, 377 templates, 3.937 geradores, 6.500 itens, 248
     skills binárias, 14 montarias e oito evocacoes; tambem explicita por classe
     quais skills ja foram promovidas ao runtime. O code splitting tambem foi
     aplicado: Three.js ocupa um chunk vendor cacheavel, a entrada da aplicacao
-    ficou em cerca de 544 KiB minificados e os renderers de Foema, TransKnight
+    ficou em cerca de 553 KiB minificados e os renderers de Foema, TransKnight
     e BeastMaster viraram chunks lazy na faixa de aproximadamente 37–124 KiB,
     carregados somente no primeiro switch para cada classe.
     O preview 3D do inventário também deixou de crescer com cada item

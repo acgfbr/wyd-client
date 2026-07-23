@@ -63,7 +63,7 @@ corpus para `public/game-data/classic`; o runtime consome apenas esse pacote.
 | `Field*.dat` | objetos por Field | 108 declarados; ausencia nos demais e do manifesto |
 | `m*.wyt` | minimapas | 103 declarados; nem todo Field possui um |
 | `.wys` | malhas/objetos compostos | transformacao difere de personagem |
-| `.msa/.msh` | objetos e meshes | 875 modelos de mapa no manifesto |
+| `.msa/.msh` | objetos e meshes | 889 modelos de mapa no manifesto |
 | `.bon/.ani` | skeleton e animacao | bancos nao podem ser cruzados entre rigs |
 | `AttributeMap.dat` | flags globais de navegacao | inclui portal `0x10` |
 | `object.bin` | mascaras de objeto | compoe colisao depois do AttributeMap |
@@ -122,6 +122,42 @@ foi homologada; nao reabrir sua colisao global sem regressao reproduzivel.
   respectivamente, `615`, `1770`, `1771` e `1772`. São 430 bases afetadas.
   Essas dependências agora são importadas explicitamente e compartilham o
   mesmo lease/lifecycle de streaming da base.
+- As casas `TMHouse` `251..254` usam a malha seguinte (`tipo + 1`) como teto,
+  embora essa segunda malha não apareça no DAT. Em Armia há bases `251` em
+  `2102,2114` e `253` em `2072,2110`, portanto os tetos reais são `252/254`.
+  `TMObject::IsInHouse` consulta o bit `0x08` do `AttributeMap.dat`: o teto
+  desaparece dentro da construção e fica translúcido a menos de seis unidades.
+  O runtime replica a regra usando o atributo autoritativo já residente, com
+  materiais próprios por teto e descarte junto ao Field. A proximidade não usa
+  uma opacidade inventada: traduz `SRCBLEND=ONE/DESTBLEND=DESTCOLOR` do D3D9
+  para `CustomBlending` do Three.js.
+- O tipo `1855` é outro branch de proximidade de `TMHouse`: existem 52
+  registros e, a menos de seis unidades, ele ativa o par clássico
+  `ONE/INVSRCALPHA`. Cada instância recebe material próprio somente porque o
+  estado muda por posição; geometria e texturas continuam compartilhadas.
+  `TMHouse 610` referencia `611/612`, mas não existe registro `610` em nenhum
+  dos 108 DAT deste corpus, portanto não há instância ativa a completar.
+- `TMHouse::FrameMove` acrescenta partículas à água sem alterar sua malha:
+  52 fontes ativas (`195/273/274/697/699/1993`) usam o billboard `151` a cada
+  `200 ms`; 225 cachoeiras ativas (`292/490/1526/2005`) usam dois ou quatro
+  bocais em intervalos de `100/300 ms`. Os 40 objetos `1520`, 112 `1535` e
+  nove `1695` configuram contagem zero, enquanto os 20 `1665` retornam antes
+  da emissão — não se deve inventar respingo neles. Os cinco `607` geram cinco
+  billboards e cinco partículas por pulso, alternando a textura/cor no modo
+  dungeon `2`. O runtime agrupa tudo em `Points` por Field, com ciclo,
+  duração, posições e crescimento provenientes dos parâmetros do cliente,
+  lifecycle de streaming e visibilidade controlada por `V`.
+- `TMObjectContainer` mantém a base opaca de `1528`, `1540..1543` e `1597`,
+  mas acrescenta, respectivamente, overlays `1555..1559` e `1598` via
+  `TMEffectMesh`. São 697 bases afetadas. Os seis modelos indiretos agora são
+  importados explicitamente e usam o RGB `0x223333`; o alpha vem da textura,
+  como no `D3DTSS_ALPHAARG1=TEXTURE`, e não do byte alpha zero do literal.
+- Os tipos `1549/1550/1551` são 62 `TMBike`. Eles não ficam estáticos: a cada
+  ciclo de `20 s`, `sin(progress)` desloca a instância até `±3` unidades no
+  eixo lógico Y quando o ângulo está próximo de `0/π/2π`, ou no eixo X nos
+  demais ângulos. A conversão para Three.js inverte somente o deslocamento de
+  Y para Z; geometria/material continuam compartilhados e o Field controla o
+  lifecycle.
 - Os tipos `520..530` são criados como `TMEffectMesh`, mas o próprio
   `TMEffectMesh::Render` retorna sem desenhá-los. `657/658` são `m_bNullObj` e
   `674` não possui entrada utilizável. Eles devem continuar invisíveis.

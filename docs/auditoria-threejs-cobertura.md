@@ -91,7 +91,7 @@ A matriz fisica e reproduzivel agora e gerada por
 `bun run audit:coverage` em `docs/matriz-cobertura-classico.md` e
 `docs/matriz-cobertura-classico.json`. O gerador cruza o manifesto com os
 arquivos existentes e importa as definicoes TypeScript do runtime para nao
-confundir asset presente com feature jogavel. No snapshot atual existem 2.295
+confundir asset presente com feature jogavel. No snapshot atual existem 2.303
 caminhos unicos declarados e nenhum ausente; os 111 Fields possuem 111 TRN,
 108 DAT declarados e 103 minimapas declarados. As ausencias de DAT/minimapa
 nos demais Fields fazem parte do proprio manifesto, nao sao links quebrados.
@@ -100,7 +100,7 @@ nos demais Fields fazem parte do proprio manifesto, nao sao links quebrados.
 | --- | --- | --- | --- |
 | Mapas/Fields | 111 Fields, streaming, conexões, minimapas, seletor | `manifest.json`, `Field*.trn`, `regions.ts` | Revisão visual final dos 111 mapas |
 | Terreno/colisão | TRN, AttributeMap, object.bin, pontes/altura, pathfinding | `ClassicWorld`, `ClassicNavigation` | Casos isolados de máscara/altura que aparecerem em teste |
-| Objetos/props | DAT/WYS/MSH, água, folhas, fogueiras, fontes, floats, TMDust 531, TMHouse e composições 1846/1980/2035 | `MapObjects`, `MapWater`, `ClassicEnvironmentObjects`, `MapEffects`, `MapMeshEffects` | Homologar pontos de grama e objetos raros |
+| Objetos/props | DAT/WYS/MSH, água, folhas, fogueiras, fontes, floats, TMDust 531, tetos/partículas TMHouse e composições 1846/1980/2035 | `MapObjects`, `MapWater`, `ClassicEnvironmentObjects`, `MapEffects`, `MapMeshEffects` | Homologar pontos de grama e objetos raros |
 | Personagem | Quatro classes jogáveis, rigs, traje base, arma, montaria/familiar | `PlayerClasses`, `ClassicPlayerAvatar` | Cobertura completa de equipamentos visuais por classe |
 | Huntress | Mulher Kalintz, Skytalos Ancient +15, Griupan, 17 skills promovidas | `HuntressLooks`, `ClassicHuntressSkillEffects`, `ClassicAlchemyCatalog`, `ClassicLevelUpEffects` | 17 passivas e 2 casts ainda fora do runtime |
 | Montarias | 14 montarias nível 120, Unicórnio padrão, sela/bones | `MountLooks`, `ClassicMount` | Homologação visual de todas as variações |
@@ -137,7 +137,15 @@ nos demais Fields fazem parte do proprio manifesto, nao sao links quebrados.
   declarados pela fonte. O aberto é homologação visual dos mapas e dos raros
   objetos com comportamento próprio, não uma importação em lote ausente. A
   primeira varredura recuperou 1.189 emissores `TMDust 531`, portais `2035`,
-  coroas `1846`, composições `1980` e 430 bases `TMHouse` com partes indiretas;
+  coroas `1846`, composições `1980`, 430 bases `TMHouse` com partes indiretas
+  e os tetos `tipo + 1` de `251..254`, ocultos pelo bit `0x08` do AttributeMap.
+  Os 52 objetos `1855` agora também alternam o blend de proximidade do cliente;
+  `610/611/612` não foi instanciado porque não existe base `610` nos DAT;
+  52 fontes, 225 cachoeiras e cinco objetos `607` recuperaram os emissores de
+  `TMHouse::FrameMove` em batches GPU, mantendo sem emissão os quatro branches
+  que o cliente explicitamente zera ou interrompe;
+  697 estruturas recuperaram os overlays indiretos `1555..1559/1598`, e 62
+  objetos `TMBike 1549..1551` agora oscilam no ciclo clássico de 20 segundos;
   confirmou ainda que `520..530`, `657/658` e `674` são deliberadamente
   invisíveis no cliente.
 - Áudio: 333 SFX e 13 músicas estão no catálogo. Quatro referências não existem

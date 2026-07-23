@@ -38,6 +38,22 @@ const groundShadeDefinitions: Readonly<Record<number, GroundShadeDefinition>> = 
 };
 
 const OWNED_GROUND_SHADE = "classicOwnedGroundShade";
+const OWNED_HOUSE_PARTICLES = "classicOwnedHouseParticles";
+const HOUSE_FOUNTAIN_PARTICLE_TYPES = new Set([195, 273, 274, 697, 699, 1993]);
+const HOUSE_WATERFALL_PARTICLE_TYPES = new Set([292, 490, 1526, 2005]);
+const HOUSE_GATE_PARTICLE_TYPE = 607;
+
+interface HouseParticle {
+  readonly x: number;
+  readonly y: number;
+  readonly z: number;
+  readonly phase: number;
+  readonly cycle: number;
+  readonly lifetime: number;
+  readonly size: number;
+  readonly growth: number;
+  readonly rise: number;
+}
 
 export class MapEffects {
   readonly object = new THREE.Group();
@@ -73,11 +89,18 @@ export class MapEffects {
       || record.type === 1846
       || record.type === 2035
     ));
+    const houseParticleRecords = records.filter((record) => (
+      HOUSE_FOUNTAIN_PARTICLE_TYPES.has(record.type)
+      || HOUSE_WATERFALL_PARTICLE_TYPES.has(record.type)
+      || record.type === HOUSE_GATE_PARTICLE_TYPE
+    ));
+    const isCurrent = () => (
+      this.#generations.get(key) === generation && this.#fieldGroups.get(key) === group
+    );
     await Promise.all([
       this.#meshEffects.addBlock(column, row, records),
-      ...effects.map((record) => this.addRecord(column, row, record, group, () => (
-        this.#generations.get(key) === generation && this.#fieldGroups.get(key) === group
-      ))),
+      this.addHouseParticleBatches(column, row, houseParticleRecords, group, isCurrent),
+      ...effects.map((record) => this.addRecord(column, row, record, group, isCurrent)),
     ]);
   }
 
@@ -92,6 +115,12 @@ export class MapEffects {
     group.traverse((child) => {
       if (child instanceof THREE.Sprite) {
         child.onBeforeRender = () => undefined;
+        child.material.dispose();
+        return;
+      }
+      if (child instanceof THREE.Points && child.userData[OWNED_HOUSE_PARTICLES]) {
+        child.onBeforeRender = () => undefined;
+        child.geometry.dispose();
         child.material.dispose();
         return;
       }
@@ -269,6 +298,390 @@ export class MapEffects {
 
     if (record.type === 504) installPulse(sprite, record.scaleH, record.scaleV);
   }
+
+  private async addHouseParticleBatches(
+    column: number,
+    row: number,
+    records: readonly MapObjectRecord[],
+    target: THREE.Group,
+    isCurrent: () => boolean,
+  ): Promise<void> {
+    if (records.length === 0) return;
+    const waterRecords = records.filter((record) => record.type !== HOUSE_GATE_PARTICLE_TYPE);
+    const gateRecords = records.filter((record) => record.type === HOUSE_GATE_PARTICLE_TYPE);
+    const normalGateRecords = gateRecords.filter(() => !isDungeonTwo(column, row));
+    const dungeonGateRecords = gateRecords.filter(() => isDungeonTwo(column, row));
+    const [splashTexture, gateTexture, gateCoreTexture] = await Promise.all([
+      waterRecords.length > 0 || dungeonGateRecords.length > 0
+        ? this.#textures.load(151)
+        : Promise.resolve(null),
+      normalGateRecords.length > 0 ? this.#textures.load(0) : Promise.resolve(null),
+      gateRecords.length > 0 ? this.#textures.load(56) : Promise.resolve(null),
+    ]);
+    if (!isCurrent()) return;
+
+    if (splashTexture && waterRecords.length > 0) {
+      const particles = createHouseWaterParticles(column, row, waterRecords, this.origin);
+      if (particles.length > 0) {
+        target.add(createHouseParticlePoints(
+          particles,
+          splashTexture,
+          0xffffff,
+          0.86,
+          false,
+          "map-effect-house-water-splashes",
+        ));
+      }
+    }
+
+    for (const [profileRecords, texture, color, additive, name] of [
+      [normalGateRecords, gateTexture, 0x00aaff, true, "map-effect-607-energy"],
+      [dungeonGateRecords, splashTexture, 0xffffff, false, "map-effect-607-dungeon-energy"],
+    ] as const) {
+      if (!texture || profileRecords.length === 0) continue;
+      const { billboards } = createGateParticles(column, row, profileRecords, this.origin);
+      if (billboards.length > 0) {
+        target.add(createHouseParticlePoints(
+          billboards,
+          texture,
+          color,
+          additive ? 0.72 : 0.82,
+          additive,
+          name,
+        ));
+      }
+    }
+
+    if (gateCoreTexture && gateRecords.length > 0) {
+      const { cores } = createGateParticles(column, row, gateRecords, this.origin);
+      if (cores.length > 0) {
+        target.add(createHouseParticlePoints(
+          cores,
+          gateCoreTexture,
+          0x005588,
+          0.76,
+          true,
+          "map-effect-607-particles",
+        ));
+      }
+    }
+  }
+}
+
+function createHouseWaterParticles(
+  column: number,
+  row: number,
+  records: readonly MapObjectRecord[],
+  origin: WydPosition,
+): HouseParticle[] {
+  const particles: HouseParticle[] = [];
+  const nozzleAngles = [-1.3463968, 0, Math.PI / 2, Math.PI, Math.PI * 1.5, 5.1050882] as const;
+  for (let recordIndex = 0; recordIndex < records.length; recordIndex++) {
+    const record = records[recordIndex];
+    if (!record) continue;
+    const worldX = column * FIELD_WORLD_SIZE + record.localX;
+    const worldY = row * FIELD_WORLD_SIZE + record.localY;
+
+    if (HOUSE_FOUNTAIN_PARTICLE_TYPES.has(record.type)) {
+      let firstNozzle = 1;
+      let nozzleCount = 5;
+      let length = 1.8;
+      let angleOffset = 0;
+      if (record.type === 274) {
+        firstNozzle = 0;
+        nozzleCount = 1;
+        length = 1;
+      } else if (record.type === 195) {
+        firstNozzle = 0;
+        nozzleCount = 4;
+        length = 0.8;
+      } else if (record.type === 697) {
+        firstNozzle = 0;
+        nozzleCount = 1;
+        length = -1;
+      } else if (record.type === 699) {
+        firstNozzle = 0;
+        nozzleCount = 4;
+        length = 1;
+      } else if (record.type === 1993) {
+        firstNozzle = 0;
+        nozzleCount = 4;
+        length = 1.5;
+        angleOffset = Math.PI / 4;
+      }
+      appendWaterEmitterParticles({
+        particles,
+        column,
+        row,
+        recordIndex,
+        record,
+        origin,
+        worldX,
+        worldY,
+        nozzleAngles,
+        firstNozzle,
+        nozzleCount,
+        length,
+        angleOffset,
+        interval: 0.2,
+        count: 8,
+        baseSize: 0.12,
+        sizeUnit: 0.15,
+        jitterUnit: 0.05,
+        height: record.height + 0.3,
+      });
+      continue;
+    }
+
+    if (!HOUSE_WATERFALL_PARTICLE_TYPES.has(record.type)) continue;
+    const large = record.type === 1526 || record.type === 2005;
+    const count = large ? 4 : 2;
+    const interval = large ? 0.3 : 0.1;
+    const slots = Math.ceil(1.5 / interval);
+    const length = record.type === 2005 ? 2.5 : large ? 4 : 3.2;
+    const detail = record.type === 2005 ? 6.4 : large ? 1 : 0;
+    const baseSize = large ? 0.8 : 0.4;
+    for (let slot = 0; slot < slots; slot++) {
+      const random = Math.floor(hash01(column * 17.31 + row * 29.17 + recordIndex * 11.3 + slot * 7.9) * 5);
+      for (let nozzle = 0; nozzle < count; nozzle++) {
+        const angle = detail * 0.3 + record.angle - nozzle * (large ? 0.2 : 0.1) + Math.PI / 2;
+        const logicalX = worldX - Math.cos(angle) * length - random * (record.type === 1526 ? 0.15 : 0.05);
+        const logicalY = worldY + Math.sin(angle) * length - random * (record.type === 1526 ? 0.15 : 0.05);
+        const scene = toScene({ x: logicalX, y: logicalY }, origin);
+        const waterfallHeight = record.type === 1526
+          ? record.height + (column === 9 && row === 28 ? 0 : -1.9)
+          : record.height + 0.3;
+        particles.push({
+          x: scene.x,
+          y: waterfallHeight,
+          z: scene.z,
+          phase: slot * interval,
+          cycle: slots * interval,
+          lifetime: 1.5,
+          size: random * 0.15 + baseSize + nozzle * 0.3,
+          growth: 0.5,
+          rise: 0,
+        });
+      }
+    }
+  }
+  return particles;
+}
+
+function appendWaterEmitterParticles(options: {
+  readonly particles: HouseParticle[];
+  readonly column: number;
+  readonly row: number;
+  readonly recordIndex: number;
+  readonly record: MapObjectRecord;
+  readonly origin: WydPosition;
+  readonly worldX: number;
+  readonly worldY: number;
+  readonly nozzleAngles: readonly number[];
+  readonly firstNozzle: number;
+  readonly nozzleCount: number;
+  readonly length: number;
+  readonly angleOffset: number;
+  readonly interval: number;
+  readonly count: number;
+  readonly baseSize: number;
+  readonly sizeUnit: number;
+  readonly jitterUnit: number;
+  readonly height: number;
+}): void {
+  const cycle = options.count * options.interval;
+  for (let slot = 0; slot < options.count; slot++) {
+    const random = Math.floor(hash01(
+      options.column * 17.31
+      + options.row * 29.17
+      + options.recordIndex * 11.3
+      + slot * 7.9,
+    ) * 5);
+    for (let offset = 0; offset < options.nozzleCount; offset++) {
+      const nozzle = options.firstNozzle + offset;
+      const nozzleAngle = options.nozzleAngles[nozzle];
+      if (nozzleAngle === undefined) continue;
+      const angle = options.record.angle + options.angleOffset + nozzleAngle;
+      const logicalX = options.worldX - Math.cos(angle) * options.length - random * options.jitterUnit;
+      const logicalY = options.worldY + Math.sin(angle) * options.length - random * options.jitterUnit;
+      const scene = toScene({ x: logicalX, y: logicalY }, options.origin);
+      options.particles.push({
+        x: scene.x,
+        y: options.height,
+        z: scene.z,
+        phase: slot * options.interval,
+        cycle,
+        lifetime: 1.5,
+        size: random * options.sizeUnit + options.baseSize,
+        growth: 0.5,
+        rise: 0,
+      });
+    }
+  }
+}
+
+function createGateParticles(
+  column: number,
+  row: number,
+  records: readonly MapObjectRecord[],
+  origin: WydPosition,
+): { readonly billboards: HouseParticle[]; readonly cores: HouseParticle[] } {
+  const billboards: HouseParticle[] = [];
+  const cores: HouseParticle[] = [];
+  const interval = 0.2;
+  const slots = 10;
+  const cycle = slots * interval;
+  for (let recordIndex = 0; recordIndex < records.length; recordIndex++) {
+    const record = records[recordIndex];
+    if (!record) continue;
+    const worldX = column * FIELD_WORLD_SIZE + record.localX;
+    const worldY = row * FIELD_WORLD_SIZE + record.localY;
+    for (let slot = 0; slot < slots; slot++) {
+      for (let copy = 0; copy < 5; copy++) {
+        const seed = hash01(column * 71.3 + row * 31.9 + recordIndex * 17.1 + slot * 5.7 + copy * 2.3);
+        const random = Math.floor(seed * 10) - 5;
+        const scene = toScene({
+          x: worldX + random * 0.05,
+          y: worldY + random * 0.05,
+        }, origin);
+        billboards.push({
+          x: scene.x,
+          y: record.height + 1,
+          z: scene.z,
+          phase: slot * interval,
+          cycle,
+          lifetime: random * 0.1 + 1.5,
+          size: Math.max(0.2, Math.abs(random * 0.6 + 1.5)),
+          growth: 0.1,
+          rise: 1.5,
+        });
+        const coreScene = toScene({ x: worldX, y: worldY }, origin);
+        cores.push({
+          x: coreScene.x,
+          y: record.height + 1,
+          z: coreScene.z,
+          phase: slot * interval,
+          cycle,
+          lifetime: 1,
+          size: 0.42,
+          growth: 0.18,
+          rise: 0.6,
+        });
+      }
+    }
+  }
+  return { billboards, cores };
+}
+
+function createHouseParticlePoints(
+  particles: readonly HouseParticle[],
+  texture: THREE.Texture,
+  color: number,
+  opacity: number,
+  additive: boolean,
+  name: string,
+): THREE.Points<THREE.BufferGeometry, THREE.ShaderMaterial> {
+  const count = particles.length;
+  const positions = new Float32Array(count * 3);
+  const phases = new Float32Array(count);
+  const cycles = new Float32Array(count);
+  const lifetimes = new Float32Array(count);
+  const sizes = new Float32Array(count);
+  const growth = new Float32Array(count);
+  const rise = new Float32Array(count);
+  for (let index = 0; index < count; index++) {
+    const particle = particles[index];
+    if (!particle) continue;
+    positions[index * 3] = particle.x;
+    positions[index * 3 + 1] = particle.y;
+    positions[index * 3 + 2] = particle.z;
+    phases[index] = particle.phase;
+    cycles[index] = particle.cycle;
+    lifetimes[index] = particle.lifetime;
+    sizes[index] = particle.size;
+    growth[index] = particle.growth;
+    rise[index] = particle.rise;
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute("particlePhase", new THREE.BufferAttribute(phases, 1));
+  geometry.setAttribute("particleCycle", new THREE.BufferAttribute(cycles, 1));
+  geometry.setAttribute("particleLifetime", new THREE.BufferAttribute(lifetimes, 1));
+  geometry.setAttribute("particleSize", new THREE.BufferAttribute(sizes, 1));
+  geometry.setAttribute("particleGrowth", new THREE.BufferAttribute(growth, 1));
+  geometry.setAttribute("particleRise", new THREE.BufferAttribute(rise, 1));
+  geometry.computeBoundingSphere();
+  if (geometry.boundingSphere) geometry.boundingSphere.radius += 5;
+  const time = { value: 0 };
+  const material = new THREE.ShaderMaterial({
+    name: `WYD ${name}`,
+    uniforms: {
+      time,
+      spriteMap: { value: texture },
+      tint: { value: new THREE.Color(color) },
+      opacity: { value: opacity },
+    },
+    vertexShader: /* glsl */ `
+      uniform float time;
+      attribute float particlePhase;
+      attribute float particleCycle;
+      attribute float particleLifetime;
+      attribute float particleSize;
+      attribute float particleGrowth;
+      attribute float particleRise;
+      varying float vFade;
+      void main() {
+        float age = mod(time + particlePhase, particleCycle);
+        float progress = clamp(age / particleLifetime, 0.0, 1.0);
+        float active = 1.0 - step(particleLifetime, age);
+        vec3 animated = position;
+        animated.y += particleRise * age;
+        vec4 mvPosition = modelViewMatrix * vec4(animated, 1.0);
+        float size = max(0.05, particleSize + particleGrowth * age);
+        gl_PointSize = clamp((118.0 * size) / max(1.0, -mvPosition.z), 1.0, 42.0);
+        gl_Position = projectionMatrix * mvPosition;
+        vFade = active * sin(progress * 3.14159265);
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      uniform sampler2D spriteMap;
+      uniform vec3 tint;
+      uniform float opacity;
+      varying float vFade;
+      void main() {
+        vec2 uv = vec2(0.02 + gl_PointCoord.x * 0.96, 0.98 - gl_PointCoord.y * 0.96);
+        vec4 sampleColor = texture2D(spriteMap, uv);
+        float sourceAlpha = max(sampleColor.a, dot(sampleColor.rgb, vec3(0.333333)));
+        float alpha = sourceAlpha * vFade * opacity;
+        if (alpha < 0.015) discard;
+        gl_FragColor = vec4(tint * max(sampleColor.rgb, vec3(0.35)), alpha);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }
+    `,
+    transparent: true,
+    depthTest: true,
+    depthWrite: false,
+    blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
+    fog: false,
+    toneMapped: false,
+  });
+  const points = new THREE.Points(geometry, material);
+  points.name = name;
+  points.renderOrder = 5;
+  points.userData[OWNED_HOUSE_PARTICLES] = true;
+  points.onBeforeRender = () => {
+    time.value = performance.now() / 1_000;
+  };
+  return points;
+}
+
+function isDungeonTwo(column: number, row: number): boolean {
+  return row > 25 && column > 8 && column < 16;
+}
+
+function hash01(value: number): number {
+  return Math.abs(Math.sin(value * 12.9898 + 78.233) * 43_758.5453) % 1;
 }
 
 function parseFieldKey(key: string): [number, number] {

@@ -4,7 +4,15 @@ import { FIELD_WORLD_SIZE, toScene, type WydPosition } from "../../world/coordin
 import { fieldKey } from "../../world/regions";
 import type { ModelLibrary } from "../objects/ModelLibrary";
 
-const EFFECT_MESH_TYPES = new Set([506, 532, 1980]);
+const EFFECT_PROXY_MODELS = new Map<number, number>([
+  [1528, 1555],
+  [1540, 1556],
+  [1541, 1557],
+  [1542, 1558],
+  [1543, 1559],
+  [1597, 1598],
+]);
+const EFFECT_MESH_TYPES = new Set([506, 532, 1980, ...EFFECT_PROXY_MODELS.keys()]);
 const EFFECT_CYCLE_MS = 5_000;
 
 interface EffectMeshDefinition {
@@ -282,6 +290,12 @@ function animateMaterials(materials: readonly AnimatedMaterial[]): void {
 }
 
 function effectMeshDefinitions(record: MapObjectRecord): readonly EffectMeshDefinition[] {
+  const proxyModel = EFFECT_PROXY_MODELS.get(record.type);
+  if (proxyModel !== undefined) {
+    // The D3D branch selects alpha from the texture, not vertex diffuse.
+    // Preserve RGB 0x223333 while keeping Three's material contribution live.
+    return [effectMeshDefinition(proxyModel, 0xff223333)];
+  }
   if (record.type === 1980) {
     return [
       effectMeshDefinition(1980, 0xaaaaaaaa),

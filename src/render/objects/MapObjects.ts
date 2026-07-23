@@ -11,6 +11,13 @@ import { ClassicFloatObjects } from "../water/ClassicFloatObjects";
 
 const nonStaticTypes = new Set([2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 121, 343, 344, 1980]);
 const WATERFALL_OBJECT_TYPES = new Set([292, 490, 1526, 1665, 2005]);
+const BIKE_OBJECT_TYPES = new Set([1549, 1550, 1551]);
+const HOUSE_ROOF_TYPES = new Map<number, number>([
+  [251, 252],
+  [252, 253],
+  [253, 254],
+  [254, 255],
+]);
 const HOUSE_STATIC_COMPANIONS = new Map<number, number>([
   [614, 615],
   [1750, 1770],
@@ -23,6 +30,40 @@ export interface ClassicMapAmbientSoundSource {
   readonly position: WydPosition;
   readonly radius: number;
   readonly volume: number;
+}
+
+interface DynamicMaterial {
+  readonly material: THREE.Material;
+  readonly opacity: number;
+  readonly transparent: boolean;
+  readonly depthWrite: boolean;
+  readonly blending: THREE.Blending;
+  readonly blendSrc: THREE.BlendingSrcFactor;
+  readonly blendDst: THREE.BlendingDstFactor;
+  readonly blendEquation: THREE.BlendingEquation;
+  readonly blendSrcAlpha: THREE.BlendingSrcFactor | null;
+  readonly blendDstAlpha: THREE.BlendingDstFactor | null;
+  readonly blendEquationAlpha: THREE.BlendingEquation | null;
+}
+
+interface HouseRoof {
+  readonly object: THREE.Group;
+  readonly position: WydPosition;
+  readonly materials: readonly DynamicMaterial[];
+  translucent: boolean;
+}
+
+interface ProximityBlendObject {
+  readonly position: WydPosition;
+  readonly materials: readonly DynamicMaterial[];
+  blended: boolean;
+}
+
+interface BikeObject {
+  readonly object: THREE.Group;
+  readonly startX: number;
+  readonly startZ: number;
+  readonly angle: number;
 }
 
 function isStaticMeshType(type: number): boolean {
@@ -42,6 +83,9 @@ export class MapObjects {
   readonly #floats: ClassicFloatObjects;
   readonly #fieldGroups = new Map<string, THREE.Group>();
   readonly #fieldTypes = new Map<string, ReadonlySet<number>>();
+  readonly #houseRoofs = new Map<string, HouseRoof[]>();
+  readonly #proximityBlendObjects = new Map<string, ProximityBlendObject[]>();
+  readonly #bikeObjects = new Map<string, BikeObject[]>();
   readonly #ambientSources = new Map<string, readonly ClassicMapAmbientSoundSource[]>();
   readonly #generations = new Map<string, number>();
 
@@ -50,6 +94,7 @@ export class MapObjects {
     private readonly origin: WydPosition,
     heightAt: (position: WydPosition) => number,
     colorAt: (position: WydPosition) => THREE.Color,
+    private readonly attributeAt: (position: WydPosition) => number | null,
     models?: ModelLibrary,
   ) {
     this.#models = models ?? new ModelLibrary(assets);
@@ -77,8 +122,45 @@ export class MapObjects {
     this.#floats.setEffectsEnabled(enabled);
   }
 
-  update(deltaSeconds: number): void {
+  update(deltaSeconds: number, position: WydPosition): void {
     this.#floats.update(deltaSeconds);
+    const insideHouse = ((this.attributeAt(position) ?? 0) & 0x08) !== 0;
+    for (const roofs of this.#houseRoofs.values()) {
+      for (const roof of roofs) {
+        roof.object.visible = !insideHouse;
+        if (insideHouse) continue;
+        const translucent = Math.abs(position.x - roof.position.x) < 6
+          && Math.abs(position.y - roof.position.y) < 6;
+        if (roof.translucent === translucent) continue;
+        roof.translucent = translucent;
+        for (const material of roof.materials) {
+          setClassicBlend(material, translucent ? "roof" : "normal");
+        }
+      }
+    }
+    for (const objects of this.#proximityBlendObjects.values()) {
+      for (const object of objects) {
+        const blended = Math.abs(position.x - object.position.x) < 6
+          && Math.abs(position.y - object.position.y) < 6;
+        if (object.blended === blended) continue;
+        object.blended = blended;
+        for (const material of object.materials) {
+          setClassicBlend(material, blended ? "alpha" : "normal");
+        }
+      }
+    }
+    const bikeProgress = Math.sin(((performance.now() % 20_000) / 10_000) * Math.PI) * 3;
+    for (const bikes of this.#bikeObjects.values()) {
+      for (const bike of bikes) {
+        const movesOnLogicalY = (
+          Math.abs(bike.angle) < 0.01
+          || (bike.angle > 3.13 && bike.angle < 3.15)
+          || (bike.angle > 6.27 && bike.angle < 6.29)
+        );
+        bike.object.position.x = bike.startX + (movesOnLogicalY ? 0 : bikeProgress);
+        bike.object.position.z = bike.startZ - (movesOnLogicalY ? bikeProgress : 0);
+      }
+    }
   }
 
   ambientSoundSources(): readonly ClassicMapAmbientSoundSource[] {
@@ -93,6 +175,12 @@ export class MapObjects {
     const group = new THREE.Group();
     group.name = `objects-${key}`;
     this.#fieldGroups.set(key, group);
+    const houseRoofs: HouseRoof[] = [];
+    this.#houseRoofs.set(key, houseRoofs);
+    const proximityBlendObjects: ProximityBlendObject[] = [];
+    this.#proximityBlendObjects.set(key, proximityBlendObjects);
+    const bikeObjects: BikeObject[] = [];
+    this.#bikeObjects.set(key, bikeObjects);
     this.#ambientSources.set(
       key,
       records.flatMap((record): readonly ClassicMapAmbientSoundSource[] => {
@@ -132,6 +220,9 @@ export class MapObjects {
       typeSet.add(608);
       typeSet.add(609);
     }
+    for (const [ownerType, roofType] of HOUSE_ROOF_TYPES) {
+      if (typeSet.has(ownerType)) typeSet.add(roofType);
+    }
     for (const [ownerType, companionType] of HOUSE_STATIC_COMPANIONS) {
       if (typeSet.has(ownerType)) typeSet.add(companionType);
     }
@@ -160,7 +251,38 @@ export class MapObjects {
       instance.rotation.y = -record.angle;
       instance.scale.set(record.scaleH || 1, record.scaleV || 1, record.scaleH || 1);
       instance.name = `object-${record.type}`;
+      if (record.type === 1855) {
+        proximityBlendObjects.push({
+          position: {
+            x: column * FIELD_WORLD_SIZE + record.localX,
+            y: row * FIELD_WORLD_SIZE + record.localY,
+          },
+          materials: cloneOwnedMaterials(instance),
+          blended: false,
+        });
+      }
+      if (BIKE_OBJECT_TYPES.has(record.type)) {
+        bikeObjects.push({
+          object: instance,
+          startX: scene.x,
+          startZ: scene.z,
+          angle: record.angle,
+        });
+      }
       group.add(instance);
+      const roofType = HOUSE_ROOF_TYPES.get(record.type);
+      if (roofType !== undefined) {
+        const roofPrototype = prototypes.get(roofType);
+        if (roofPrototype) {
+          const worldPosition = {
+            x: column * FIELD_WORLD_SIZE + record.localX,
+            y: row * FIELD_WORLD_SIZE + record.localY,
+          };
+          const roof = createHouseRoof(roofPrototype, roofType, record, scene, worldPosition);
+          houseRoofs.push(roof);
+          group.add(roof.object);
+        }
+      }
       if (record.type === 474) {
         const bladePrototype = prototypes.get(475);
         if (bladePrototype) group.add(createWindmillBlade(bladePrototype, record, scene));
@@ -195,6 +317,21 @@ export class MapObjects {
     this.#generations.set(key, (this.#generations.get(key) ?? 0) + 1);
     this.#ambientSources.delete(key);
     const group = this.#fieldGroups.get(key);
+    const roofs = this.#houseRoofs.get(key);
+    if (roofs) {
+      this.#houseRoofs.delete(key);
+      for (const roof of roofs) {
+        for (const state of roof.materials) state.material.dispose();
+      }
+    }
+    const proximityObjects = this.#proximityBlendObjects.get(key);
+    if (proximityObjects) {
+      this.#proximityBlendObjects.delete(key);
+      for (const object of proximityObjects) {
+        for (const state of object.materials) state.material.dispose();
+      }
+    }
+    this.#bikeObjects.delete(key);
     if (group) {
       this.#fieldGroups.delete(key);
       this.object.remove(group);
@@ -221,6 +358,9 @@ export class MapObjects {
     }
     this.#generations.clear();
     this.#fieldTypes.clear();
+    this.#houseRoofs.clear();
+    this.#proximityBlendObjects.clear();
+    this.#bikeObjects.clear();
     this.#ambientSources.clear();
     this.#effects.dispose();
     this.#environment.dispose();
@@ -322,4 +462,83 @@ function createHouseCompanion(
   companion.scale.set(record.scaleH || 1, record.scaleV || 1, record.scaleH || 1);
   companion.name = `object-${record.type}-house-companion-${companionType}`;
   return companion;
+}
+
+function createHouseRoof(
+  prototype: THREE.Group,
+  roofType: number,
+  record: MapObjectRecord,
+  scene: { readonly x: number; readonly z: number },
+  position: WydPosition,
+): HouseRoof {
+  const object = prototype.clone(true);
+  object.position.set(scene.x, record.height, scene.z);
+  object.rotation.y = -record.angle;
+  object.scale.set(record.scaleH || 1, record.scaleV || 1, record.scaleH || 1);
+  object.name = `object-${record.type}-house-roof-${roofType}`;
+  const materials = cloneOwnedMaterials(object);
+  return {
+    object,
+    position,
+    materials,
+    translucent: false,
+  };
+}
+
+function cloneOwnedMaterials(object: THREE.Object3D): DynamicMaterial[] {
+  const materials: DynamicMaterial[] = [];
+  object.traverse((child) => {
+    if (!(child instanceof THREE.Mesh)) return;
+    const sourceMaterials = Array.isArray(child.material) ? child.material : [child.material];
+    const clonedMaterials = sourceMaterials.map((source) => {
+      const material = source.clone();
+      materials.push({
+        material,
+        opacity: material.opacity,
+        transparent: material.transparent,
+        depthWrite: material.depthWrite,
+        blending: material.blending,
+        blendSrc: material.blendSrc,
+        blendDst: material.blendDst,
+        blendEquation: material.blendEquation,
+        blendSrcAlpha: material.blendSrcAlpha,
+        blendDstAlpha: material.blendDstAlpha,
+        blendEquationAlpha: material.blendEquationAlpha,
+      });
+      return material;
+    });
+    child.material = Array.isArray(child.material) ? clonedMaterials : clonedMaterials[0]!;
+  });
+  return materials;
+}
+
+function setClassicBlend(
+  state: DynamicMaterial,
+  mode: "normal" | "roof" | "alpha",
+): void {
+  const material = state.material;
+  material.opacity = state.opacity;
+  material.depthWrite = state.depthWrite;
+  if (mode === "normal") {
+    material.transparent = state.transparent;
+    material.blending = state.blending;
+    material.blendSrc = state.blendSrc;
+    material.blendDst = state.blendDst;
+    material.blendEquation = state.blendEquation;
+    material.blendSrcAlpha = state.blendSrcAlpha;
+    material.blendDstAlpha = state.blendDstAlpha;
+    material.blendEquationAlpha = state.blendEquationAlpha;
+  } else {
+    // D3D9 state inherited by TMHouse is SRCBLEND=ONE. Type 0 changes only
+    // DESTBLEND to DESTCOLOR; type 11 keeps INVSRCALPHA.
+    material.transparent = true;
+    material.blending = THREE.CustomBlending;
+    material.blendSrc = THREE.OneFactor;
+    material.blendDst = mode === "roof" ? THREE.DstColorFactor : THREE.OneMinusSrcAlphaFactor;
+    material.blendEquation = THREE.AddEquation;
+    material.blendSrcAlpha = null;
+    material.blendDstAlpha = null;
+    material.blendEquationAlpha = null;
+  }
+  material.needsUpdate = true;
 }
