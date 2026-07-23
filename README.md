@@ -22,10 +22,16 @@ Documentação de arquitetura:
 - Terreno, objetos, colisão, pontes, água, efeitos ambientais e minimapa.
 - TransKnight, Foema, BeastMaster e Huntress com visuais, armas e skills por classe.
 - Huntress com Mulher Kalintz, Skytalos Ancient +15 animado e Griupan.
-- Oito evocações naturais do BeastMaster; cada uso materializa um grupo de 10.
+- Extração e Alquimia da Huntress com seleção de item, confirmação e painel
+  `Mixlist.bin`; resultados econômicos continuam reservados ao servidor.
+- Toxina de Serpente mantém a exigência clássica de garras `WTYPE 41` e
+  rejeita corretamente o Skytalos `WTYPE 101` antes de consumir mana.
+- Oito evocações naturais do BeastMaster (10 por uso) e as cinco
+  transformações clássicas com rig e animações próprios.
 - 14 montarias clássicas nível 120, incluindo Unicórnio e Grifo.
 - NPCs e monstros com animação, autonomia, separação, combate, morte e respawn.
 - Drops materializados no mundo, coleta por proximidade e nomes globais opcionais.
+- Bolsa e cargo respeitam o `EF_GRID` clássico para itens de `1×1` até `2×4`.
 - Movimento por WASD/clique, câmera clássica, zoom amplo e modo G.
 - C.C clássico com modos físico, mágico e suporte, arco, dano/crítico, skills e
   buffs da Huntress.

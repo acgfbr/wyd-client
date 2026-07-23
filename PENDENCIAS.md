@@ -108,7 +108,7 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
   `ch01/ch02`, `bExpand`, armaduras da seleção clássica, armas Ancient, bancos
   a pé/montado e attachments de mão já foram derivados do cliente. Cada classe
   possui traje base/armadura no seletor e um primeiro loadout auditado. A
-  Huntress possui nove atalhos visíveis e quatorze skills promovidas; Ilusão
+  Huntress possui nove atalhos visíveis e dezessete skills promovidas; Ilusão
   `#73`, Meditação `#77`, Escudo Dourado `#85`, Troca de Espírito `#87` e
   Evasão Aprimorada `#89` continuam utilizáveis pelo catálogo `K`.
 - BeastMaster possui as oito evocações de Natureza auditadas (`#56–#63`):
@@ -280,10 +280,21 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
    posterior que não pertença à coleta. Como o TTL real depende do servidor, o
    mock não inventa um tempo clássico: mantém um teto explícito de 128 drops
    residentes e descarta o mais antigo ao excedê-lo, além da janela espacial de
-   18 células. Ainda faltam ownership,
-   decaimento/ressincronização de servidor, footprint `EF_GRID` multicélula,
-   moedas no chão e drop tables
-   autoritativas. NPCs amistosos mantêm o passeio
+   18 células. O `EF_GRID 33` da instância agora usa a tabela exata
+   `g_pItemGridXY` (`1×1`, `1×2`, `1×3`, `1×4`, `2×1`, `2×2`, `2×3`,
+   `2×4`) em bolsa e cargo. Add, coleta, merge, troca, equipar/desequipar e
+   transferência validam todas as células sem atravessar a página; clicar ou
+   arrastar por uma célula secundária resolve o mesmo item-âncora, e o tooltip
+   mostra o footprint quando ele não é `1×1`. O corpus local não possui
+   `EF_GRID` nos itens estáticos/Carries atuais; a informação chega pelo
+   `STRUCT_ITEM`, por isso nenhum tamanho foi inventado para o Skytalos ou
+   drops offline. O renderer também reconhece `EF_ITEMTYPE 38 = 2`,
+   reconstrói o valor monetário clássico como dois bytes sem sinal
+   (`EF36 << 8 | EF37`) e usa a string original `Messages[65]`,
+   `Bronze %d`, no nome exibido no chão. Criação, confirmação da coleta e
+   alteração de saldo não foram falsificadas: continuam aguardando o protocolo
+   autoritativo. Ainda faltam ownership, decaimento/ressincronização de
+   servidor e drop tables autoritativas. NPCs amistosos mantêm o passeio
    curto já implementado, e o Griupan segue homologado como familiar padrão.
 10. HUD, áudio, efeitos e revisão manual dos mapas — **parcial**. A HUD recebeu
     o primeiro passe de escala/composição baseado na captura 7.54 fornecida:
@@ -579,7 +590,20 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
    reprodutível. Os masters Anti Magia `#224`, Chama Resistente `#225` e Last
    Resistance `#235` também estão na barra/catálogo com os campos binários e
    duração offline de `180 s`; como o dispatcher não processa índices master,
-   não receberam partículas genéricas. Skills ainda não citadas continuam abertas e não devem cair
+   não receberam partículas genéricas. As transformações `#64` Lobisomem,
+   `#66` Homem Urso, `#68` Astaroth, `#70` Titã e `#71` Éden agora substituem
+   o rig inteiro pelas famílias clássicas `BL01/LB01/DD01/SP02/MM01`, com
+   BON/MSH/ANI/DDS próprios, clips recuperados de `ValidIndex`, ritmos do
+   `AniSound4`, troca mutuamente exclusiva e lifecycle ligado ao buff de
+   `180 s`. A forma bloqueia montaria e o cast respeita a rejeição original
+   quando Equip[14] contém traje `4150..4199`; Titã conserva a escala `2.0`
+   definida pelo cliente. Com isso, BeastMaster possui 24 skills no runtime e
+   restam somente `#226` (debuff/fórmula autoritativa) e `#229` (Invocação
+   Final). A investigação de `#229` confirmou `InstanceType=11/Value=9`, mas o
+   cliente apenas envia o cast e recebe o summon pronto como `MSG_CreateMob`;
+   não há nele associação `9 → LOOK/NPC`, duração ou status. Essa entidade é
+   uma tabela do servidor e permanece bloqueada, sem escolher um monstro por
+   aparência. Skills ainda não citadas continuam abertas e não devem cair
    silenciosamente em um efeito genérico ao serem promovidas.
    O lote seguinte da Huntress promoveu Meditação `#77` e Escudo Dourado
    `#85`. Meditação porta os cinco pares roxo/branco da textura `101`, com
@@ -603,8 +627,25 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
    Evasão Aprimorada `#89`
    cria as cinco cópias cinzas reais da pose corrente, iniciadas a cada
    `100 ms`, com vidas de `400–600 ms`; montada, duplica somente o animal.
-   A matriz agora registra quatorze skills Huntress no runtime e 22 registros
-   ainda não promovidos.
+   Extração `#83` e Alquimia `#84` também deixaram de ser tratadas como ataques.
+   A primeira arma a seleção sobre uma célula ocupada das quatro bolsas, usa a
+   confirmação no `MessageBox2` e não altera o item sem a resposta do servidor.
+   A segunda abre diretamente o atlas `NewItemMix`, junto do inventário, e
+   apresenta as dez receitas `head=0/x=0/y=0`, resultados, requisitos e custos
+   recuperados dos 100 `STRUCT_RESULT_ITEMLIST` e 100
+   `STRUCT_NEED_ITEMLIST` de `Mixlist.bin`. Combinar permanece bloqueado em
+   modo somente leitura porque consumo, chance e resultado são autoritativos.
+   Toxina de Serpente `#92` também está no runtime com a trava exata de
+   `TMFieldScene::SkillUse`: exige garras `EF_WTYPE 41`, rejeita o Skytalos
+   `WTYPE 101` antes de mana/cooldown e não desenha aura inventada, pois o
+   `Affect 36` é somente estado/ícone em `TMHuman::CheckAffect`.
+   A matriz agora registra dezessete skills Huntress no runtime e 19 registros
+   ainda não promovidos, dos quais 17 são passivos e apenas `#241/#246`
+   continuam sendo casts dependentes de regra autoritativa.
+   Os oito casts restantes das quatro classes possuem bloqueio canônico em
+   `ClassSkillBlockers.ts`; o catálogo `K` os identifica como `SERVIDOR` e o
+   tooltip explica a dependência exata. A auditoria exporta os mesmos motivos
+   em Markdown/JSON, evitando que a UI e a documentação divirjam.
    `#76/#81/#86/#101` estão homologadas; `#88` está implementada e aguarda a
    inspeção visual no navegador. O épico só fecha depois da matriz completa das
    quatro classes. As oito evocações reais do BeastMaster já têm

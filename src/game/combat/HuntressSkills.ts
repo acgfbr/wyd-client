@@ -1,6 +1,6 @@
 import type { PlayerState } from "../state/PlayerState";
 
-export type HuntressSkillKind = "direct" | "volley" | "cone" | "shadow" | "buff" | "movement";
+export type HuntressSkillKind = "direct" | "volley" | "cone" | "shadow" | "buff" | "movement" | "utility";
 
 export interface HuntressSkill {
   readonly slot: number;
@@ -24,6 +24,8 @@ export interface HuntressSkill {
   readonly damageCoefficient: number;
   /** Geometry used by the original target selection, in WYD tiles. */
   readonly radius: number;
+  /** EF_WTYPE required by TMFieldScene::SkillUse before mana is spent. */
+  readonly requiredWeaponType?: number;
   /** Presentation fallback while the skill-specific classic effect is being ported. */
   readonly color: number;
 }
@@ -31,8 +33,9 @@ export interface HuntressSkill {
 /**
  * Bow-compatible Huntress loadout. Binary fields below are copied from the
  * decoded retail SkillData.bin; only damageCoefficient is an offline overlay.
- * Toxina de Serpente (#92) is intentionally absent because the client accepts
- * it only with WTYPE 41 claws, while this character equips a WTYPE 101 bow.
+ * Toxina de Serpente (#92) is exposed in the catalog with the exact WTYPE 41
+ * gate from TMFieldScene::SkillUse. The default WTYPE 101 Skytalos therefore
+ * rejects it before mana/cooldown, exactly like the retail client.
  */
 export const HUNTRESS_SKILLS: readonly HuntressSkill[] = [
   { slot: 1, classicIndex: 72, name: "Ataque Fatal", shortName: "Fatal", mana: 15, cooldownSeconds: 15, range: 2, kind: "direct", target: "enemy", maxTargets: 1, affectType: 0, affectValue: 0, affectTimeSeconds: 0, runtimeDurationSeconds: 0, damageCoefficient: 1.3, radius: 0, color: 0xffaa55 },
@@ -49,6 +52,17 @@ export const HUNTRESS_SKILLS: readonly HuntressSkill[] = [
   { slot: 12, classicIndex: 89, name: "Evasão Aprimorada", shortName: "Evasão", mana: 24, cooldownSeconds: 6, range: 0, kind: "buff", target: "self", maxTargets: 1, affectType: 26, affectValue: 1, affectTimeSeconds: 12, runtimeDurationSeconds: 180, damageCoefficient: 0, radius: 0, color: 0x4d4d4d },
   { slot: 13, classicIndex: 87, name: "Troca de Espírito", shortName: "Espírito", mana: 90, cooldownSeconds: 10, range: 0, kind: "buff", target: "self", maxTargets: 1, affectType: 38, affectValue: 0, affectTimeSeconds: 14, runtimeDurationSeconds: 180, damageCoefficient: 0, radius: 0, color: 0xff7777 },
   { slot: 14, classicIndex: 73, name: "Ilusão", shortName: "Ilusão", mana: 45, cooldownSeconds: 3, range: 0, kind: "movement", target: "ground", maxTargets: 1, affectType: 0, affectValue: 0, affectTimeSeconds: 0, runtimeDurationSeconds: 0, damageCoefficient: 0, radius: 0, color: 0x0055ff },
+  // SkillUse returns immediately for #83. SGrid arms the selected skill over
+  // an inventory item, opens message 84 and only the confirmation emits the
+  // attack plus extraction request packets.
+  { slot: 15, classicIndex: 83, name: "Extração", shortName: "Extração", mana: 30, cooldownSeconds: 1, range: 0, kind: "utility", target: "self", maxTargets: 1, affectType: 0, affectValue: 0, affectTimeSeconds: 0, runtimeDurationSeconds: 0, damageCoefficient: 0, radius: 0, color: 0x75c99b },
+  // TMFieldScene::SkillUse handles #84 before mana/cooldown/animation: it
+  // toggles CItemMix with ResultItemListSet(0,0,0). Combining remains a
+  // separate server-authoritative operation.
+  { slot: 16, classicIndex: 84, name: "Alquimia", shortName: "Alquimia", mana: 30, cooldownSeconds: 1, range: 0, kind: "utility", target: "self", maxTargets: 1, affectType: 0, affectValue: 0, affectTimeSeconds: 0, runtimeDurationSeconds: 0, damageCoefficient: 0, radius: 0, color: 0xb89655 },
+  // Affect 36 has no persistent world renderer in CheckAffect; it is retained
+  // as a buff/icon. SkillUse accepts it only while Equip[6] has EF_WTYPE 41.
+  { slot: 17, classicIndex: 92, name: "Toxina de Serpente", shortName: "Toxina", mana: 50, cooldownSeconds: 6, range: 0, kind: "buff", target: "self", maxTargets: 1, affectType: 36, affectValue: 1, affectTimeSeconds: 12, runtimeDurationSeconds: 180, damageCoefficient: 0, radius: 0, requiredWeaponType: 41, color: 0x55aa66 },
 ] as const;
 
 export interface ActiveHuntressBuff {

@@ -19,6 +19,7 @@ const { CLASSIC_PLAYER_CLASSES } = await import("../src/game/player/PlayerClasse
 const { HUNTRESS_LOOKS } = await import("../src/game/player/HuntressLooks.ts");
 const { MOUNT_LOOKS } = await import("../src/game/player/MountLooks.ts");
 const { CLASS_SKILL_LOADOUTS } = await import("../src/game/combat/ClassSkills.ts");
+const { CLASSIC_SKILL_RUNTIME_BLOCKERS } = await import("../src/game/combat/ClassSkillBlockers.ts");
 const { BEAST_MASTER_SUMMONS } = await import("../src/game/combat/BeastMasterSummons.ts");
 
 const areas = [
@@ -91,6 +92,13 @@ const skillsByClass = skillCatalog.classes.map((classEntry) => {
   const castablePendingIndices = catalogOnly
     .filter((skill) => skill.passive !== 1)
     .map((skill) => skill.index);
+  const castablePending = catalogOnly
+    .filter((skill) => skill.passive !== 1)
+    .map((skill) => ({
+      index: skill.index,
+      name: skill.name,
+      blocker: CLASSIC_SKILL_RUNTIME_BLOCKERS[skill.index] ?? null,
+    }));
   return {
     key: classEntry.key,
     name: classEntry.name,
@@ -101,6 +109,7 @@ const skillsByClass = skillCatalog.classes.map((classEntry) => {
     runtimeIndices: [...runtimeIndices].sort((a, b) => a - b),
     passiveCatalogIndices,
     castablePendingIndices,
+    castablePending,
     // Compatibility key for consumers of the first report version. It now
     // tracks actionable casts/buffs instead of passive catalog records.
     pendingIndices: castablePendingIndices,
@@ -211,6 +220,11 @@ function renderMarkdown(report) {
   const skillRows = report.skills.classes.map((entry) =>
     `| ${entry.name} | ${entry.imported} (${entry.regular} normais + ${entry.master} master) | ${entry.runtime} | ${entry.runtimeIndices.join(", ") || "-"} | ${entry.passiveCatalogIndices.length} | ${entry.castablePendingIndices.length} |`,
   ).join("\n");
+  const skillGapRows = report.skills.classes
+    .flatMap((entry) => entry.castablePending.map((skill) =>
+      `- ${entry.name} \`#${skill.index}\` ${skill.name}: ${skill.blocker ?? "bloqueio ainda nao classificado"}.`,
+    ))
+    .join("\n");
 
   const classRows = report.player.classes.map((entry) =>
     `| ${entry.name} | ${entry.looks} |`,
@@ -293,6 +307,10 @@ visual; a homologacao do renderer continua manual e rastreada em
 | Classe | Importadas | Runtime | Indices ativos | Passivas fora da barra | Casts/buffs pendentes |
 | --- | ---: | ---: | --- | ---: | ---: |
 ${skillRows}
+
+### Casts/buffs ainda fora do runtime
+
+${skillGapRows || "- Nenhum cast/buff pendente."}
 
 ## Lacunas objetivas
 

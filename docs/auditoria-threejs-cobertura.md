@@ -102,12 +102,12 @@ nos demais Fields fazem parte do proprio manifesto, nao sao links quebrados.
 | Terreno/colisão | TRN, AttributeMap, object.bin, pontes/altura, pathfinding | `ClassicWorld`, `ClassicNavigation` | Casos isolados de máscara/altura que aparecerem em teste |
 | Objetos/props | DAT/WYS/MSH, água, folhas, fogueiras, fontes, floats | `MapObjects`, `MapWater`, `ClassicEnvironmentObjects` | Homologar pontos de grama e objetos raros |
 | Personagem | Quatro classes jogáveis, rigs, traje base, arma, montaria/familiar | `PlayerClasses`, `ClassicPlayerAvatar` | Cobertura completa de equipamentos visuais por classe |
-| Huntress | Mulher Kalintz, Skytalos Ancient +15, Griupan, 14 skills promovidas | `HuntressLooks`, `ClassicHuntressSkillEffects`, `ClassicLevelUpEffects` | 17 passivas e 5 casts ainda fora do runtime |
+| Huntress | Mulher Kalintz, Skytalos Ancient +15, Griupan, 17 skills promovidas | `HuntressLooks`, `ClassicHuntressSkillEffects`, `ClassicAlchemyCatalog`, `ClassicLevelUpEffects` | 17 passivas e 2 casts ainda fora do runtime |
 | Montarias | 14 montarias nível 120, Unicórnio padrão, sela/bones | `MountLooks`, `ClassicMount` | Homologação visual de todas as variações |
 | NPCs/monstros | Spawn por Field, animação, hover/seleção, IA offline, drops | `MonsterCatalog`, `ClassicSpawnManager` | Cobertura de todos skins/itens/ações especiais |
-| BeastMaster summons | 8 evocações, 10 por cast, IA offline | `BeastMasterSummons`, `ClassicBeastMasterSummon` | Trocar IA local por packets autoritativos no futuro |
-| Inventário/equipamento | UI 7.54, bolsas, equip/unequip, cargo, preview 3D | `GameHud`, `ClassicInventoryPreview` | Compra/venda/economia somente com servidor |
-| Itens/comércio | 6.500 ItemList, ItemPrice, Carry de NPC, tooltips clássicos | `ClassicCommerceCatalog`, `ClassicItemTooltip` | Footprint multicélula EF_GRID e ownership de drops |
+| BeastMaster | 8 evocações (10 por cast), IA offline e 5 transformações de rig | `BeastMasterSummons`, `ClassicBeastMasterSummon`, `BeastMasterTransformations` | Invocação Final e fórmulas autoritativas ainda dependem do servidor |
+| Inventário/equipamento | UI 7.54, bolsas, equip/unequip, cargo, preview 3D, Extração e Alquimia somente leitura | `GameHud`, `ClassicInventoryPreview`, `ClassicAlchemyCatalog` | Compra/venda/economia e resultado das combinações somente com servidor |
+| Itens/comércio | 6.500 ItemList, ItemPrice, Carry de NPC, tooltips clássicos e footprint EF_GRID | `ClassicCommerceCatalog`, `PlayerState`, `ClassicItemTooltip` | Ownership/decadência de drops e economia autoritativa |
 | HUD/chat | Orbes, C.C., menu, chat local, overhead name/HP/balão | `main.ts`, `GameHud`, `ClassicPlayerOverheadHud` | Homologar 1024x768, widescreen e iPhone |
 | Skills/VFX | Vários lotes por classe implementados; skills não citadas bloqueadas | `ClassSkills`, `render/effects` | Épico de skills completo continua aberto |
 | Áudio | 333 SFX, 13 músicas, BGM opcional, combate/coleta, passos por piso, 82 IDs AniSound de atores e loops ambientais próximos | `audio/catalog.json`, `ClassicAudio`, `ClassicSpawnManager`, `MapObjects` | Quatro referências órfãs dos corpora desktop/mobile; clima global depende do futuro weather |
@@ -115,10 +115,10 @@ nos demais Fields fazem parte do proprio manifesto, nao sao links quebrados.
 
 ## Inventário objetivo das lacunas
 
-- Skills: 79 de 144 registros de classe/master já estão no runtime. Dos 65
-  restantes, 49 são passivos no próprio `SkillData.bin`; apenas 16 são
-  casts/buffs ainda não promovidos. Alguns destes 16 dependem de estado
-  autoritativo, transformação do rig, party, item ou servidor; “pendente” não
+- Skills: 87 de 144 registros de classe/master já estão no runtime. Dos 57
+  restantes, 49 são passivos no próprio `SkillData.bin`; apenas 8 são
+  casts/buffs ainda não promovidos. Alguns destes 8 dependem de estado
+  autoritativo, party, item ou servidor; “pendente” não
   significa automaticamente “falta um efeito”.
 - Classes/equipamentos: as quatro classes e seus looks base são jogáveis, mas
   a cobertura visual 1:1 de todos os `LOOK_INFO` e combinações dos 6.500 itens
@@ -130,7 +130,9 @@ nos demais Fields fazem parte do proprio manifesto, nao sao links quebrados.
   corrigidos no catálogo/importador para beneficiar todos os spawns.
 - Itens: os 6.500 registros, preços, carries e ícones estão importados. Ainda
   são sistemas de servidor: propriedade real do drop, compra/venda, economia,
-  persistência e validação. `EF_GRID` multicélula permanece uma lacuna de UI.
+  persistência e validação. `EF_GRID` multicélula já é respeitado por
+  bolsa/cargo, e moedas `EF_ITEMTYPE 2` já têm leitura/etiqueta clássica; a
+  criação, coleta e alteração de saldo continuam corretamente no servidor.
 - Mapas: os 111 TRN existem; 108 DAT e 103 minimapas são exatamente os
   declarados pela fonte. O aberto é homologação visual dos mapas e dos raros
   objetos com comportamento próprio, não uma importação em lote ausente.

@@ -5,6 +5,7 @@ import { HUNTRESS_LOOKS } from "../src/game/player/HuntressLooks.ts";
 import { MOUNT_LOOKS } from "../src/game/player/MountLooks.ts";
 import { CLASSIC_PLAYER_CLASSES } from "../src/game/player/PlayerClasses.ts";
 import { BEAST_MASTER_SUMMONS } from "../src/game/combat/BeastMasterSummons.ts";
+import { BEAST_MASTER_TRANSFORMATIONS } from "../src/game/combat/BeastMasterTransformations.ts";
 
 const projectRoot = path.resolve(import.meta.dirname, "..");
 const clientRoot = path.resolve(process.argv[2] ?? path.join(projectRoot, "../tjs/Origem"));
@@ -14,12 +15,14 @@ const meshesRoot = path.join(outputRoot, "meshes");
 const texturesRoot = path.join(outputRoot, "textures");
 const mountsRoot = path.join(outputRoot, "mounts");
 const summonsRoot = path.join(outputRoot, "summons");
+const transformationsRoot = path.join(outputRoot, "transformations");
 const griupanRoot = path.join(outputRoot, "familiars/ag01");
 
 await mkdir(meshesRoot, { recursive: true });
 await mkdir(texturesRoot, { recursive: true });
 await mkdir(mountsRoot, { recursive: true });
 await mkdir(summonsRoot, { recursive: true });
+await mkdir(transformationsRoot, { recursive: true });
 await mkdir(griupanRoot, { recursive: true });
 
 // LOOK_INFO equipment and SetHumanCostume cases used by the Huntress wardrobe.
@@ -178,6 +181,36 @@ for (const summon of BEAST_MASTER_SUMMONS) {
   }
 }
 
+// BeastMaster transformations are player LOOK replacements delivered by the
+// server after skills #64/#66/#68/#70/#71. They never need to occur in
+// NPCGener, so keep their five BON/MSH/ANI families with the player package.
+for (const transformation of BEAST_MASTER_TRANSFORMATIONS) {
+  const base = transformation.family.base;
+  const transformationRoot = path.join(transformationsRoot, base);
+  await mkdir(transformationRoot, { recursive: true });
+  await copyFile(
+    path.join(meshRoot, `${base}.bon`),
+    path.join(transformationRoot, `${base}.bon`),
+  );
+  for (const clip of transformation.family.clips) {
+    const file = path.basename(clip);
+    await copyFile(path.join(meshRoot, file), path.join(transformationRoot, file));
+  }
+  const importedTransformationTextures = new Set();
+  for (const part of transformation.parts) {
+    const meshFile = path.basename(part.mesh);
+    await copyFile(path.join(meshRoot, meshFile), path.join(transformationRoot, meshFile));
+    if (!part.texture) continue;
+    const textureFile = path.basename(part.texture);
+    if (importedTransformationTextures.has(textureFile)) continue;
+    await writeFile(
+      path.join(transformationRoot, textureFile),
+      decodeWys(await readFile(path.join(meshRoot, textureFile.replace(/\.dds$/i, ".wys")))),
+    );
+    importedTransformationTextures.add(textureFile);
+  }
+}
+
 // Equip[13] item #1726 (Griupan): TMHuman creates skin 32 with LOOK_INFO
 // Mesh0/Skin0 = 2/0. TMSkinMesh therefore resolves the familiar to ag010103.
 // BM skills #50/#53 create the same skin with look 0/0, resolving their
@@ -197,7 +230,7 @@ await writeFile(
 );
 
 console.log(
-  `${CLASSIC_PLAYER_CLASSES.length} classes (${HUNTRESS_LOOKS.length} looks da Huntress), ${importedWeapons.size} armas, ${MOUNT_LOOKS.length} montarias, ${BEAST_MASTER_SUMMONS.length} evocacoes e Griupan/fadas importados para ${outputRoot}`,
+  `${CLASSIC_PLAYER_CLASSES.length} classes (${HUNTRESS_LOOKS.length} looks da Huntress), ${importedWeapons.size} armas, ${MOUNT_LOOKS.length} montarias, ${BEAST_MASTER_SUMMONS.length} evocacoes, ${BEAST_MASTER_TRANSFORMATIONS.length} transformacoes e Griupan/fadas importados para ${outputRoot}`,
 );
 
 function decodeWys(encoded) {

@@ -4,6 +4,9 @@ import {
   EQUIPMENT_SLOTS,
   INVENTORY_BAG_COUNT,
   INVENTORY_BAG_SIZE,
+  classicGridAnchorAt,
+  classicGridOccupiedCellCount,
+  classicItemGridFootprint,
   type EquipmentSlot,
   type InventoryItem,
   type InventoryStack,
@@ -22,11 +25,16 @@ import type {
   ClassicNpcInteractionKind,
 } from "../game/npcs/ClassicMonsterGameplay";
 import type { ClassicGroundPortal } from "../game/portals/ClassicGroundPortals";
+import { CLASSIC_SKILL_RUNTIME_BLOCKERS } from "../game/combat/ClassSkillBlockers";
 import {
   loadClassicCommerceCatalog,
   type ClassicCommerceCatalog,
   type ClassicResolvedTemplateCarry,
 } from "../game/commerce/ClassicCommerceCatalog";
+import type {
+  ClassicAlchemyCatalog,
+  ClassicAlchemyRecipe,
+} from "../game/items/ClassicAlchemyCatalog";
 import { classicInventoryItemTooltip } from "./ClassicItemTooltip";
 import { ClassicNpcShopGrid } from "./ClassicNpcShopGrid";
 import {
@@ -74,6 +82,7 @@ export interface SkillHudEntry {
   readonly range?: number;
   readonly kind?: string;
   readonly target?: "enemy" | "self" | "ground";
+  readonly requiredWeaponType?: number;
 }
 
 export interface BuffHudEntry {
@@ -138,6 +147,7 @@ export class GameHud {
   onAutoCombatMountThresholdChanged: ((percentage: number) => void) | null = null;
   onAutoCombatPositionModeSelected: ((mode: AutoCombatPositionMode) => void) | null = null;
   onChatSubmit: ((message: string, channel: ChatChannel) => void) | null = null;
+  onExtractionRequest: ((slot: number, item: InventoryItem) => void) | null = null;
   onNpcInteractionClose: (() => void) | null = null;
   onGroundPortalConfirm: ((portal: ClassicGroundPortal) => void) | null = null;
   onGroundPortalClose: ((portal: ClassicGroundPortal) => void) | null = null;
@@ -150,6 +160,11 @@ export class GameHud {
   readonly #inventoryEquipment = requireElement<HTMLElement>("#inventory-equipment");
   readonly #inventoryBags = requireElement<HTMLElement>("#inventory-bags");
   readonly #inventoryPreview = requireElement<HTMLElement>("#inventory-preview");
+  readonly #alchemyPanel = requireElement<HTMLElement>("#alchemy-panel");
+  readonly #alchemyResults = requireElement<HTMLElement>("#alchemy-results");
+  readonly #alchemyRequirements = requireElement<HTMLElement>("#alchemy-requirements");
+  readonly #alchemyCost = requireElement<HTMLElement>("#alchemy-cost");
+  readonly #alchemyStatus = requireElement<HTMLElement>("#alchemy-status");
   readonly #characterPanel = requireElement<HTMLElement>("#character-panel");
   readonly #combatLog = requireElement<HTMLElement>("#combat-log");
   readonly #chatShell = requireElement<HTMLElement>(".classic-chat-shell");
@@ -175,10 +190,14 @@ export class GameHud {
   readonly #groundPortalPromptMessage = requireElement<HTMLElement>("#ground-portal-prompt-message");
   readonly #groundPortalPromptPrice = requireElement<HTMLElement>("#ground-portal-prompt-price");
   readonly #groundPortalConfirm = requireElement<HTMLButtonElement>("[data-ground-portal-confirm]");
+  readonly #extractionPrompt = requireElement<HTMLElement>("#extraction-prompt");
+  readonly #extractionPromptMessage = requireElement<HTMLElement>("#extraction-prompt-message");
+  readonly #extractionPromptConfirm = requireElement<HTMLButtonElement>("[data-extraction-confirm]");
   readonly #npcShopGrid: ClassicNpcShopGrid;
   readonly #cargoPageNav: HTMLElement;
   readonly #cargoOfflineNotice: HTMLElement;
   readonly #inventoryWindowDrag: ClassicWindowDragController;
+  readonly #alchemyWindowDrag: ClassicWindowDragController;
   readonly #characterWindowDrag: ClassicWindowDragController;
   readonly #skillWindowDrag: ClassicWindowDragController;
   readonly #npcWindowDrag: ClassicWindowDragController;
@@ -192,6 +211,9 @@ export class GameHud {
   #itemIconCatalogJob: Promise<ClassicItemIconCatalog | null> | null = null;
   #classicCommerceCatalog: ClassicCommerceCatalog | null = null;
   #classicCommerceCatalogJob: Promise<ClassicCommerceCatalog | null> | null = null;
+  #classicAlchemyCatalog: ClassicAlchemyCatalog | null = null;
+  #classicAlchemyCatalogJob: Promise<ClassicAlchemyCatalog | null> | null = null;
+  #selectedAlchemyRecipe: ClassicAlchemyRecipe | null = null;
   #inventorySignature = "";
   #cargoSignature = "";
   #activeInventoryBag = 0;
@@ -213,6 +235,8 @@ export class GameHud {
   #chatHistory: string[] = [];
   #chatHistoryCursor = 0;
   #activeGroundPortal: ClassicGroundPortal | null = null;
+  #extractionArmed = false;
+  #pendingExtraction: { readonly slot: number; readonly item: InventoryItem } | null = null;
   #groundPortalPreviousFocus: HTMLElement | null = null;
   #npcAnchorSnapFrame = 0;
   #activeNpcShopTemplateKey: string | null = null;
@@ -248,6 +272,10 @@ export class GameHud {
         onReset: () => this.positionNpcBesideInventory(),
       },
     );
+    this.#alchemyWindowDrag = makeClassicWindowDraggable(
+      this.#alchemyPanel,
+      requirePanelHandle(this.#alchemyPanel, ":scope > header"),
+    );
     this.#characterWindowDrag = makeClassicWindowDraggable(
       this.#characterPanel,
       requirePanelHandle(this.#characterPanel, ":scope > header"),
@@ -260,6 +288,14 @@ export class GameHud {
 
     document.querySelector<HTMLElement>("[data-inventory-close]")?.addEventListener("click", () => {
       this.toggleInventory(false);
+    });
+    document.querySelector<HTMLElement>("[data-alchemy-close]")?.addEventListener("click", () => {
+      this.closeAlchemy();
+    });
+    document.querySelector<HTMLElement>("[data-alchemy-combine]")?.addEventListener("click", () => {
+      this.#alchemyStatus.textContent = this.#selectedAlchemyRecipe
+        ? "A combinação exige validação, consumo e resultado do servidor; nenhum item foi alterado."
+        : "Selecione uma receita antes de combinar.";
     });
     for (const button of this.#inventoryBags.querySelectorAll<HTMLButtonElement>("[data-inventory-bag]")) {
       button.addEventListener("click", () => {
@@ -316,6 +352,12 @@ export class GameHud {
     });
     document.querySelector<HTMLButtonElement>("[data-ground-portal-cancel]")?.addEventListener("click", () => {
       this.requestGroundPortalClose();
+    });
+    this.#extractionPromptConfirm.addEventListener("click", () => {
+      this.requestExtractionConfirm();
+    });
+    document.querySelector<HTMLButtonElement>("[data-extraction-cancel]")?.addEventListener("click", () => {
+      this.closeExtractionPrompt(false);
     });
     document.querySelector<HTMLButtonElement>("[data-game-menu-close]")?.addEventListener("click", () => {
       this.toggleGameMenu(false);
@@ -503,6 +545,49 @@ export class GameHud {
     this.#inventoryPreview.classList.toggle("is-inventory-visible", visible);
     if (!visible) this.clearInventorySelection();
     return visible;
+  }
+
+  openAlchemy(): void {
+    this.closeChat(false);
+    this.toggleSkills(false);
+    this.toggleGameMenu(false);
+    this.toggleAutoCombatPanel(false);
+    this.toggleInventory(true);
+    this.#alchemyPanel.classList.add("is-visible");
+    this.#alchemyPanel.setAttribute("aria-hidden", "false");
+    this.#alchemyStatus.textContent = "Lendo as receitas de Mixlist.bin…";
+    void Promise.all([
+      this.ensureClassicAlchemyCatalog(),
+      this.ensureClassicCommerceCatalog(),
+      this.ensureItemIconCatalog(),
+    ]).then(() => this.renderAlchemy());
+  }
+
+  closeAlchemy(): void {
+    const wasVisible = this.#alchemyPanel.classList.contains("is-visible");
+    this.#alchemyPanel.classList.remove("is-visible");
+    this.#alchemyPanel.setAttribute("aria-hidden", "true");
+    this.#selectedAlchemyRecipe = null;
+    // SetVisibleMixPanel(0) also closes the inventory in the recovered client.
+    if (wasVisible) this.toggleInventory(false);
+  }
+
+  armExtraction(): void {
+    this.closeAlchemy();
+    this.toggleSkills(false);
+    this.toggleGameMenu(false);
+    this.toggleAutoCombatPanel(false);
+    this.toggleInventory(true);
+    this.clearInventorySelection();
+    this.#extractionArmed = true;
+    this.#inventory.classList.add("is-extraction-armed");
+    this.addLog("Extração: clique no item desejado dentro de uma das bolsas.", "system");
+  }
+
+  cancelExtraction(): void {
+    this.closeExtractionPrompt(false);
+    this.#extractionArmed = false;
+    this.#inventory.classList.remove("is-extraction-armed");
   }
 
   toggleCharacter(force?: boolean): boolean {
@@ -874,10 +959,15 @@ export class GameHud {
         ));
       for (const skill of entries) {
         const canUse = selectedClass.key === this.#activeClassKey && this.#runtimeSkillIndices.has(skill.index);
+        const runtimeSkill = canUse
+          ? this.#runtimeSkills.find((candidate) => candidate.classicIndex === skill.index)
+          : undefined;
         column.appendChild(createSkillCatalogEntry(
           skill,
           false,
           canUse ? () => this.onCatalogSkillUse?.(skill.index) : undefined,
+          runtimeSkill?.requiredWeaponType,
+          CLASSIC_SKILL_RUNTIME_BLOCKERS[skill.index],
         ));
       }
       return column;
@@ -893,6 +983,10 @@ export class GameHud {
         skill,
         alwaysLearned.has(skill.index),
         canUse ? () => this.onCatalogSkillUse?.(skill.index) : undefined,
+        canUse
+          ? this.#runtimeSkills.find((candidate) => candidate.classicIndex === skill.index)?.requiredWeaponType
+          : undefined,
+        CLASSIC_SKILL_RUNTIME_BLOCKERS[skill.index],
       ));
     }
     columns.push(specialColumn);
@@ -1008,7 +1102,15 @@ export class GameHud {
     const pageStart = this.#activeCargoPage * CARGO_PAGE_SIZE;
     const cells = Array.from({ length: CARGO_PAGE_SIZE }, (_, offset) => {
       const slot = pageStart + offset;
-      return this.createCargoCell(slot, snapshot.cargo[slot] ?? null);
+      const anchor = classicGridAnchorAt(snapshot.cargo, slot, CARGO_PAGE_SIZE, 5);
+      const stack = anchor < 0 ? null : snapshot.cargo[anchor] ?? null;
+      const cell = this.createCargoCell(anchor < 0 ? slot : anchor, stack);
+      if (anchor >= 0 && anchor !== slot) {
+        cell.replaceChildren();
+        cell.classList.add("is-footprint-shadow");
+        cell.setAttribute("aria-label", `${stack?.item.name ?? "Item"} ocupa este espaço`);
+      }
+      return cell;
     });
     this.#npcInteractionSlots.replaceChildren(...cells);
     this.#npcInteractionSlots.setAttribute("role", "grid");
@@ -1087,8 +1189,7 @@ export class GameHud {
   private updateCargoPageButtons(snapshot: PlayerSnapshot): void {
     for (const button of this.#cargoPageNav.querySelectorAll<HTMLButtonElement>("[data-cargo-page]")) {
       const page = Number(button.dataset.cargoPage);
-      const start = page * CARGO_PAGE_SIZE;
-      const used = snapshot.cargo.slice(start, start + CARGO_PAGE_SIZE).filter(Boolean).length;
+      const used = classicGridOccupiedCellCount(snapshot.cargo, page, CARGO_PAGE_SIZE, 5);
       const active = page === this.#activeCargoPage;
       button.classList.toggle("is-active", active);
       button.setAttribute("aria-pressed", String(active));
@@ -1110,10 +1211,22 @@ export class GameHud {
     const bagStart = this.#activeInventoryBag * INVENTORY_BAG_SIZE;
     const bagCells = Array.from({ length: INVENTORY_BAG_SIZE }, (_, offset) => {
       const slot = bagStart + offset;
-      return this.createInventoryCell(
-        { kind: "inventory", slot },
-        snapshot.inventory[slot] ?? null,
+      const anchor = classicGridAnchorAt(snapshot.inventory, slot, INVENTORY_BAG_SIZE, 5);
+      const stack = anchor < 0 ? null : snapshot.inventory[anchor] ?? null;
+      const cell = this.createInventoryCell(
+        { kind: "inventory", slot: anchor < 0 ? slot : anchor },
+        stack,
       );
+      if (anchor >= 0 && anchor !== slot) {
+        cell.replaceChildren();
+        cell.classList.add("is-footprint-shadow");
+        cell.setAttribute("aria-label", `${stack?.item.name ?? "Item"} ocupa este espaço`);
+      } else if (stack) {
+        const footprint = classicItemGridFootprint(stack.item);
+        cell.dataset.gridWidth = String(footprint.width);
+        cell.dataset.gridHeight = String(footprint.height);
+      }
+      return cell;
     });
     const equipmentCells = EQUIPMENT_SLOTS.map((slot) => this.createInventoryCell(
       { kind: "equipment", slot },
@@ -1165,7 +1278,7 @@ export class GameHud {
       return button;
     }
 
-    button.classList.add(`rarity-${stack.item.rarity}`);
+    button.classList.add("has-item", `rarity-${stack.item.rarity}`);
     button.setAttribute(
       "aria-label",
       `${stack.item.name}, quantidade ${stack.quantity}. ${stack.item.description}`,
@@ -1184,13 +1297,22 @@ export class GameHud {
 
     button.addEventListener("click", () => {
       if (this.consumeSuppressedInventoryClick()) return;
+      if (this.#extractionArmed && source.kind === "inventory") {
+        this.openExtractionPrompt(source.slot, stack.item);
+        return;
+      }
       this.handleInventoryCellClick(source, stack.item, button);
     });
     button.addEventListener("pointerdown", (event) => {
+      if (this.#extractionArmed && source.kind === "inventory") {
+        event.preventDefault();
+        return;
+      }
       this.beginInventoryPointerDrag(event, source, stack.item, button);
     });
     button.addEventListener("dblclick", (event) => {
       event.preventDefault();
+      if (this.#extractionArmed) return;
       if (source.kind === "inventory") {
         if (stack.item.kind === "equipment") {
           if (this.#state?.equipInventorySlot(source.slot)) {
@@ -1213,8 +1335,7 @@ export class GameHud {
   private updateInventoryBagButtons(snapshot: PlayerSnapshot): void {
     for (const button of this.#inventoryBags.querySelectorAll<HTMLButtonElement>("[data-inventory-bag]")) {
       const bag = Number(button.dataset.inventoryBag);
-      const start = bag * INVENTORY_BAG_SIZE;
-      const used = snapshot.inventory.slice(start, start + INVENTORY_BAG_SIZE).filter(Boolean).length;
+      const used = classicGridOccupiedCellCount(snapshot.inventory, bag, INVENTORY_BAG_SIZE, 5);
       const active = bag === this.#activeInventoryBag;
       button.classList.toggle("is-active", active);
       button.setAttribute("aria-pressed", String(active));
@@ -1357,7 +1478,8 @@ export class GameHud {
       this.#inventory.classList.add("is-dragging");
       this.#npcInteraction.classList.add("is-item-dragging");
       this.clearInventorySelection();
-      drag.ghost = drag.anchor.cloneNode(true) as HTMLElement;
+      const ghostSource = this.findInventorySourceElement(drag.source) ?? drag.anchor;
+      drag.ghost = ghostSource.cloneNode(true) as HTMLElement;
       drag.ghost.classList.remove("is-selected", "is-drag-source");
       drag.ghost.classList.add("inventory-drag-ghost");
       drag.ghost.removeAttribute("id");
@@ -1554,7 +1676,59 @@ export class GameHud {
     this.onGroundPortalClose?.(portal);
   }
 
+  private openExtractionPrompt(slot: number, item: InventoryItem): void {
+    if (!this.#extractionArmed) return;
+    this.cancelInventoryPointerDrag();
+    this.clearInventorySelection();
+    this.#pendingExtraction = { slot, item };
+    this.#extractionPromptMessage.textContent = `Deseja extrair ${item.name}?`;
+    this.#extractionPrompt.classList.add("is-visible");
+    this.#extractionPrompt.setAttribute("aria-hidden", "false");
+    this.#extractionPromptConfirm.focus({ preventScroll: true });
+  }
+
+  private closeExtractionPrompt(cancelSelection: boolean): void {
+    this.#extractionPrompt.classList.remove("is-visible");
+    this.#extractionPrompt.setAttribute("aria-hidden", "true");
+    this.#pendingExtraction = null;
+    if (cancelSelection) this.cancelExtraction();
+  }
+
+  private requestExtractionConfirm(): void {
+    const pending = this.#pendingExtraction;
+    if (!pending || !this.#extractionPrompt.classList.contains("is-visible")) return;
+    this.closeExtractionPrompt(false);
+    this.#extractionArmed = false;
+    this.#inventory.classList.remove("is-extraction-armed");
+    this.onExtractionRequest?.(pending.slot, pending.item);
+  }
+
   private readonly chatGlobalKeyDown = (event: KeyboardEvent): void => {
+    if (this.#extractionPrompt.classList.contains("is-visible")) {
+      if (event.code === "Enter") {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        this.requestExtractionConfirm();
+        return;
+      }
+      if (event.code === "Escape") {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        this.closeExtractionPrompt(false);
+      }
+      return;
+    }
+    if (
+      event.code === "Escape"
+      && this.#extractionArmed
+      && !isTextEntry(event.target)
+    ) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      this.cancelExtraction();
+      this.addLog("Extração cancelada.", "system");
+      return;
+    }
     if (this.groundPortalPromptVisible) {
       const key = event.key.toLowerCase();
       if (event.code === "Enter" || key === "y") {
@@ -1710,7 +1884,7 @@ export class GameHud {
     const fallback = document.createElement("span");
     fallback.className = "inventory-item-mark";
     fallback.textContent = item.name.slice(0, 2).toUpperCase();
-    const resolved = this.resolveInventoryIcon(item);
+    const resolved = item.classicIndex === undefined ? null : this.resolveClassicItemIcon(item.classicIndex);
     if (!resolved) return fallback;
     const icon = document.createElement("span");
     icon.className = "inventory-item-icon";
@@ -1727,9 +1901,19 @@ export class GameHud {
     readonly cellSize: number;
     readonly columns: number;
   } | null {
+    return item.classicIndex === undefined ? null : this.resolveClassicItemIcon(item.classicIndex);
+  }
+
+  private resolveClassicItemIcon(itemIndex: number): {
+    readonly atlas: string;
+    readonly column: number;
+    readonly row: number;
+    readonly cellSize: number;
+    readonly columns: number;
+  } | null {
     const catalog = this.#itemIconCatalog;
-    if (!catalog || item.classicIndex === undefined) return null;
-    const globalIndex = catalog.itemToIcon[item.classicIndex] ?? -1;
+    if (!catalog) return null;
+    const globalIndex = catalog.itemToIcon[itemIndex] ?? -1;
     if (globalIndex < 0) return null;
     const atlasIndex = Math.floor(globalIndex / catalog.iconsPerAtlas);
     const atlas = catalog.atlases[atlasIndex];
@@ -1742,6 +1926,108 @@ export class GameHud {
       cellSize: catalog.cellSize,
       columns: catalog.columns,
     };
+  }
+
+  private createClassicItemIcon(itemIndex: number, fallbackName: string): HTMLElement {
+    const resolved = this.resolveClassicItemIcon(itemIndex);
+    if (!resolved) {
+      const fallback = document.createElement("span");
+      fallback.className = "inventory-item-mark";
+      fallback.textContent = fallbackName.slice(0, 2).toUpperCase();
+      return fallback;
+    }
+    const icon = document.createElement("span");
+    icon.className = "inventory-item-icon";
+    icon.style.backgroundImage = `url("/game-data/classic/ui/${resolved.atlas}")`;
+    icon.style.backgroundPosition = `${-resolved.column * resolved.cellSize}px ${-resolved.row * resolved.cellSize}px`;
+    icon.setAttribute("aria-hidden", "true");
+    return icon;
+  }
+
+  private renderAlchemy(): void {
+    const alchemy = this.#classicAlchemyCatalog;
+    const commerce = this.#classicCommerceCatalog;
+    if (!alchemy || !commerce || !this.#itemIconCatalog) {
+      this.#alchemyStatus.textContent = "Falha ao carregar os dados clássicos de alquimia.";
+      return;
+    }
+    const recipes = alchemy.huntressRecipes();
+    const cells = Array.from({ length: 24 }, (_, index) => {
+      const recipe = recipes[index] ?? null;
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = `alchemy-result${recipe ? "" : " is-empty"}`;
+      if (!recipe) {
+        button.disabled = true;
+        button.setAttribute("aria-label", "Receita vazia");
+        return button;
+      }
+      const item = commerce.item(recipe.result.itemIndex);
+      const name = item?.name || `Item #${recipe.result.itemIndex}`;
+      button.append(this.createClassicItemIcon(recipe.result.itemIndex, name));
+      button.setAttribute("aria-label", `Selecionar ${name}`);
+      button.title = name;
+      button.addEventListener("click", () => this.selectAlchemyRecipe(recipe, button));
+      return button;
+    });
+    this.#alchemyResults.replaceChildren(...cells);
+    this.#alchemyRequirements.replaceChildren();
+    this.#alchemyCost.textContent = "0";
+    this.#selectedAlchemyRecipe = null;
+    this.#alchemyStatus.textContent = `${recipes.length} receitas de Alquimia recuperadas do cliente 7.54.`;
+  }
+
+  private selectAlchemyRecipe(recipe: ClassicAlchemyRecipe, anchor: HTMLButtonElement): void {
+    const alchemy = this.#classicAlchemyCatalog;
+    const commerce = this.#classicCommerceCatalog;
+    if (!alchemy || !commerce) return;
+    this.#selectedAlchemyRecipe = recipe;
+    for (const button of this.#alchemyResults.querySelectorAll(".alchemy-result")) {
+      button.classList.toggle("is-selected", button === anchor);
+    }
+    const requirements = recipe.requirements.slice(0, 8).map((requirement) => {
+      const need = requirement.access === 0 ? null : alchemy.need(requirement.index);
+      const itemIndex = requirement.access === 0
+        ? requirement.index
+        : (need?.item.itemIndex || need?.acceptedItemIndices[0] || 0);
+      const item = itemIndex > 0 ? commerce.item(itemIndex) : null;
+      const name = item?.name
+        || (requirement.access === 2 ? `Sublista #${requirement.index}` : `Requisito #${requirement.index}`);
+      const row = document.createElement("div");
+      row.className = "alchemy-requirement";
+      const icon = document.createElement("span");
+      icon.className = "alchemy-requirement-icon";
+      if (itemIndex > 0) icon.append(this.createClassicItemIcon(itemIndex, name));
+      const copy = document.createElement("span");
+      copy.textContent = name;
+      const quantity = document.createElement("small");
+      quantity.textContent = `0 / ${Math.max(1, need?.quantity ?? 1)}`;
+      copy.append(quantity);
+      row.append(icon, copy);
+      return row;
+    });
+    this.#alchemyRequirements.replaceChildren(...requirements);
+    this.#alchemyCost.textContent = formatNumber(recipe.cost);
+    const result = commerce.item(recipe.result.itemIndex);
+    this.#alchemyStatus.textContent =
+      `${result?.name || `Item #${recipe.result.itemIndex}`} selecionado · resultado somente leitura.`;
+  }
+
+  private ensureClassicAlchemyCatalog(): Promise<ClassicAlchemyCatalog | null> {
+    if (this.#classicAlchemyCatalog) return Promise.resolve(this.#classicAlchemyCatalog);
+    if (this.#classicAlchemyCatalogJob) return this.#classicAlchemyCatalogJob;
+    const job = import("../game/items/ClassicAlchemyCatalog")
+      .then(({ loadClassicAlchemyCatalog }) => loadClassicAlchemyCatalog())
+      .then((catalog) => {
+        this.#classicAlchemyCatalog = catalog;
+        return catalog;
+      })
+      .catch((error: unknown) => {
+        console.warn("Falha ao carregar Mixlist.bin", error);
+        return null;
+      });
+    this.#classicAlchemyCatalogJob = job;
+    return job;
   }
 
   private inventoryTooltip(item: InventoryItem, quantity: number): GameTooltipContent {
@@ -1783,11 +2069,13 @@ function createSkillCatalogEntry(
   skill: ClassicSkillCatalogEntry,
   learned = false,
   onUse?: () => void,
+  requiredWeaponType?: number,
+  blockedReason?: string,
 ): HTMLElement {
   const entry = document.createElement("article");
-  entry.className = `skill-catalog-entry is-${skill.kind}${skill.category === "master" ? " is-master" : ""}${learned ? " is-learned" : ""}${onUse ? " is-castable" : ""}`;
+  entry.className = `skill-catalog-entry is-${skill.kind}${skill.category === "master" ? " is-master" : ""}${learned ? " is-learned" : ""}${onUse ? " is-castable" : ""}${blockedReason ? " is-server-blocked" : ""}`;
   entry.tabIndex = 0;
-  setGameTooltip(entry, catalogSkillTooltip(skill));
+  setGameTooltip(entry, catalogSkillTooltip(skill, requiredWeaponType, blockedReason));
   const icon = document.createElement("i");
   if (skill.iconIndex !== null) {
     const iconIndex = Math.max(0, Math.min(152, Math.trunc(skill.iconIndex)));
@@ -1801,7 +2089,7 @@ function createSkillCatalogEntry(
   name.textContent = skill.name;
   const details = document.createElement("small");
   const kind = skill.kind === "active" ? "ATIVA" : (skill.kind === "buff" ? "BUFF" : "PASSIVA");
-  details.textContent = `${kind}${learned ? " · APRENDIDA" : ""} · MP ${skill.manaSpent} · CD ${skill.delaySeconds}s · R ${skill.range}${onUse ? " · USAR" : ""}`;
+  details.textContent = `${kind}${learned ? " · APRENDIDA" : ""} · MP ${skill.manaSpent} · CD ${skill.delaySeconds}s · R ${skill.range}${onUse ? " · USAR" : ""}${blockedReason ? " · SERVIDOR" : ""}`;
   copy.append(name, details);
   const index = document.createElement("b");
   index.textContent = `#${skill.index}`;
@@ -1838,6 +2126,9 @@ function skillTooltip(skill: SkillHudEntry): GameTooltipContent {
       : (skill.target === "ground" ? "posição no terreno" : "inimigo");
     lines.push(`Alvo: ${target}`);
   }
+  if (skill.requiredWeaponType !== undefined) {
+    lines.push(`Arma exigida: ${classicWeaponTypeLabel(skill.requiredWeaponType)}`);
+  }
   if (skill.classicIndex !== undefined) lines.push(`Skill clássica: #${skill.classicIndex}`);
   return {
     title: skill.name,
@@ -1847,7 +2138,17 @@ function skillTooltip(skill: SkillHudEntry): GameTooltipContent {
   };
 }
 
-function catalogSkillTooltip(skill: ClassicSkillCatalogEntry): GameTooltipContent {
+function classicWeaponTypeLabel(weaponType: number): string {
+  if (weaponType === 41) return "Garras (WTYPE 41)";
+  if (weaponType === 101) return "Arco (WTYPE 101)";
+  return `WTYPE ${weaponType}`;
+}
+
+function catalogSkillTooltip(
+  skill: ClassicSkillCatalogEntry,
+  requiredWeaponType?: number,
+  blockedReason?: string,
+): GameTooltipContent {
   const kind = skill.kind === "active" ? "Ativa" : skill.kind === "buff" ? "Buff" : "Passiva";
   const category = skill.category === "master" ? "Mestre" : skill.category === "special" ? "Especial" : "Classe";
   const lines = [
@@ -1856,6 +2157,10 @@ function catalogSkillTooltip(skill: ClassicSkillCatalogEntry): GameTooltipConten
     `Alcance: ${skill.range}`,
   ];
   if ((skill.affectTimeSeconds ?? 0) > 0) lines.push(`Duração clássica: ${formatDuration(skill.affectTimeSeconds ?? 0)}`);
+  if (requiredWeaponType !== undefined) {
+    lines.push(`Arma exigida: ${classicWeaponTypeLabel(requiredWeaponType)}`);
+  }
+  if (blockedReason) lines.push(`Bloqueio atual: ${blockedReason}`);
   return {
     title: `${skill.name} · #${skill.index}`,
     description: `${kind} · ${category}`,
@@ -1910,6 +2215,7 @@ function skillKindLabel(kind: string | undefined, offensive: boolean | undefined
   if (kind === "cone") return "Ataque em cone";
   if (kind === "shadow") return "Ataque de sombra";
   if (kind === "direct") return "Ataque direto";
+  if (kind === "utility") return "Utilidade";
   return offensive ? "Ofensiva" : "Ativa";
 }
 
@@ -2141,8 +2447,14 @@ function inventoryStackAt(
   snapshot: PlayerSnapshot,
   source: InventoryItemSource,
 ): Readonly<InventoryStack> | null {
-  if (source.kind === "inventory") return snapshot.inventory[source.slot] ?? null;
-  if (source.kind === "cargo") return snapshot.cargo[source.slot] ?? null;
+  if (source.kind === "inventory") {
+    const anchor = classicGridAnchorAt(snapshot.inventory, source.slot, INVENTORY_BAG_SIZE, 5);
+    return anchor < 0 ? null : snapshot.inventory[anchor] ?? null;
+  }
+  if (source.kind === "cargo") {
+    const anchor = classicGridAnchorAt(snapshot.cargo, source.slot, CARGO_PAGE_SIZE, 5);
+    return anchor < 0 ? null : snapshot.cargo[anchor] ?? null;
+  }
   return snapshot.equipment[source.slot];
 }
 
@@ -2174,6 +2486,9 @@ function inventoryStackSignature(stack: Readonly<InventoryStack> | null): string
         stack.item.refinement ?? "",
         Number(stack.item.ancient ?? false),
         stack.item.refinementTextureIndex ?? "",
+        stack.item.classicInstanceEffects
+          ?.map((effect) => `${effect.effect},${effect.value},${effect.packed ?? ""}`)
+          .join(";") ?? "",
       ].join(":")
     : "-";
 }

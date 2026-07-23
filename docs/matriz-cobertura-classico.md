@@ -1,6 +1,6 @@
 # Matriz automatica de cobertura do cliente classico
 
-Gerado por `bun run audit:coverage` em 2026-07-23T17:46:19.607Z. Este arquivo e
+Gerado por `bun run audit:coverage` em 2026-07-23T20:54:22.447Z. Este arquivo e
 derivado dos artefatos importados e do runtime; nao deve ser editado
 manualmente. A analise e as decisoes ficam em `auditoria-threejs-cobertura.md`.
 
@@ -29,11 +29,11 @@ Nenhum arquivo referenciado pelo manifesto esta ausente.
 | Texturas de efeitos | `textures/effects` | 495 | 15.7 MiB | .dds 495 |
 | Texturas de agua | `textures/water` | 5 | 67.0 KiB | .dds 5 |
 | Monstros/NPCs | `monsters` | 1340 | 37.2 MiB | .ani 555, .bon 47, .dds 337, .json 1, .msh 400 |
-| Player | `player` | 450 | 23.5 MiB | .ani 141, .bon 18, .dds 120, .msa 5, .msh 166 |
+| Player | `player` | 509 | 29.6 MiB | .ani 171, .bon 23, .dds 130, .msa 5, .msh 180 |
 | Montarias | `player/mounts` | 144 | 5.5 MiB | .ani 77, .bon 10, .dds 21, .msh 36 |
 | Familiares | `player/familiars` | 6 | 128.7 KiB | .ani 1, .bon 1, .dds 2, .msh 2 |
 | Evocacoes | `player/summons` | 94 | 3.2 MiB | .ani 63, .bon 7, .dds 9, .msh 15 |
-| UI | `ui` | 35 | 6.3 MiB | .json 1, .png 33, .ttf 1 |
+| UI | `ui` | 37 | 6.5 MiB | .json 2, .png 34, .ttf 1 |
 | Dados | `data` | 1 | 158.8 KiB | .json 1 |
 | Comercio | `commerce` | 1 | 3.9 MiB | .json 1 |
 | Navegacao | `navigation` | 2 | 1.5 MiB | .bin 1, .dat 1 |
@@ -91,8 +91,19 @@ visual; a homologacao do renderer continua manual e rastreada em
 | --- | ---: | ---: | --- | ---: | ---: |
 | TransKnight | 36 (24 normais + 12 master) | 22 | 0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 16, 17, 18, 19, 20, 21, 22, 23, 200 | 14 | 0 |
 | Foema | 36 (24 normais + 12 master) | 24 | 24, 25, 26, 27, 28, 29, 30, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 43, 44, 45, 46, 47, 213, 216 | 8 | 4 |
-| BeastMaster | 36 (24 normais + 12 master) | 19 | 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 224, 225, 235 | 10 | 7 |
-| Huntress | 36 (24 normais + 12 master) | 14 | 72, 73, 75, 76, 77, 79, 80, 81, 85, 86, 87, 88, 89, 95 | 17 | 5 |
+| BeastMaster | 36 (24 normais + 12 master) | 24 | 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 66, 68, 70, 71, 224, 225, 235 | 10 | 2 |
+| Huntress | 36 (24 normais + 12 master) | 17 | 72, 73, 75, 76, 77, 79, 80, 81, 83, 84, 85, 86, 87, 88, 89, 92, 95 | 17 | 2 |
+
+### Casts/buffs ainda fora do runtime
+
+- Foema `#31` Renascimento: exige um jogador aliado morto e confirmação autoritativa de renascimento.
+- Foema `#42` Teleporte: exige grupo, consentimento, restrições de mapa e teleporte do servidor.
+- Foema `#221` Incapacitador: o affect PvP e sua duração efetiva são aceitos pelo servidor.
+- Foema `#223` Another Change: registro master sem instance, tick, affect ou renderer no cliente recuperado.
+- BeastMaster `#226` Resi Decrease: redução de resistência e aplicação do affect são fórmulas do servidor.
+- BeastMaster `#229` Invocação Final: InstanceValue 9 só é convertido em entidade pelo servidor via MSG_CreateMob.
+- Huntress `#241` Absorção de Alma: registro master sem instance, tick, affect ou renderer no cliente recuperado.
+- Huntress `#246` Bleeding: Affect 47 e o dano periódico de Bleeding pertencem ao servidor.
 
 ## Lacunas objetivas
 

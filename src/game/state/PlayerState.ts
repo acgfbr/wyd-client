@@ -35,6 +35,8 @@ export interface InventoryItem {
   readonly classicIndex?: number;
   /** MeshList type rendered by the optional shared-renderer inventory preview. */
   readonly previewModelType?: number;
+  /** EF_WTYPE (static ItemList effect 21), when the item is a weapon. */
+  readonly weaponType?: number;
   /** Refinamento dinâmico do STRUCT_ITEM (sSanc), exibido como no grid clássico. */
   readonly refinement?: number;
   readonly ancient?: boolean;
@@ -124,6 +126,100 @@ export const CARGO_PAGE_SIZE = 40;
  * to the visible client contract instead of exposing the eight hidden slots.
  */
 export const CARGO_VISIBLE_SIZE = CARGO_PAGE_COUNT * CARGO_PAGE_SIZE;
+const INVENTORY_GRID_WIDTH = 5;
+const CARGO_GRID_WIDTH = 5;
+const CLASSIC_ITEM_GRID_XY = Object.freeze([
+  Object.freeze({ width: 1, height: 1 }),
+  Object.freeze({ width: 1, height: 2 }),
+  Object.freeze({ width: 1, height: 3 }),
+  Object.freeze({ width: 1, height: 4 }),
+  Object.freeze({ width: 2, height: 1 }),
+  Object.freeze({ width: 2, height: 2 }),
+  Object.freeze({ width: 2, height: 3 }),
+  Object.freeze({ width: 2, height: 4 }),
+] as const);
+const INVENTORY_GRID_LAYOUT = Object.freeze({
+  pageSize: INVENTORY_BAG_SIZE,
+  width: INVENTORY_GRID_WIDTH,
+});
+const CARGO_GRID_LAYOUT = Object.freeze({
+  pageSize: CARGO_PAGE_SIZE,
+  width: CARGO_GRID_WIDTH,
+});
+
+interface ClassicGridLayout {
+  readonly pageSize: number;
+  readonly width: number;
+}
+
+export interface ClassicItemGridFootprint {
+  readonly index: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+/** Exact g_pItemGridXY lookup used by SGridControlItem for EF_GRID (33). */
+export function classicItemGridFootprint(item: InventoryItem): ClassicItemGridFootprint {
+  const rawIndex = item.classicInstanceEffects
+    ?.find((effect) => effect.effect === 33)
+    ?.value ?? 0;
+  const index = Number.isInteger(rawIndex) && rawIndex >= 0 && rawIndex <= 7
+    ? rawIndex
+    : 0;
+  const footprint = CLASSIC_ITEM_GRID_XY[index] ?? CLASSIC_ITEM_GRID_XY[0];
+  return { index, width: footprint.width, height: footprint.height };
+}
+
+/**
+ * Resolves an arbitrary occupied cell to the stack anchor stored in a flat
+ * inventory/cargo snapshot. Returns -1 for a genuinely empty cell.
+ */
+export function classicGridAnchorAt(
+  slots: readonly (Readonly<InventoryStack> | null)[],
+  slot: number,
+  pageSize: number,
+  width: number,
+): number {
+  if (!Number.isInteger(slot) || slot < 0 || slot >= slots.length) return -1;
+  if (slots[slot]) return slot;
+  const pageStart = Math.floor(slot / pageSize) * pageSize;
+  const pageEnd = Math.min(slots.length, pageStart + pageSize);
+  const layout = { pageSize, width };
+  for (let anchor = pageStart; anchor < pageEnd; anchor++) {
+    const stack = slots[anchor];
+    if (!stack) continue;
+    if (gridFootprintCells(anchor, stack.item, layout).includes(slot)) return anchor;
+  }
+  return -1;
+}
+
+/** Number of cells hidden by SGrid's m_pbFilled mask on one logical page. */
+export function classicGridOccupiedCellCount(
+  slots: readonly (Readonly<InventoryStack> | null)[],
+  page: number,
+  pageSize: number,
+  width: number,
+): number {
+  const pageStart = page * pageSize;
+  const pageEnd = Math.min(slots.length, pageStart + pageSize);
+  const occupied = new Set<number>();
+  const layout = { pageSize, width };
+  for (let anchor = pageStart; anchor < pageEnd; anchor++) {
+    const stack = slots[anchor];
+    if (!stack) continue;
+    for (const cell of gridFootprintCells(anchor, stack.item, layout)) occupied.add(cell);
+  }
+  return occupied.size;
+}
+
+export function classicGridHasPlacement(
+  slots: readonly (Readonly<InventoryStack> | null)[],
+  item: InventoryItem,
+  pageSize: number,
+  width: number,
+): boolean {
+  return firstGridPlacement(slots, item, { pageSize, width }) >= 0;
+}
 const OFFLINE_ATTACK_PER_LEVEL = 3;
 /** Explicit frontend mock; callers may override it through OfflineProgressionOptions. */
 export const DEFAULT_OFFLINE_ATTRIBUTE_POINTS_PER_LEVEL = 5;
@@ -241,6 +337,7 @@ export class PlayerState {
       equipSlot: "leftHand",
       classicIndex: 2551,
       previewModelType: 762,
+      weaponType: 101,
       refinement: 15,
       ancient: true,
       classicInstanceEffects: [
@@ -427,10 +524,17 @@ export class PlayerState {
       if (remaining === 0) break;
     }
     for (let slot = 0; remaining > 0 && slot < this.#inventory.length; slot++) {
-      if (this.#inventory[slot]) continue;
+      const destination = firstGridPlacement(
+        this.#inventory,
+        item,
+        INVENTORY_GRID_LAYOUT,
+        slot,
+      );
+      if (destination < 0) break;
       const accepted = Math.min(remaining, item.maxStack);
-      this.#inventory[slot] = { item, quantity: accepted };
+      this.#inventory[destination] = { item, quantity: accepted };
       remaining -= accepted;
+      slot = destination;
     }
     const added = Math.max(0, Math.trunc(quantity)) - remaining;
     if (notify && added > 0) this.emit();
@@ -440,7 +544,14 @@ export class PlayerState {
   /** Moves, merges or swaps two positions in the flattened four-bag inventory. */
   moveInventoryItem(from: number, to: number): boolean {
     if (!isInventorySlot(from) || !isInventorySlot(to)) return false;
-    return this.moveStack(this.#inventory, from, this.#inventory, to);
+    return this.moveStack(
+      this.#inventory,
+      from,
+      INVENTORY_GRID_LAYOUT,
+      this.#inventory,
+      to,
+      INVENTORY_GRID_LAYOUT,
+    );
   }
 
   /**
@@ -450,25 +561,52 @@ export class PlayerState {
    */
   moveCargoItem(from: number, to: number): boolean {
     if (!isCargoSlot(from) || !isCargoSlot(to)) return false;
-    return this.moveStack(this.#cargo, from, this.#cargo, to);
+    return this.moveStack(
+      this.#cargo,
+      from,
+      CARGO_GRID_LAYOUT,
+      this.#cargo,
+      to,
+      CARGO_GRID_LAYOUT,
+    );
   }
 
   /** Atomically moves, merges or swaps an inventory stack into visible cargo. */
   transferInventoryToCargo(inventorySlot: number, cargoSlot: number): boolean {
     if (!isInventorySlot(inventorySlot) || !isCargoSlot(cargoSlot)) return false;
-    return this.moveStack(this.#inventory, inventorySlot, this.#cargo, cargoSlot);
+    return this.moveStack(
+      this.#inventory,
+      inventorySlot,
+      INVENTORY_GRID_LAYOUT,
+      this.#cargo,
+      cargoSlot,
+      CARGO_GRID_LAYOUT,
+    );
   }
 
   /** Atomically moves, merges or swaps a visible cargo stack into inventory. */
   transferCargoToInventory(cargoSlot: number, inventorySlot: number): boolean {
     if (!isCargoSlot(cargoSlot) || !isInventorySlot(inventorySlot)) return false;
-    return this.moveStack(this.#cargo, cargoSlot, this.#inventory, inventorySlot);
+    return this.moveStack(
+      this.#cargo,
+      cargoSlot,
+      CARGO_GRID_LAYOUT,
+      this.#inventory,
+      inventorySlot,
+      INVENTORY_GRID_LAYOUT,
+    );
   }
 
   /** Equips an item and atomically puts the previous occupant back in its bag slot. */
   equipInventorySlot(slot: number): boolean {
     if (!isInventorySlot(slot)) return false;
-    const stack = this.#inventory[slot];
+    const sourceSlot = classicGridAnchorAt(
+      this.#inventory,
+      slot,
+      INVENTORY_GRID_LAYOUT.pageSize,
+      INVENTORY_GRID_LAYOUT.width,
+    );
+    const stack = sourceSlot < 0 ? null : this.#inventory[sourceSlot];
     const equipmentSlot = stack?.item.equipSlot;
     if (
       !stack
@@ -477,8 +615,20 @@ export class PlayerState {
     ) return false;
 
     const previouslyEquipped = this.#equipment[equipmentSlot];
+    this.#inventory[sourceSlot] = null;
+    const returnSlot = previouslyEquipped
+      ? (
+          canPlaceInGrid(this.#inventory, sourceSlot, previouslyEquipped.item, INVENTORY_GRID_LAYOUT)
+            ? sourceSlot
+            : firstGridPlacement(this.#inventory, previouslyEquipped.item, INVENTORY_GRID_LAYOUT)
+        )
+      : -1;
+    if (previouslyEquipped && returnSlot < 0) {
+      this.#inventory[sourceSlot] = stack;
+      return false;
+    }
     this.#equipment[equipmentSlot] = stack;
-    this.#inventory[slot] = previouslyEquipped;
+    if (previouslyEquipped) this.#inventory[returnSlot] = previouslyEquipped;
     this.emit();
     return true;
   }
@@ -493,9 +643,10 @@ export class PlayerState {
     const equipped = this.#equipment[slot];
     if (!equipped) return false;
 
-    const destination = preferredBagSlot !== undefined && !this.#inventory[preferredBagSlot]
+    const destination = preferredBagSlot !== undefined
+      && canPlaceInGrid(this.#inventory, preferredBagSlot, equipped.item, INVENTORY_GRID_LAYOUT)
       ? preferredBagSlot
-      : this.#inventory.findIndex((stack) => stack === null);
+      : firstGridPlacement(this.#inventory, equipped.item, INVENTORY_GRID_LAYOUT);
     if (destination < 0) return false;
 
     this.#inventory[destination] = equipped;
@@ -505,7 +656,13 @@ export class PlayerState {
   }
 
   useInventorySlot(slot: number): boolean {
-    const stack = this.#inventory[slot];
+    const sourceSlot = classicGridAnchorAt(
+      this.#inventory,
+      slot,
+      INVENTORY_GRID_LAYOUT.pageSize,
+      INVENTORY_GRID_LAYOUT.width,
+    );
+    const stack = sourceSlot < 0 ? null : this.#inventory[sourceSlot];
     if (!stack || stack.item.kind !== "consumable" || !this.snapshot.alive) return false;
     let consumed = false;
     if (stack.item.heal && this.#hp < this.#maxHp) {
@@ -518,7 +675,7 @@ export class PlayerState {
     }
     if (!consumed) return false;
     stack.quantity--;
-    if (stack.quantity <= 0) this.#inventory[slot] = null;
+    if (stack.quantity <= 0) this.#inventory[sourceSlot] = null;
     this.emit();
     return true;
   }
@@ -531,17 +688,36 @@ export class PlayerState {
   private moveStack(
     sourceSlots: (InventoryStack | null)[],
     sourceIndex: number,
+    sourceLayout: ClassicGridLayout,
     destinationSlots: (InventoryStack | null)[],
     destinationIndex: number,
+    destinationLayout: ClassicGridLayout,
   ): boolean {
-    const source = sourceSlots[sourceIndex];
+    const sourceAnchor = classicGridAnchorAt(
+      sourceSlots,
+      sourceIndex,
+      sourceLayout.pageSize,
+      sourceLayout.width,
+    );
+    if (sourceAnchor < 0) return false;
+    const source = sourceSlots[sourceAnchor];
     if (!source) return false;
-    if (sourceSlots === destinationSlots && sourceIndex === destinationIndex) return true;
+    const destinationAnchor = classicGridAnchorAt(
+      destinationSlots,
+      destinationIndex,
+      destinationLayout.pageSize,
+      destinationLayout.width,
+    );
+    if (sourceSlots === destinationSlots && sourceAnchor === destinationAnchor) return true;
 
-    const destination = destinationSlots[destinationIndex];
+    const destination = destinationAnchor < 0 ? null : destinationSlots[destinationAnchor];
     if (!destination) {
+      const ignored = sourceSlots === destinationSlots ? new Set([sourceAnchor]) : undefined;
+      if (!canPlaceInGrid(destinationSlots, destinationIndex, source.item, destinationLayout, ignored)) {
+        return false;
+      }
       destinationSlots[destinationIndex] = source;
-      sourceSlots[sourceIndex] = null;
+      sourceSlots[sourceAnchor] = null;
       this.emit();
       return true;
     }
@@ -552,14 +728,43 @@ export class PlayerState {
       if (moved > 0) {
         destination.quantity += moved;
         source.quantity -= moved;
-        if (source.quantity <= 0) sourceSlots[sourceIndex] = null;
+        if (source.quantity <= 0) sourceSlots[sourceAnchor] = null;
         this.emit();
         return true;
       }
     }
 
-    sourceSlots[sourceIndex] = destination;
-    destinationSlots[destinationIndex] = source;
+    const sourceDestination = destinationAnchor;
+    const ignoredSource = sourceSlots === destinationSlots
+      ? new Set([sourceAnchor, sourceDestination])
+      : new Set([sourceAnchor]);
+    const ignoredDestination = sourceSlots === destinationSlots
+      ? ignoredSource
+      : new Set([sourceDestination]);
+    if (
+      !canPlaceInGrid(
+        destinationSlots,
+        sourceDestination,
+        source.item,
+        destinationLayout,
+        ignoredDestination,
+      )
+      || !canPlaceInGrid(
+        sourceSlots,
+        sourceAnchor,
+        destination.item,
+        sourceLayout,
+        ignoredSource,
+      )
+    ) return false;
+    if (sourceSlots === destinationSlots) {
+      const sourceCells = gridFootprintCells(sourceDestination, source.item, destinationLayout);
+      const destinationCells = new Set(gridFootprintCells(sourceAnchor, destination.item, sourceLayout));
+      if (sourceCells.some((cell) => destinationCells.has(cell))) return false;
+    }
+
+    sourceSlots[sourceAnchor] = destination;
+    destinationSlots[sourceDestination] = source;
     this.emit();
     return true;
   }
@@ -582,6 +787,67 @@ function clampWholeNumber(value: number, minimum: number, maximum: number): numb
 
 function isPrimaryAttribute(value: string): value is PrimaryAttribute {
   return value === "str" || value === "int" || value === "dex" || value === "con";
+}
+
+function firstGridPlacement(
+  slots: readonly (Readonly<InventoryStack> | null)[],
+  item: InventoryItem,
+  layout: ClassicGridLayout,
+  start = 0,
+): number {
+  for (let slot = Math.max(0, Math.trunc(start)); slot < slots.length; slot++) {
+    if (canPlaceInGrid(slots, slot, item, layout)) return slot;
+  }
+  return -1;
+}
+
+function canPlaceInGrid(
+  slots: readonly (Readonly<InventoryStack> | null)[],
+  anchor: number,
+  item: InventoryItem,
+  layout: ClassicGridLayout,
+  ignoredAnchors: ReadonlySet<number> = new Set(),
+): boolean {
+  const cells = gridFootprintCells(anchor, item, layout);
+  if (cells.length === 0) return false;
+  for (const cell of cells) {
+    const occupiedAnchor = classicGridAnchorAt(
+      slots,
+      cell,
+      layout.pageSize,
+      layout.width,
+    );
+    if (occupiedAnchor >= 0 && !ignoredAnchors.has(occupiedAnchor)) return false;
+  }
+  return true;
+}
+
+function gridFootprintCells(
+  anchor: number,
+  item: InventoryItem,
+  layout: ClassicGridLayout,
+): number[] {
+  if (
+    !Number.isInteger(anchor)
+    || anchor < 0
+    || anchor >= 1_000_000
+    || layout.pageSize <= 0
+    || layout.width <= 0
+  ) return [];
+  const { width, height } = classicItemGridFootprint(item);
+  const pageStart = Math.floor(anchor / layout.pageSize) * layout.pageSize;
+  const localAnchor = anchor - pageStart;
+  const anchorX = localAnchor % layout.width;
+  const anchorY = Math.floor(localAnchor / layout.width);
+  const pageHeight = Math.floor(layout.pageSize / layout.width);
+  if (anchorX + width > layout.width || anchorY + height > pageHeight) return [];
+  const cells: number[] = [];
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      cells.push(pageStart + anchorX + x + (anchorY + y) * layout.width);
+    }
+  }
+  return cells;
 }
 
 function isInventorySlot(slot: number): boolean {

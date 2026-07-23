@@ -18,6 +18,9 @@ export const CLASSIC_GROUND_ITEM_ID_USER_DATA_KEY = "classicGroundItemId";
 
 const CLASSIC_ITEM_COUNT = 6_500;
 const CLASSIC_ITEM_EFFECT_TYPE = 38;
+const CLASSIC_COIN_ITEM_TYPE = 2;
+const CLASSIC_COIN_HIGH_BYTE_EFFECT_TYPE = 36;
+const CLASSIC_COIN_LOW_BYTE_EFFECT_TYPE = 37;
 const CLASSIC_HP_RECOVERY_EFFECT_TYPE = 4;
 const CLASSIC_ITEM_FLOOR_OFFSET = 0.1;
 const CLASSIC_ITEM_LABEL_HEIGHT = 0.3;
@@ -34,6 +37,11 @@ export interface ClassicGroundItemMetadata {
   readonly grade: number;
   /** Result of BASE_GetItemAbility(item, EF38), including the three instance effects. */
   readonly itemType: number;
+  /**
+   * `TMItem::InitObject` decodes type-2 currency as unsigned EF36:EF37 and
+   * formats it through Messages[65] (`Bronze %d`). Null for ordinary items.
+   */
+  readonly coinAmount: number | null;
   readonly item: ClassicCommerceItem;
 }
 
@@ -274,6 +282,9 @@ export class ClassicGroundItemManager {
     }
 
     const itemType = classicItemAbility(item, entry.snapshot.effects, CLASSIC_ITEM_EFFECT_TYPE);
+    const coinAmount = itemType === CLASSIC_COIN_ITEM_TYPE
+      ? classicCoinAmount(item, entry.snapshot.effects)
+      : null;
     entry.metadata = Object.freeze({
       classicIndex: item.index,
       name: displayItemName(item.name),
@@ -282,6 +293,7 @@ export class ClassicGroundItemManager {
       visualEffect: item.visualEffect,
       grade: item.grade,
       itemType,
+      coinAmount,
       item,
     });
 
@@ -354,7 +366,10 @@ export class ClassicGroundItemManager {
     const labelColor = metadata.itemType === 4 || metadata.itemType === 5
       ? "#ffffaa"
       : "#aaaaff";
-    const labelResult = createItemLabel(metadata.name, labelColor);
+    const labelText = metadata.coinAmount === null
+      ? metadata.name
+      : `Bronze ${metadata.coinAmount}`;
+    const labelResult = createItemLabel(labelText, labelColor);
     labelResult.sprite.position.y = CLASSIC_ITEM_LABEL_HEIGHT;
     labelResult.sprite.visible = false;
     root.add(labelResult.sprite);
@@ -560,6 +575,23 @@ function classicItemAbility(
     if (effect.effect === effectType) value += effect.value;
   }
   return value;
+}
+
+function classicCoinAmount(
+  item: ClassicCommerceItem,
+  instanceEffects: ClassicGroundItemEffects,
+): number {
+  const highByte = classicItemAbility(
+    item,
+    instanceEffects,
+    CLASSIC_COIN_HIGH_BYTE_EFFECT_TYPE,
+  ) & 0xff;
+  const lowByte = classicItemAbility(
+    item,
+    instanceEffects,
+    CLASSIC_COIN_LOW_BYTE_EFFECT_TYPE,
+  ) & 0xff;
+  return (highByte << 8) | lowByte;
 }
 
 function classicItemGlowColor(itemType: number, classicIndex: number, hpRecovery: number): number | null {

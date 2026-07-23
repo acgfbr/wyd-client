@@ -4,6 +4,7 @@ import {
   type HuntressSkill,
 } from "./HuntressSkills";
 import { BEAST_MASTER_SUMMONS } from "./BeastMasterSummons";
+import { BEAST_MASTER_TRANSFORMATIONS } from "./BeastMasterTransformations";
 
 export { HUNTRESS_SKILLS };
 
@@ -19,7 +20,8 @@ export type ClassSkillKind =
   | "shadow"
   | "buff"
   | "movement"
-  | "summon";
+  | "summon"
+  | "utility";
 
 export type ClassSkillTarget = "enemy" | "self" | "ground";
 
@@ -71,6 +73,8 @@ export interface ClassSkill {
   readonly damageCoefficient: number;
   /** Area geometry in WYD tiles; zero means a single target or self cast. */
   readonly radius: number;
+  /** Optional EF_WTYPE gate evaluated before mana/cooldown, as in SkillUse. */
+  readonly requiredWeaponType?: number;
   /** Three.js fallback tint; the classic effect renderer remains authoritative. */
   readonly color: number;
   /** Stable dispatch key for the class-specific classic effect renderer. */
@@ -1461,6 +1465,15 @@ const BEASTMASTER_SUMMON_ACTIONS: Readonly<Record<number, readonly [ClassicActio
   63: [[8, 0, 0, 6, 0, 0, 0, 0], [8, 0, 0, 6, 0, 0, 0, 0]],
 };
 const BEASTMASTER_SUMMON_HOTBAR_ORDER = [56, 57, 58, 60, 59, 61, 62, 63] as const;
+const BEASTMASTER_TRANSFORMATION_ACTIONS: Readonly<
+  Record<number, readonly [ClassicActionSequence, ClassicActionSequence]>
+> = {
+  64: [[8, 0, 0, 8, 0, 0, 0, 0], [8, 0, 0, 8, 0, 0, 0, 0]],
+  66: [[8, 0, 0, 8, 0, 0, 0, 0], [8, 0, 0, 8, 0, 0, 0, 0]],
+  68: [[24, 0, 0, 8, 0, 0, 0, 0], [8, 0, 0, 8, 0, 0, 0, 0]],
+  70: [[24, 0, 0, 8, 0, 0, 0, 0], [8, 0, 0, 8, 0, 0, 0, 0]],
+  71: [[8, 0, 0, 2, 0, 0, 0, 0], [8, 0, 0, 2, 0, 0, 0, 0]],
+};
 
 /** BeastMaster active records #48-#55 plus nature summons #56-#63. */
 export const BEASTMASTER_SKILLS = defineLoadout("beastmaster", [
@@ -1785,6 +1798,38 @@ export const BEASTMASTER_SKILLS = defineLoadout("beastmaster", [
     color: 0xaa8866,
     effectKey: "beastmaster-last-resistance",
   },
+  ...BEAST_MASTER_TRANSFORMATIONS.map((transformation, index): ClassSkillDefinition => {
+    const [action1, action2] = BEASTMASTER_TRANSFORMATION_ACTIONS[transformation.classicIndex]!;
+    return {
+      slot: 20 + index,
+      classicIndex: transformation.classicIndex,
+      name: transformation.name,
+      shortName: transformation.name,
+      mana: transformation.mana,
+      cooldownSeconds: transformation.cooldownSeconds,
+      range: 0,
+      kind: "buff",
+      target: "self",
+      classicTargetType: 0,
+      maxTargets: 1,
+      instanceType: 0,
+      instanceValue: 0,
+      tickType: 0,
+      tickValue: 0,
+      affectType: transformation.affectType,
+      affectValue: transformation.affectValue,
+      affectTimeSeconds: transformation.affectTimeSeconds,
+      runtimeDurationSeconds: CLASS_BUFF_DURATION_SECONDS,
+      aggressive: 0,
+      party: 0,
+      action1,
+      action2,
+      damageCoefficient: 0,
+      radius: 0,
+      color: transformation.classicIndex === 70 ? 0xd6a358 : 0x9a6649,
+      effectKey: `beastmaster-transformation-${transformation.key}`,
+    };
+  }),
   ...BEAST_MASTER_SUMMONS.map((summon): ClassSkillDefinition => {
     const [action1, action2] = BEASTMASTER_SUMMON_ACTIONS[summon.skill.classicIndex]!;
     return {
@@ -1830,11 +1875,14 @@ const HUNTRESS_CLASSIC_RECORDS: Readonly<Record<number, ClassicRecordFields>> = 
   79: classicRecord(6, 1, 750, 0, 0, 0, 0, 0, [7, 0, 0, 9, 0, 0, 0, 0], [9, 0, 0, 8, 0, 0, 0, 0], 1, 6, 0),
   80: classicRecord(1, 1, 30, 0, 0, 0, 0, 0, [9, 0, 0, 7, 0, 0, 0, 0], [8, 0, 0, 7, 0, 0, 0, 0], 1, 1, 0),
   81: classicRecord(0, 0, 0, 0, 0, 37, 0, 14, [8, 0, 0, 7, 0, 0, 0, 0], [9, 0, 0, 7, 0, 0, 0, 0], 0, 1, 0),
+  83: classicRecord(0, 0, 0, 0, 0, 0, 0, 0, [10, 0, 0, 16, 0, 0, 0, 0], [14, 0, 0, 8, 0, 0, 0, 0], 0, 1, 0),
+  84: classicRecord(0, 0, 0, 0, 0, 0, 0, 0, [10, 0, 0, 16, 0, 0, 0, 0], [14, 0, 0, 8, 0, 0, 0, 0], 0, 1, 0),
   85: classicRecord(0, 0, 0, 0, 0, 31, 150, 30, [20, 0, 0, 24, 0, 0, 0, 0], [20, 0, 0, 8, 0, 0, 0, 0], 0, 1, 0),
   86: classicRecord(5, 1, 50, 0, 0, 0, 0, 0, [7, 0, 0, 9, 0, 0, 0, 0], [9, 0, 0, 8, 0, 0, 0, 0], 1, 13, 0),
   87: classicRecord(0, 0, 160, 0, 0, 38, 0, 14, [8, 0, 0, 7, 0, 0, 0, 0], [9, 0, 0, 7, 0, 0, 0, 0], 0, 1, 0),
   88: classicRecord(1, 1, 30, 0, 0, 0, 0, 0, [9, 0, 0, 7, 0, 0, 0, 0], [24, 0, 0, 7, 0, 0, 0, 0], 1, 1, 0),
   89: classicRecord(0, 0, 0, 0, 0, 26, 1, 12, [8, 0, 0, 7, 0, 0, 0, 0], [9, 0, 0, 7, 0, 0, 0, 0], 0, 1, 0),
+  92: classicRecord(0, 0, 0, 0, 0, 36, 1, 12, [8, 0, 0, 7, 0, 0, 0, 0], [9, 0, 0, 7, 0, 0, 0, 0], 0, 1, 0),
   95: classicRecord(0, 0, 0, 0, 0, 28, 1, 3, [19, 0, 0, 8, 0, 0, 0, 0], [10, 0, 0, 8, 0, 0, 0, 0], 0, 1, 0),
 });
 

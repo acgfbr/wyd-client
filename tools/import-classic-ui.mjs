@@ -30,6 +30,9 @@ const textures = [
   ["UI/Quest2.wyt", "quest.png"],
   ["UI/PotalUI.wyt", "portal.png"],
   ["UI/PotalOldUI.wyt", "portal-old.png"],
+  // Skill #84 opens this exact ItemMix5 surface. The authored panel occupies
+  // the full 440x450 layout described by GameScene.txt.
+  ["UI/NewItemMix.wyt", "item-mix.png"],
 ];
 const itemIconAtlases = Array.from({ length: 14 }, (_, index) => {
   const suffix = String(index + 1).padStart(2, "0");
@@ -78,11 +81,84 @@ await writeFile(
   path.join(outputRoot, "item-icons.json"),
   `${JSON.stringify(itemIconManifest)}\n`,
 );
+
+// CItemMix::BASE_ReadMixList reads 100 STRUCT_RESULT_ITEMLIST records followed
+// by 100 STRUCT_NEED_ITEMLIST records. Preserve only client-authored recipe
+// presentation data; success, ownership and mutation remain server-owned.
+const mixList = await readFile(path.join(clientRoot, "Mixlist.bin"));
+const resultRecordSize = 2_656;
+const needRecordSize = 64;
+const resultCount = 100;
+const needCount = 100;
+const expectedMixBytes = resultRecordSize * resultCount + needRecordSize * needCount;
+if (mixList.length !== expectedMixBytes) {
+  throw new Error(`Mixlist.bin possui ${mixList.length} bytes; esperado ${expectedMixBytes}`);
+}
+const readMixItem = (offset) => ({
+  itemIndex: mixList.readInt16LE(offset),
+  effects: Array.from({ length: 3 }, (_, index) => {
+    const effectOffset = offset + 2 + index * 4;
+    return {
+      effect: mixList.readInt8(effectOffset),
+      value: mixList.readInt8(effectOffset + 1),
+      extendedValue: mixList.readInt16LE(effectOffset + 2),
+    };
+  }),
+});
+const needs = Array.from({ length: needCount }, (_, index) => {
+  const offset = resultRecordSize * resultCount + index * needRecordSize;
+  return {
+    index,
+    textId: mixList.readInt32LE(offset),
+    quantity: mixList.readUInt32LE(offset + 4),
+    item: readMixItem(offset + 8),
+    acceptedItemIndices: Array.from({ length: 6 }, (_, itemIndex) => (
+      mixList.readUInt32LE(offset + 24 + itemIndex * 4)
+    )).filter((itemIndex) => itemIndex > 0),
+    classOptions: [
+      mixList.readUInt32LE(offset + 48),
+      mixList.readUInt32LE(offset + 52),
+    ],
+    positionOptions: [
+      mixList.readUInt32LE(offset + 56),
+      mixList.readUInt32LE(offset + 60),
+    ],
+  };
+});
+const recipes = Array.from({ length: resultCount }, (_, index) => {
+  const offset = index * resultRecordSize;
+  return {
+    index,
+    npcHead: mixList.readUInt32LE(offset),
+    npcX: mixList.readInt32LE(offset + 4),
+    npcY: mixList.readInt32LE(offset + 8),
+    result: readMixItem(offset + 12),
+    messageId: mixList.readUInt16LE(offset + 26),
+    requirements: Array.from({ length: 8 }, (_, requirementIndex) => {
+      const requirementOffset = offset + 28 + requirementIndex * 8;
+      return {
+        access: mixList.readInt32LE(requirementOffset),
+        index: mixList.readInt32LE(requirementOffset + 4),
+      };
+    }).filter((requirement) => requirement.index > 0),
+    cost: mixList.readUInt32LE(offset + 92),
+  };
+});
+await writeFile(
+  path.join(outputRoot, "alchemy.json"),
+  `${JSON.stringify({
+    version: 1,
+    source: "Mixlist.bin",
+    recipes,
+    needs,
+  })}\n`,
+);
 await copyFile(path.join(clientRoot, "UI", "FontNanum.ttf"), path.join(outputRoot, "FontNanum.ttf"));
 
 console.log(
   `Importadas ${textures.length} texturas de UI, ${itemIconAtlases.length} atlas de itens, `
-  + `${itemToIcon.filter((icon) => icon >= 0).length} mapeamentos e a fonte clássica em ${outputRoot}`,
+  + `${itemToIcon.filter((icon) => icon >= 0).length} mapeamentos, ${recipes.length} receitas `
+  + `e a fonte clássica em ${outputRoot}`,
 );
 
 function decodeWyt(wyt, options = {}) {

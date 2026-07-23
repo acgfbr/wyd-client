@@ -1089,6 +1089,8 @@ button, select { font: inherit; }
 .skill-catalog-entry.is-passive { border-color: #555c3a; opacity: .8; }
 .skill-catalog-entry.is-learned { border-color: #8f7c38; opacity: 1; box-shadow: inset 2px 0 #d7bc53; }
 .skill-catalog-entry.is-master { border-color: #775d2f; box-shadow: inset 2px 0 #b69245; }
+.skill-catalog-entry.is-server-blocked { border-color: #5f4337; opacity: .72; }
+.skill-catalog-entry.is-server-blocked small { color: #b08a72; }
 .skill-catalog-entry.is-castable { cursor: pointer; }
 .skill-catalog-entry.is-castable:hover,
 .skill-catalog-entry.is-castable:focus-visible { border-color: #c9ab58; background: linear-gradient(90deg, rgb(69 60 38 / 96%), rgb(18 22 20 / 94%)); outline: none; }
@@ -1160,6 +1162,154 @@ button, select { font: inherit; }
 .inventory-panel > p { display: none; }
 .inventory-panel > p kbd { padding: 0 2px; }
 
+.alchemy-panel {
+  position: fixed;
+  top: 50%;
+  left: calc(50% - 125px);
+  z-index: 39;
+  width: 355px;
+  height: 415px;
+  transform: translate(-50%, -47%) scale(.98);
+  transform-origin: center;
+  background: url("/game-data/classic/ui/item-mix.png") 0 0/355px 415px no-repeat;
+  filter: drop-shadow(5px 7px 4px rgb(0 0 0 / 74%));
+  color: #d8ceb5;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity .14s, transform .14s, visibility .14s;
+  pointer-events: auto;
+}
+.alchemy-panel.is-visible {
+  transform: translate(-50%, -50%) scale(1);
+  opacity: 1;
+  visibility: visible;
+}
+.alchemy-panel > header {
+  position: absolute;
+  top: 4px;
+  left: 74px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 208px;
+  height: 22px;
+  color: #f0dca9;
+  font: 10px Tahoma, sans-serif;
+  text-shadow: 1px 1px #000;
+}
+.alchemy-panel > header button {
+  position: absolute;
+  top: -1px;
+  left: 249px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px outset #6d6250;
+  border-radius: 0;
+  background: #25231f;
+  color: #d8ccb2;
+  cursor: pointer;
+}
+.alchemy-results {
+  position: absolute;
+  top: 48px;
+  left: 20px;
+  display: grid;
+  grid-template-columns: repeat(8, 35px);
+  grid-template-rows: repeat(3, 35px);
+  gap: 5px;
+  width: 315px;
+  height: 115px;
+}
+.alchemy-result,
+.alchemy-requirement-icon {
+  display: grid;
+  place-items: center;
+  width: 35px;
+  height: 35px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: #d5c9ad;
+  cursor: pointer;
+}
+.alchemy-result:hover,
+.alchemy-result.is-selected {
+  border-color: #e5c66c;
+  box-shadow: inset 0 0 7px #8e681e, 0 0 4px rgb(255 215 102 / 55%);
+}
+.alchemy-result.is-empty { cursor: default; }
+.alchemy-result .inventory-item-icon,
+.alchemy-requirement-icon .inventory-item-icon { pointer-events: none; }
+.alchemy-cost {
+  position: absolute;
+  top: 181px;
+  left: 238px;
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  width: 94px;
+  color: #c9bb99;
+  font-size: 9px;
+}
+.alchemy-cost span { display: none; }
+.alchemy-cost b { width: 100%; color: #efd87f; font-weight: 400; text-align: right; }
+.alchemy-requirements {
+  position: absolute;
+  top: 207px;
+  left: 20px;
+  display: grid;
+  grid-template-columns: 155px 155px;
+  grid-template-rows: repeat(4, 35px);
+  gap: 5px 7px;
+}
+.alchemy-requirement {
+  display: grid;
+  grid-template-columns: 35px 1fr;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+  color: #c7bfae;
+  font-size: 8px;
+  line-height: 1.2;
+}
+.alchemy-requirement > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.alchemy-requirement small { display: block; color: #a99465; font-size: 8px; }
+.alchemy-combine {
+  position: absolute;
+  top: 378px;
+  left: 142px;
+  width: 72px;
+  height: 27px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #d7c59a;
+  font: 9px Tahoma, sans-serif;
+  text-shadow: 1px 1px #000;
+  cursor: pointer;
+}
+.alchemy-combine:hover { color: #fff0b5; filter: brightness(1.22); }
+.alchemy-panel > p {
+  position: absolute;
+  right: 14px;
+  bottom: -28px;
+  left: 14px;
+  margin: 0;
+  padding: 5px 7px;
+  border: 1px solid #4f493d;
+  background: rgb(7 8 8 / 88%);
+  color: #a99d83;
+  font-size: 8px;
+  text-align: center;
+}
+
 .game-menu-panel {
   position: fixed;
   top: 50%;
@@ -1188,7 +1338,8 @@ button, select { font: inherit; }
 .game-menu-divider span { position: relative; top: -7px; padding: 0 6px; background: #171713; }
 .game-menu-panel small { padding: 4px 5px 0; color: #777268; font-size: 7px; line-height: 10px; text-align: center; }
 
-.ground-portal-prompt {
+.ground-portal-prompt,
+.extraction-prompt {
   position: fixed;
   inset: 0;
   z-index: 60;
@@ -1200,12 +1351,14 @@ button, select { font: inherit; }
   pointer-events: none;
   transition: opacity .1s, visibility .1s;
 }
-.ground-portal-prompt.is-visible {
+.ground-portal-prompt.is-visible,
+.extraction-prompt.is-visible {
   opacity: 1;
   visibility: visible;
   pointer-events: auto;
 }
-.ground-portal-prompt-surface {
+.ground-portal-prompt-surface,
+.extraction-prompt-surface {
   position: relative;
   width: 256px;
   height: 172px;
@@ -1218,8 +1371,10 @@ button, select { font: inherit; }
   filter: drop-shadow(4px 5px 3px rgb(0 0 0 / 76%));
   transition: transform .1s;
 }
-.ground-portal-prompt.is-visible .ground-portal-prompt-surface { transform: translateY(0) scale(1); }
-.ground-portal-prompt-title {
+.ground-portal-prompt.is-visible .ground-portal-prompt-surface,
+.extraction-prompt.is-visible .extraction-prompt-surface { transform: translateY(0) scale(1); }
+.ground-portal-prompt-title,
+.extraction-prompt-title {
   position: absolute;
   top: 9px;
   left: 96px;
@@ -1230,6 +1385,7 @@ button, select { font: inherit; }
   white-space: nowrap;
 }
 .ground-portal-prompt-message,
+.extraction-prompt-message,
 .ground-portal-prompt-price {
   position: absolute;
   left: 20px;
@@ -1242,14 +1398,16 @@ button, select { font: inherit; }
   line-height: 16px;
   white-space: nowrap;
 }
-.ground-portal-prompt-message { top: 36px; }
+.ground-portal-prompt-message,
+.extraction-prompt-message { top: 36px; }
 .ground-portal-prompt-price {
   top: 52px;
   opacity: 0;
   visibility: hidden;
 }
 .ground-portal-prompt-price.is-visible { opacity: 1; visibility: visible; }
-.ground-portal-prompt button {
+.ground-portal-prompt button,
+.extraction-prompt button {
   position: absolute;
   top: 132px;
   width: 103px;
@@ -1264,19 +1422,32 @@ button, select { font: inherit; }
   text-shadow: 1px 1px #000;
   cursor: pointer;
 }
-.ground-portal-prompt-confirm { left: 17px; }
-.ground-portal-prompt-cancel { left: 137px; }
+.ground-portal-prompt-confirm,
+.extraction-prompt-confirm { left: 17px; }
+.ground-portal-prompt-cancel,
+.extraction-prompt-cancel { left: 137px; }
 .ground-portal-prompt button:hover,
-.ground-portal-prompt button:focus-visible {
+.ground-portal-prompt button:focus-visible,
+.extraction-prompt button:hover,
+.extraction-prompt button:focus-visible {
   border-color: #c4aa69;
   background: linear-gradient(#625c4b, #292a25 58%, #49483d);
   color: #fff5d4;
   outline: 1px solid rgb(226 194 103 / 58%);
   outline-offset: -2px;
 }
-.ground-portal-prompt button:active {
+.ground-portal-prompt button:active,
+.extraction-prompt button:active {
   border-style: inset;
   background: linear-gradient(#20221f, #44443e);
+}
+
+.inventory-panel.is-extraction-armed .inventory-slot.has-item {
+  cursor: crosshair;
+}
+.inventory-panel.is-extraction-armed .inventory-slot.has-item:hover {
+  border-color: #8eeab3;
+  box-shadow: inset 0 0 7px #207044, 0 0 5px rgb(112 255 170 / 60%);
 }
 
 .npc-interaction {
@@ -1696,6 +1867,8 @@ button, select { font: inherit; }
   .character-panel.is-visible { transform: translate(0, -50%) scale(.9); }
   .inventory-panel { top: 50%; transform: translate(120%, -50%) scale(.9); }
   .inventory-panel.is-visible { transform: translate(0, -50%) scale(.9); }
+  .alchemy-panel { left: 50%; transform: translate(-50%, -47%) scale(.78); }
+  .alchemy-panel.is-visible { transform: translate(-50%, -50%) scale(.82); }
   .minimap-panel canvas { width: 132px; height: 132px; }
   .minimap-panel { width: 148px; }
   .map-teleport { width: min(270px, calc(100vw - 175px)); }
@@ -1737,6 +1910,8 @@ button, select { font: inherit; }
   .character-panel.is-visible { transform: translate(0, -50%) scale(.78); }
   .inventory-panel { top: 50%; transform: translate(120%, -50%) scale(.78); }
   .inventory-panel.is-visible { transform: translate(0, -50%) scale(.78); }
+  .alchemy-panel { left: 50%; transform: translate(-50%, -47%) scale(.72); }
+  .alchemy-panel.is-visible { transform: translate(-50%, -50%) scale(.76); }
   .classic-chat-shell { bottom: 52px; height: 128px; }
   .classic-chat-shell::before { bottom: 52px; }
   .combat-log { bottom: 56px; height: 48px; }

@@ -23,6 +23,10 @@ import {
   beastMasterSummonForSkill,
   type BeastMasterSummonDefinition,
 } from "../game/combat/BeastMasterSummons";
+import {
+  BEAST_MASTER_TRANSFORMATIONS,
+  beastMasterTransformationForSkill,
+} from "../game/combat/BeastMasterTransformations";
 import { SPECTRAL_FORCE } from "../game/combat/SpectralForce";
 import type {
   ClassicMonsterAttackEvent,
@@ -44,7 +48,9 @@ import { GameHud } from "../ui/GameHud";
 import { RuntimeTelemetry } from "../ui/RuntimeTelemetry";
 import { ClassicPlayerOverheadHud } from "../ui/ClassicPlayerOverheadHud";
 import {
+  INVENTORY_BAG_SIZE,
   PlayerState,
+  classicGridHasPlacement,
   type InventoryItem,
   type PlayerSnapshot,
 } from "../game/state/PlayerState";
@@ -338,6 +344,24 @@ export class GameApp {
     };
     this.#hud.onGroundPortalClose = () => undefined;
     this.#hud.onCatalogSkillUse = (classicIndex) => this.requestCatalogSkill(classicIndex);
+    this.#hud.onExtractionRequest = (_slot, item) => {
+      const skill = this.#skills.skills.find((candidate) => candidate.classicIndex === 83);
+      if (
+        !skill
+        || skill.classKey !== "huntress"
+        || this.#activeClassKey !== "huntress"
+        || !this.#player
+      ) return;
+      // The local client echoes the action packet, but item mutation/result is
+      // accepted only from the server. Preserve the pose without charging MP
+      // or deleting the selected item in this offline build.
+      this.#player.stop();
+      this.#player.playClassSkill(skill);
+      this.#hud.addLog(
+        `Extração de ${item.name} confirmada localmente; custo e resultado dependem do servidor e nenhum item foi alterado.`,
+        "system",
+      );
+    };
     this.#hud.bindPlayer(this.#playerState);
     this.#playerState.subscribe(this.playerEquipmentChanged);
     this.#playerState.subscribe((snapshot) => this.#playerOverhead.sync(snapshot));
@@ -1760,6 +1784,25 @@ export class GameApp {
       return;
     }
     this.#queuedGroundSkillSlot = null;
+    if (
+      skill.classKey === "huntress"
+      && skill.classicIndex === 83
+      && skill.kind === "utility"
+    ) {
+      this.#hud.armExtraction();
+      return;
+    }
+    if (
+      skill.classKey === "huntress"
+      && skill.classicIndex === 84
+      && skill.kind === "utility"
+    ) {
+      // Retail returns from SkillUse before mana/cooldown/animation and opens
+      // CItemMix directly. The combine request is a later server transaction.
+      this.#hud.openAlchemy();
+      this.#hud.addLog("Alquimia: receitas clássicas abertas em modo somente leitura.", "system");
+      return;
+    }
     if (skill.kind === "summon") {
       this.castSummonSkill(skill);
       return;
@@ -2471,6 +2514,36 @@ export class GameApp {
 
   private castBuffSkill(skill: ClassSkill): void {
     if (!this.#player || skill.kind !== "buff") return;
+    if (skill.requiredWeaponType !== undefined) {
+      const equipment = this.#playerState.snapshot.equipment;
+      const equippedWeaponType = equipment.leftHand?.item.weaponType
+        ?? equipment.rightHand?.item.weaponType
+        ?? null;
+      if (equippedWeaponType !== skill.requiredWeaponType) {
+        const requiredName = skill.requiredWeaponType === 41
+          ? "garras (WTYPE 41)"
+          : `uma arma WTYPE ${skill.requiredWeaponType}`;
+        this.#hud.addLog(
+          `${skill.name}: equipe ${requiredName}. O Skytalos é WTYPE 101.`,
+          "system",
+        );
+        return;
+      }
+    }
+    const requestedTransformation = skill.classKey === "beastmaster"
+      ? beastMasterTransformationForSkill(skill.classicIndex)
+      : null;
+    const costumeIndex = this.#playerState.snapshot.equipment.costume?.item.classicIndex ?? 0;
+    if (
+      requestedTransformation
+      && costumeIndex >= 4150
+      && costumeIndex <= 4199
+    ) {
+      // TMFieldScene::SkillUse rejects all five shapeshifts while a 4150..4199
+      // costume occupies Equip[14]; keep the same rule before spending mana.
+      this.#hud.addLog(`${skill.name}: remova o traje para se transformar.`, "system");
+      return;
+    }
     const started = this.#skills.start(skill.slot, this.#playerState);
     if (!started.ok) {
       this.#hud.addLog(started.reason === "mana"
@@ -2494,8 +2567,29 @@ export class GameApp {
     const delay = timing?.effectDelaySeconds ?? 0.5;
     this.scheduleSkillEvent(delay, () => {
       if (!this.#player || !this.#playerState.snapshot.alive) return;
+      const beastMasterTransformation = requestedTransformation;
+      if (beastMasterTransformation) {
+        for (const candidate of BEAST_MASTER_TRANSFORMATIONS) {
+          if (candidate.classicIndex !== skill.classicIndex) {
+            this.#skills.removeBuff(candidate.classicIndex);
+          }
+        }
+      }
       const active = this.#skills.activateBuff(skill);
       if (!active) return;
+      if (beastMasterTransformation && this.#assets) {
+        void this.#player.syncClassicBeastMasterTransformation(
+          this.#assets,
+          beastMasterTransformation,
+        ).then((loaded) => {
+          if (!loaded) {
+            this.#hud.addLog(
+              `${beastMasterTransformation.name}: modelo clássico indisponível.`,
+              "system",
+            );
+          }
+        });
+      }
       if (skill.classicIndex === 76) this.#skillEffects.playImmunityCast(this.#player.object.position);
       if (skill.classicIndex === 77) this.#skillEffects.playMeditationCast(this.#player.object.position);
       if (skill.classicIndex === 81) this.#skillEffects.playSoulLinkCast(this.#player.object.position);
@@ -2741,6 +2835,17 @@ export class GameApp {
     }
     const active = this.#skills.activeBuffs();
     const activeIndices = new Set(active.map((buff) => buff.classicIndex));
+    const activeBeastMasterTransformation = this.#activeClassKey === "beastmaster"
+      ? active
+        .map((buff) => beastMasterTransformationForSkill(buff.classicIndex))
+        .find((definition) => definition !== null) ?? null
+      : null;
+    if (this.#assets) {
+      void player.syncClassicBeastMasterTransformation(
+        this.#assets,
+        activeBeastMasterTransformation,
+      );
+    }
     for (const classicIndex of this.#buffVisualPulseRemaining.keys()) {
       if (!activeIndices.has(classicIndex)) this.#buffVisualPulseRemaining.delete(classicIndex);
     }
@@ -3043,6 +3148,8 @@ export class GameApp {
     this.cancelGroundItemPickup();
     this.resetGroundPortalPrompt();
     this.closeNpcInteraction();
+    this.#hud.closeAlchemy();
+    this.#hud.cancelExtraction();
     this.selectTarget(null);
     playOptionalPlayerAction(this.#player, "playDeath");
     this.#audio.playPlayerAction(this.#activeClassKey, "death", this.#player?.mounted ?? false);
@@ -3711,9 +3818,8 @@ function classicFootstepSound(tileType: number, side: 0 | 1): number {
 function canAcceptInventoryItem(snapshot: PlayerSnapshot, item: InventoryItem): boolean {
   const maxStack = Math.max(1, Math.trunc(item.maxStack));
   return snapshot.inventory.some((stack) => (
-    stack === null
-    || (stack.item.key === item.key && stack.quantity < maxStack)
-  ));
+    stack?.item.key === item.key && stack.quantity < maxStack
+  )) || classicGridHasPlacement(snapshot.inventory, item, INVENTORY_BAG_SIZE, 5);
 }
 
 const CLASSIC_GRID_DISTANCE_TABLE = Object.freeze([

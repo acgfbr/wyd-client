@@ -2,10 +2,11 @@ import type {
   ClassicCommerceCarryEffect,
   ClassicCommerceItem,
 } from "../game/commerce/ClassicCommerceCatalog";
-import type {
-  InventoryItem,
-  InventoryItemClassicEffect,
-  PlayerSnapshot,
+import {
+  classicItemGridFootprint,
+  type InventoryItem,
+  type InventoryItemClassicEffect,
+  type PlayerSnapshot,
 } from "../game/state/PlayerState";
 import type {
   GameTooltipContent,
@@ -18,6 +19,7 @@ const LEVEL_EFFECT = 1;
 const DAMAGE_EFFECT = 2;
 const DEFENSE_EFFECT = 3;
 const ATTACK_SPEED_EFFECT = 26;
+const GRID_EFFECT = 33;
 const REFINEMENT_EFFECT = 43;
 const FIRST_REFINEMENT_COLOR_EFFECT = 115;
 const LAST_REFINEMENT_COLOR_EFFECT = 126;
@@ -109,6 +111,10 @@ export function classicInventoryItemTooltip(context: ClassicItemTooltipContext):
   appendInstanceEffects(lines, item.classicInstanceEffects ?? [], metadata, item.refinement ?? 0);
   appendAncientGrade(lines, metadata, item.classicInstanceEffects ?? [], item.refinement ?? 0, item.ancient ?? false);
   appendRefinement(lines, item.refinement ?? 0, item.ancient ?? false);
+  const footprint = classicItemGridFootprint(item);
+  if ((footprint.width > 1 || footprint.height > 1) && lines.length < MAX_CLASSIC_BODY_LINES) {
+    lines.push({ text: `Espaço : ${footprint.width} × ${footprint.height}`, tone: "muted" });
+  }
   if (quantity > 1 && lines.length < MAX_CLASSIC_BODY_LINES) {
     lines.push({ text: `Quantidade : ${quantity} / ${item.maxStack}`, tone: "muted" });
   }
@@ -148,6 +154,10 @@ function fallbackInventoryTooltip(item: InventoryItem, quantity: number): GameTo
     lines.push({ text: `Refinação : +${item.refinement}`, tone: "refinement" });
   }
   if (item.ancient) lines.push({ text: "Item Ancient", tone: "refinement" });
+  const footprint = classicItemGridFootprint(item);
+  if (footprint.width > 1 || footprint.height > 1) {
+    lines.push({ text: `Espaço : ${footprint.width} × ${footprint.height}`, tone: "muted" });
+  }
   if (quantity > 1) lines.push({ text: `Quantidade : ${quantity} / ${item.maxStack}`, tone: "muted" });
   if (item.description.trim()) lines.push({ text: item.description.trim(), tone: "muted" });
   return {
@@ -211,7 +221,7 @@ function appendInstanceEffects(
   if (isMountItem(metadata)) return;
   const grouped = new Map<number, number>();
   for (const effect of effects) {
-    if (!effect.effect || isRefinementEffect(effect.effect)) continue;
+    if (!effect.effect || effect.effect === GRID_EFFECT || isRefinementEffect(effect.effect)) continue;
     grouped.set(effect.effect, (grouped.get(effect.effect) ?? 0) + effect.value);
   }
   for (const effect of CLASSIC_EFFECT_ORDER) {

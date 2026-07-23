@@ -11,6 +11,8 @@ import {
   ClassicPlayerAvatar,
   type ClassicWeaponEffectSegmentSample,
 } from "./player/ClassicPlayerAvatar";
+import { ClassicBeastMasterTransformation } from "./player/ClassicBeastMasterTransformation";
+import type { BeastMasterTransformationDefinition } from "./combat/BeastMasterTransformations";
 import {
   ClassicMount,
   type ClassicMountAfterimageAnimationSnapshot,
@@ -73,11 +75,14 @@ export class Player {
   readonly #manualDetourHeading = new THREE.Vector2();
   #speedBoost = false;
   #avatar: ClassicPlayerAvatar | null = null;
+  #transformation: ClassicBeastMasterTransformation | null = null;
   #mount: ClassicMount | null = null;
   #familiar: ClassicFamiliar | null = null;
   #mounted = false;
   #mountDesired = false;
   #avatarLoadGeneration = 0;
+  #transformationLoadGeneration = 0;
+  #transformationRequestedSkill: number | null = null;
   #mountLoadGeneration = 0;
   #familiarLoadGeneration = 0;
   #effectsEnabled = true;
@@ -100,6 +105,9 @@ export class Player {
   get speed(): number { return this.#speedBoost ? 64 : (this.#mounted ? 13 : 8); }
   get speedBoost(): boolean { return this.#speedBoost; }
   get hasClassicAvatar(): boolean { return this.#avatar !== null; }
+  get beastMasterTransformationSkill(): number | null {
+    return this.#transformation?.definition.classicIndex ?? null;
+  }
   get hasClassicMount(): boolean { return this.#mount !== null; }
   get hasClassicFamiliar(): boolean { return this.#familiar !== null; }
   get mounted(): boolean { return this.#mounted; }
@@ -120,8 +128,8 @@ export class Player {
   }
   /** Logical TMSkinMesh yaw used by owner-attached classic skill effects. */
   get classicYaw(): number { return this.#classicYaw; }
-  /** All imported playable-class rigs currently use the retail 0.9 scale. */
-  get classicScale(): number { return 0.9; }
+  /** Titã is the one retail form whose InitObject explicitly forces scale 2.0. */
+  get classicScale(): number { return this.#transformation?.definition.scale ?? 0.9; }
 
   /**
    * Samples m_vecSkinPos semantics without exposing the mutable avatar root.
@@ -130,6 +138,10 @@ export class Player {
    * retail `-0.4 * m_fScale` vertical correction.
    */
   sampleClassicSkinAnchor(out: THREE.Vector3): THREE.Vector3 {
+    if (this.#transformation) {
+      this.#transformation.object.updateWorldMatrix(true, false);
+      return this.#transformation.object.getWorldPosition(out);
+    }
     if (this.#mounted && this.#mount) {
       return this.#mount.sampleRiderSkinPosition(out, this.classicScale);
     }
@@ -140,6 +152,11 @@ export class Player {
   }
 
   sampleSpiritChangeWingAnchor(out: THREE.Vector3): THREE.Vector3 {
+    if (this.#transformation) {
+      out.copy(this.object.position);
+      out.y += this.#transformation.definition.scale;
+      return out;
+    }
     const avatar = this.#avatar;
     if (avatar) return avatar.sampleSpiritChangeWingAnchor(out);
     out.copy(this.object.position);
@@ -148,6 +165,7 @@ export class Player {
   }
 
   sampleWeaponEffectSegments(out: ClassicWeaponEffectSegmentSample[]): number {
+    if (this.#transformation) return 0;
     return this.#avatar?.sampleWeaponEffectSegments(out) ?? 0;
   }
 
@@ -183,6 +201,7 @@ export class Player {
     classKey: ClassicPlayerClassKey = this.#avatarClassKey,
     lookKey?: string,
   ): Promise<boolean> {
+    if (classKey !== "beastmaster") this.clearClassicBeastMasterTransformation();
     const generation = ++this.#avatarLoadGeneration;
     try {
       const requestedLook = lookKey ?? (classKey === this.#avatarClassKey ? this.#avatarLookKey : undefined);
@@ -209,6 +228,62 @@ export class Player {
     } catch {
       return false;
     }
+  }
+
+  /**
+   * Applies the alternate LOOK rig sent by the classic server for BeastMaster
+   * transformation affects. Passing null restores the equipped player look.
+   */
+  async syncClassicBeastMasterTransformation(
+    assets: ClassicAssetSource,
+    definition: BeastMasterTransformationDefinition | null,
+  ): Promise<boolean> {
+    const desiredSkill = definition?.classicIndex ?? null;
+    if (desiredSkill === this.#transformationRequestedSkill) return true;
+    this.#transformationRequestedSkill = desiredSkill;
+    const generation = ++this.#transformationLoadGeneration;
+    if (!definition) {
+      this.unloadClassicBeastMasterTransformation();
+      return true;
+    }
+    if (this.#avatarClassKey !== "beastmaster" || this.#disposed) {
+      this.#transformationRequestedSkill = null;
+      return false;
+    }
+    let transformation: ClassicBeastMasterTransformation | null;
+    try {
+      transformation = await ClassicBeastMasterTransformation.load(assets, definition);
+    } catch {
+      if (generation === this.#transformationLoadGeneration) this.#transformationRequestedSkill = null;
+      return false;
+    }
+    if (!transformation) {
+      if (generation === this.#transformationLoadGeneration) this.#transformationRequestedSkill = null;
+      return false;
+    }
+    if (
+      this.#disposed
+      || generation !== this.#transformationLoadGeneration
+      || this.#avatarClassKey !== "beastmaster"
+    ) {
+      transformation.release();
+      return false;
+    }
+    this.unloadClassicBeastMasterTransformation();
+    this.#transformation = transformation;
+    this.#mountDesired = false;
+    this.#mounted = false;
+    this.#visualRoot.add(transformation.object);
+    transformation.setYaw(this.currentClassicYaw());
+    this.#avatarAction = null;
+    this.syncMountedVisuals();
+    return true;
+  }
+
+  clearClassicBeastMasterTransformation(): void {
+    this.#transformationLoadGeneration++;
+    this.#transformationRequestedSkill = null;
+    this.unloadClassicBeastMasterTransformation();
   }
 
   /** Loads or swaps the selected classic mount; R only toggles it afterwards. */
@@ -262,7 +337,7 @@ export class Player {
   }
 
   toggleMount(): boolean {
-    if (this.#dead) return this.#mounted;
+    if (this.#dead || this.#transformation) return false;
     this.#mountDesired = !this.#mountDesired;
     this.#mounted = this.#mountDesired && this.#mount !== null;
     this.syncMountedVisuals();
@@ -295,7 +370,7 @@ export class Player {
 
   unloadClassicAvatar(): void {
     if (!this.#avatar) {
-      if (!this.#disposed) this.#fallback.visible = true;
+      if (!this.#disposed && !this.#transformation) this.#fallback.visible = true;
       return;
     }
     this.#beforeClassicVisualRelease?.();
@@ -303,7 +378,20 @@ export class Player {
     this.#avatar.release();
     this.#avatar = null;
     this.#avatarAction = null;
-    if (!this.#disposed) this.#fallback.visible = true;
+    if (!this.#disposed && !this.#transformation) this.#fallback.visible = true;
+  }
+
+  private unloadClassicBeastMasterTransformation(): void {
+    if (!this.#transformation) return;
+    this.#beforeClassicVisualRelease?.();
+    this.#visualRoot.remove(this.#transformation.object);
+    this.#transformation.release();
+    this.#transformation = null;
+    this.#avatarAction = null;
+    if (!this.#disposed) {
+      this.#fallback.visible = this.#avatar === null;
+      this.syncMountedVisuals();
+    }
   }
 
   unloadClassicMount(): void {
@@ -351,7 +439,7 @@ export class Player {
     // Força Espectral is permanently learned in this offline client. The
     // retail outgoing attack sets DoubleCritical |= 8, which OnPacketAttack
     // turns into the WTYPE-101 SForce effect on the weapon matrix.
-    this.#avatar?.triggerSpectralForce();
+    if (!this.#transformation) this.#avatar?.triggerSpectralForce();
     // Mounted combat animates the rider with MATT, but must not start the
     // mount's locomotion/attack clip or preserve a previous take-off curve.
     // Keep the animal planted while the Huntress releases the shot.
@@ -419,7 +507,7 @@ export class Player {
   }
 
   triggerSpectralForce(): void {
-    if (!this.#dead) this.#avatar?.triggerSpectralForce();
+    if (!this.#dead && !this.#transformation) this.#avatar?.triggerSpectralForce();
   }
 
   /**
@@ -668,6 +756,7 @@ export class Player {
     const yaw = classicYawForVelocity(dx, dy);
     this.#classicYaw = yaw;
     this.#avatar?.setYaw(yaw);
+    this.#transformation?.setYaw(yaw);
     this.#mount?.setYaw(yaw);
   }
 
@@ -739,6 +828,7 @@ export class Player {
       this.#visualRoot.rotation.y = -this.object.rotation.y;
       this.#classicYaw = classicYawForVelocity(movedX, movedY);
       this.#avatar?.setYaw(this.#classicYaw);
+      this.#transformation?.setYaw(this.#classicYaw);
       this.#mount?.setYaw(this.#classicYaw);
     }
     this.updateAvatar(deltaSeconds, moving);
@@ -750,8 +840,10 @@ export class Player {
     if (this.#disposed) return;
     this.#disposed = true;
     this.#avatarLoadGeneration++;
+    this.#transformationLoadGeneration++;
     this.#mountLoadGeneration++;
     this.#familiarLoadGeneration++;
+    this.unloadClassicBeastMasterTransformation();
     this.unloadClassicAvatar();
     this.unloadClassicMount();
     this.unloadClassicFamiliar();
@@ -1006,8 +1098,8 @@ export class Player {
   }
 
   private updateAvatar(deltaSeconds: number, moving: boolean): void {
-    const avatar = this.#avatar;
-    if (!avatar) return;
+    const actor = this.#transformation ?? this.#avatar;
+    if (!actor) return;
     if (this.#dead) {
       this.#deathElapsed += deltaSeconds;
       if (
@@ -1028,7 +1120,7 @@ export class Player {
         ? [moving ? "MRUN" : "MSTND01", moving ? "MWALK" : "STAND01"]
         : [moving ? "RUN" : "STAND02", moving ? "WALK" : "STAND01"]);
     }
-    avatar.update(deltaSeconds);
+    actor.update(deltaSeconds);
     if (this.#mounted) {
       // Preserve non-looping mount actions (notably LEVELUP/STRIKE) while the
       // matching rider action is locked. Real movement clears the lock in the
@@ -1041,12 +1133,12 @@ export class Player {
   }
 
   private playAvatarAction(actions: readonly string[], restart = false): ReturnType<ClassicPlayerAvatar["play"]> {
-    const avatar = this.#avatar;
-    if (!avatar) return null;
+    const actor = this.#transformation ?? this.#avatar;
+    if (!actor) return null;
     if (!restart && this.#avatarAction !== null && actions.includes(this.#avatarAction)) {
       return { name: this.#avatarAction, durationSeconds: 0 };
     }
-    const action = avatar.play(actions, restart);
+    const action = actor.play(actions, restart);
     if (action) this.#avatarAction = action.name;
     return action;
   }
@@ -1056,9 +1148,13 @@ export class Player {
   }
 
   private syncMountedVisuals(): void {
-    if (this.#mount) this.#mount.object.visible = this.#mounted;
+    const transformed = this.#transformation !== null;
+    if (this.#mount) this.#mount.object.visible = this.#mounted && !transformed;
     if (this.#avatar) {
-      if (this.#mounted && this.#mount) {
+      this.#avatar.object.visible = !transformed;
+      if (transformed) {
+        this.#avatar.attachOnFoot(this.#visualRoot, this.currentClassicYaw());
+      } else if (this.#mounted && this.#mount) {
         this.#avatar.attachToMount(
           this.#mount.riderAnchor,
           this.#mount.look.riderAttachment,
@@ -1066,12 +1162,19 @@ export class Player {
       }
       else this.#avatar.attachOnFoot(this.#visualRoot, this.currentClassicYaw());
     }
+    if (this.#transformation) {
+      this.#transformation.object.visible = true;
+      this.#transformation.setYaw(this.currentClassicYaw());
+    }
+    this.#fallback.visible = !this.#avatar && !this.#transformation;
     // Loading fallback only; the real rider follows hs01 bone 4 above.
-    this.#fallback.position.y = this.#mounted ? 1.8 : 0.95;
+    this.#fallback.position.y = this.#mounted && !transformed ? 1.8 : 0.95;
     if (!this.#dead) {
       this.#avatarAction = null;
-      this.playAvatarAction(this.#mounted ? ["MSTND01", "STAND01"] : ["STAND02", "STAND01"]);
-      if (this.#mounted) this.#mount?.playIdle(true);
+      this.playAvatarAction(
+        this.#mounted && !transformed ? ["MSTND01", "STAND01"] : ["STAND02", "STAND01"],
+      );
+      if (this.#mounted && !transformed) this.#mount?.playIdle(true);
     }
     this.applyInvisibility();
   }

@@ -135,6 +135,15 @@ app.innerHTML = `
     </div>
   </section>
 
+  <section id="extraction-prompt" class="extraction-prompt" role="dialog" aria-modal="true" aria-labelledby="extraction-prompt-title" aria-describedby="extraction-prompt-message" aria-hidden="true">
+    <div class="extraction-prompt-surface">
+      <strong id="extraction-prompt-title" class="extraction-prompt-title">Informação</strong>
+      <p id="extraction-prompt-message" class="extraction-prompt-message">Deseja extrair este item?</p>
+      <button type="button" class="extraction-prompt-confirm" data-extraction-confirm>Confirmar</button>
+      <button type="button" class="extraction-prompt-cancel" data-extraction-cancel>Cancelar</button>
+    </div>
+  </section>
+
   <section id="npc-interaction" class="npc-interaction" role="dialog" aria-modal="false" aria-labelledby="npc-interaction-name" aria-describedby="npc-interaction-message" aria-hidden="true">
     <div class="npc-interaction-surface">
       <header>
@@ -216,6 +225,15 @@ app.innerHTML = `
     </div>
     <div class="inventory-gold"><span>Gold</span><b id="player-coins">0</b></div>
     <p>Clique: pegar/preview · mova o mouse e clique para soltar · duplo clique: usar/equipar</p>
+  </section>
+
+  <section id="alchemy-panel" class="alchemy-panel" aria-label="Alquimia da Huntress" aria-hidden="true">
+    <header><strong>Alquimia</strong><button type="button" aria-label="Fechar alquimia" data-alchemy-close>×</button></header>
+    <div id="alchemy-results" class="alchemy-results" role="grid" aria-label="Resultados de alquimia"></div>
+    <div class="alchemy-cost"><span>Custo</span><b id="alchemy-cost">0</b></div>
+    <div id="alchemy-requirements" class="alchemy-requirements" aria-label="Itens necessários"></div>
+    <button type="button" class="alchemy-combine" data-alchemy-combine>Combinar</button>
+    <p id="alchemy-status">Selecione uma receita.</p>
   </section>
 
   <section id="skill-panel" class="skill-panel" aria-label="Skills clássicas">

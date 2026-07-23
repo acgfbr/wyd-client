@@ -155,7 +155,7 @@ O passe Ancient segue `MODULATE2X + ADDSMOOTH`. Os adicionais atuais do Carry
 de Utilidades sao `EF2=120`, `EF3=120`, `EF43=251`, grade 5; o tooltip calcula
 `Dano de Perfuracao: 480`.
 
-As skills Huntress promovidas ao runtime somam quatorze. Meditacao `#77` foi
+As skills Huntress promovidas ao runtime somam dezessete. Meditacao `#77` foi
 recuperada de `TMHuman.cpp` como cinco pares de billboards `101` em espiral;
 Escudo Dourado `#85` usa o mesmo `TMEffectLevelUp` tipo `1` do cliente, com
 texturas `122/56/2/7`. Esses casts nao usam o pulso generico e seus buffs
@@ -171,6 +171,14 @@ passos navegaveis, clona por `3 s` a pose corrente completa na origem e
 teleporta ao centro da celula confirmada. O portal tipo `2` conserva mesh
 `703`, texturas `58/94`, cyan `0x0055FF`, pulso/rotacao e som `159`; montada,
 a ilusao anima separadamente o rig do animal e o da cavaleira.
+
+O footprint de inventário não deve ser inferido pela malha ou pelo ícone.
+`SGridControlItem` lê `EF_GRID 33` dos três efeitos da instância e consulta
+`g_pItemGridXY`: índices `0..7` significam `1×1` até `2×4`. Bolsa e cargo
+agora preservam essa ocupação em add/move/swap/equip/transfer, inclusive
+clique por célula secundária. `ItemList.bin` e os Carries do corpus atual não
+possuem efeito `33`; logo o padrão legítimo continua `1×1` até um packet de
+servidor fornecer outro índice.
 
 Montarias conservam rig, partes, bancos ANI, escala e bone de sela proprios.
 Nunca aplicar ANI de cavaleiro diretamente ao animal. A MATT3 da Huntress pode
@@ -214,8 +222,11 @@ Drops locais usam apresentacao `MSG_CreateItem/TMItem`, centro `+0,5`, altura
 `+0,1`, rotacao em quartos, nome e brilho. `Espaco` coleta o vizinho alcancavel
 e `Z` alterna nomes. O cliente usa distancia 1; o fallback web solicitado usa
 alcance 3, mantendo segmento, altura e colisao. Pocoes HP/MP e Poeiras Ori/Lac
-formam pilhas de ate 50. TTL, ownership, moedas, `EF_GRID` multicelula e drop
-tables sao dependencias do servidor.
+formam pilhas de ate 50. O renderer reconhece moeda (`EF_ITEMTYPE 38 = 2`),
+decodifica `EF36:EF37` como valor de 16 bits e exibe `Bronze %d`, exatamente
+como `TMItem::InitObject` e `Messages.txt[65]`; spawn, confirmacao e saldo da
+moeda permanecem no servidor. TTL, ownership e drop tables sao dependencias
+autoritativas.
 
 ## HUD, interface e chat
 
@@ -357,8 +368,20 @@ atualizado para remover a divergencia.
   `InstanceValue=100` no alvo self aceito pelo `TargetType 2`; Desintoxicar
   `#25` porta as 21 partículas, shade e som do `TMSkillCure`, sem inventar
   estado negativo no player. A auditoria agora separa corretamente os 144
-  registros por semântica: 79 estão no runtime, 49 são passivos de catálogo e
-  16 são casts/buffs realmente pendentes. Perseguição `#16` porta
+  registros por semântica: 87 estão no runtime, 49 são passivos de catálogo e
+  8 são casts/buffs realmente pendentes. Extração `#83` e Alquimia `#84`
+  preservam o fluxo de item do cliente: a primeira seleciona/confirma um item
+  da bolsa, e a segunda abre as receitas reais de `Mixlist.bin` no atlas
+  `NewItemMix`; nenhuma delas inventa consumo ou resultado sem servidor.
+  Toxina de Serpente `#92` também está no catálogo jogável, mas conserva a
+  rejeição anterior ao gasto de mana de `TMFieldScene::SkillUse`: requer
+  `EF_WTYPE 41` (garras), enquanto o Skytalos padrão é `WTYPE 101`. O
+  `Affect 36` não cria objeto visual em `TMHuman::CheckAffect`; o runtime
+  mantém somente estado/ícone quando uma garra compatível existir.
+  Os oito casts ainda bloqueados ficam centralizados em
+  `ClassSkillBlockers.ts`; o menu `K` e `audit:coverage` consomem a mesma
+  tabela para expor claramente a fronteira de party/PvP/economia/servidor.
+  Perseguição `#16` porta
   `TMSkillSlowSlash` tipo `0`, textura `2` e som `167`; Exterminar `#22` porta
   `TMSkillBash`, os pulsos `TMSkillSpeedUp`, a explosão radial e o fogo
   `texture 33`, com pools limitados. Proteção Divina `#200` completa os casts
@@ -369,6 +392,16 @@ atualizado para remover a divergencia.
   estado sem VFX fictício. Anti Magia `#224`, Chama Resistente `#225` e Last
   Resistance `#235` seguem o mesmo contrato master no BeastMaster: estado,
   tick e fórmula autoritativa permanecem separados da apresentação.
+  As cinco transformações BeastMaster também estão no runtime:
+  `#64/#66/#68/#70/#71` resolvem respectivamente as skins
+  `44/45/47/53/54` e as famílias `BL01/LB01/DD01/SP02/MM01`, usando
+  `BoneAni4`, `ValidIndex` e `AniSound4`. A forma substitui o rig equipado,
+  mantém locomoção/ataque/morte, é mutuamente exclusiva, impede montar e
+  respeita o bloqueio clássico de trajes `4150..4199`; Titã conserva a escala
+  `2.0` imposta em `TMHuman::InitObject`. A `Invocação Final #229` carrega
+  `InstanceType=11/Value=9`, mas o cliente não contém o mapa desse valor para
+  LOOK/NPC: ele recebe a entidade já resolvida via `MSG_CreateMob`. Não criar
+  uma invocação substituta sem a tabela do servidor.
 - Backend futuro: a ultima tarefa da fila deve inventariar o servidor-base e
   produzir o guia de um multiplayer autoritativo, sem ativar rede durante o
   escopo frontend atual.

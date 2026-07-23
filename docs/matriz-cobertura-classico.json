@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-23T17:46:19.607Z",
+  "generatedAt": "2026-07-23T20:54:22.447Z",
   "command": "bun run audit:coverage",
   "source": "WYD classic",
   "referencedFiles": {
@@ -128,6 +128,7 @@
           211
         ],
         "castablePendingIndices": [],
+        "castablePending": [],
         "pendingIndices": []
       },
       {
@@ -179,6 +180,28 @@
           221,
           223
         ],
+        "castablePending": [
+          {
+            "index": 31,
+            "name": "Renascimento",
+            "blocker": "exige um jogador aliado morto e confirmação autoritativa de renascimento"
+          },
+          {
+            "index": 42,
+            "name": "Teleporte",
+            "blocker": "exige grupo, consentimento, restrições de mapa e teleporte do servidor"
+          },
+          {
+            "index": 221,
+            "name": "Incapacitador",
+            "blocker": "o affect PvP e sua duração efetiva são aceitos pelo servidor"
+          },
+          {
+            "index": 223,
+            "name": "Another Change",
+            "blocker": "registro master sem instance, tick, affect ou renderer no cliente recuperado"
+          }
+        ],
         "pendingIndices": [
           31,
           42,
@@ -192,7 +215,7 @@
         "imported": 36,
         "regular": 24,
         "master": 12,
-        "runtime": 19,
+        "runtime": 24,
         "runtimeIndices": [
           48,
           49,
@@ -210,6 +233,11 @@
           61,
           62,
           63,
+          64,
+          66,
+          68,
+          70,
+          71,
           224,
           225,
           235
@@ -227,20 +255,22 @@
           234
         ],
         "castablePendingIndices": [
-          64,
-          66,
-          68,
-          70,
-          71,
           226,
           229
         ],
+        "castablePending": [
+          {
+            "index": 226,
+            "name": "Resi Decrease",
+            "blocker": "redução de resistência e aplicação do affect são fórmulas do servidor"
+          },
+          {
+            "index": 229,
+            "name": "Invocação Final",
+            "blocker": "InstanceValue 9 só é convertido em entidade pelo servidor via MSG_CreateMob"
+          }
+        ],
         "pendingIndices": [
-          64,
-          66,
-          68,
-          70,
-          71,
           226,
           229
         ]
@@ -251,7 +281,7 @@
         "imported": 36,
         "regular": 24,
         "master": 12,
-        "runtime": 14,
+        "runtime": 17,
         "runtimeIndices": [
           72,
           73,
@@ -261,11 +291,14 @@
           79,
           80,
           81,
+          83,
+          84,
           85,
           86,
           87,
           88,
           89,
+          92,
           95
         ],
         "passiveCatalogIndices": [
@@ -288,16 +321,22 @@
           247
         ],
         "castablePendingIndices": [
-          83,
-          84,
-          92,
           241,
           246
         ],
+        "castablePending": [
+          {
+            "index": 241,
+            "name": "Absorção de Alma",
+            "blocker": "registro master sem instance, tick, affect ou renderer no cliente recuperado"
+          },
+          {
+            "index": 246,
+            "name": "Bleeding",
+            "blocker": "Affect 47 e o dano periódico de Bleeding pertencem ao servidor"
+          }
+        ],
         "pendingIndices": [
-          83,
-          84,
-          92,
           241,
           246
         ]
@@ -419,14 +458,14 @@
     {
       "label": "Player",
       "directory": "player",
-      "files": 450,
-      "bytes": 24640829,
+      "files": 509,
+      "bytes": 30993141,
       "extensions": {
-        ".ani": 141,
-        ".bon": 18,
-        ".dds": 120,
+        ".ani": 171,
+        ".bon": 23,
+        ".dds": 130,
         ".msa": 5,
-        ".msh": 166
+        ".msh": 180
       }
     },
     {
@@ -468,11 +507,11 @@
     {
       "label": "UI",
       "directory": "ui",
-      "files": 35,
-      "bytes": 6555802,
+      "files": 37,
+      "bytes": 6812601,
       "extensions": {
-        ".json": 1,
-        ".png": 33,
+        ".json": 2,
+        ".png": 34,
         ".ttf": 1
       }
     },
