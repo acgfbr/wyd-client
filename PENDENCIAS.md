@@ -278,8 +278,18 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
     voltaram aos canteiros, aguardando inspeção visual. A telemetria abaixo do
     minimapa também está concluída: agrega uma vez por segundo FPS, heap JS
     (`performance.memory`, ou `—` no Safari/iPhone) e duração/ocupação da
-    callback principal como `THREAD*`, sem alegar CPU real. Permanece aberta a
-    camada de áudio e a revisão visual final dos mapas.
+    callback principal como `THREAD*`, sem alegar CPU real. A primeira camada
+    de áudio também foi integrada: `soundlist.txt` gera um catálogo lazy com
+    332 entradas de SFX, os 13 MP3 seguem a ordem exata de `DirShow.cpp` e o
+    BGM usa o roteamento não-war recuperado de `TMFieldScene.cpp`; começa
+    desligado e a tecla `M` alterna somente a música, sem silenciar os efeitos.
+    Ataques usam os pares de arma de `TMHuman::PlayAttackSound`, e skills,
+    impactos e level up já disparam os IDs recuperados de `TMHuman.cpp` e dos
+    controladores `TMSkill*`; a coleta confirmada usa o som `31` do fluxo
+    clássico. Cinco referências do soundlist não existem no corpus e
+    permanecem explicitamente listadas. Ainda faltam conectar os eventos de
+    caminhada, monstros e ambiente aos IDs de `AniSound4.txt` e concluir a
+    revisão visual final dos mapas.
 11. Distribuição web — **concluído para o escopo atual**. O build de produção
     não publica sourcemaps, remove comentários legais/`debugger`/`console.debug`,
     minifica identificadores/sintaxe/espaços e usa nomes de assets por hash. O

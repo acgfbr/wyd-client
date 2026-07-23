@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-23T02:55:43.281Z",
+  "generatedAt": "2026-07-23T02:57:25.689Z",
   "command": "bun run audit:coverage",
   "source": "WYD classic",
   "referencedFiles": {
@@ -276,7 +276,36 @@
     "dedicatedEffectSourceFiles": 27
   },
   "audio": {
-    "importedFiles": 335
+    "importedFiles": 335,
+    "catalogSounds": 332,
+    "catalogMusic": 13,
+    "missingReferences": [
+      {
+        "kind": "sound",
+        "index": 55,
+        "source": "sound/menu/menu04-B.wav"
+      },
+      {
+        "kind": "sound",
+        "index": 95,
+        "source": "sound/effect/fireball.wav"
+      },
+      {
+        "kind": "sound",
+        "index": 96,
+        "source": "sound/effect/firearrow.wav"
+      },
+      {
+        "kind": "sound",
+        "index": 103,
+        "source": "sound/weather/weath03.wav"
+      },
+      {
+        "kind": "sound",
+        "index": 363,
+        "source": "sound/monster/mguardatt.wav"
+      }
+    ]
   },
   "screenshots": {
     "total": 124,
@@ -446,6 +475,17 @@
       "extensions": {
         ".bin": 1,
         ".dat": 1
+      }
+    },
+    {
+      "label": "Audio",
+      "directory": "audio",
+      "files": 336,
+      "bytes": 119533948,
+      "extensions": {
+        ".json": 1,
+        ".mp3": 13,
+        ".wav": 322
       }
     }
   ]

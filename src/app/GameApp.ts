@@ -286,6 +286,13 @@ export class GameApp {
     this.#input.onMountToggle = () => this.toggleMount();
     this.#input.onAutoCombatToggle = () => this.cycleAutoCombatMode();
     this.#input.onEffectsToggle = () => this.toggleEffects();
+    this.#input.onMusicToggle = () => {
+      const enabled = this.#audio.toggleMusic();
+      this.#hud.addLog(
+        enabled ? "Música ativada (M)." : "Música desativada (M).",
+        "system",
+      );
+    };
     this.#input.onNearbyGroundItemPickup = () => this.pickupNearestGroundItem();
     this.#input.onGroundItemLabelsToggle = () => {
       this.#groundItemLabelsVisible = !this.#groundItemLabelsVisible;
@@ -1373,6 +1380,7 @@ export class GameApp {
     this.#player.faceToward(target.position);
     const attack = this.#player.playAttack();
     if (!attack) return;
+    this.#audio.playBasicAttack(this.#activeClassKey, sequence);
     this.#attackCooldown = 0.72;
     this.#pendingBowAttacks.push({
       spawns: this.#boundSpawns,
@@ -1722,6 +1730,7 @@ export class GameApp {
     this.breakInvisibility();
     this.#player.stop();
     const timing = this.#player.playClassSkill(skill);
+    this.#audio.playSkill(skill.classicIndex);
     this.#attackCooldown = Math.max(
       this.#attackCooldown,
       Math.max(0.42, (timing?.animationDurationSeconds ?? 0.54) - 0.12),
@@ -1888,6 +1897,7 @@ export class GameApp {
     this.breakInvisibility();
     this.#player.stop();
     const timing = this.#player.playClassSkill(skill);
+    this.#audio.playSkill(skill.classicIndex);
     this.#attackCooldown = Math.max(
       this.#attackCooldown,
       Math.max(0.42, (timing?.animationDurationSeconds ?? 0.54) - 0.12),
@@ -1930,6 +1940,7 @@ export class GameApp {
     this.#player.stop();
     this.#player.faceToward(target.position);
     const timing = this.#player.playClassSkill(skill);
+    this.#audio.playSkill(skill.classicIndex);
     // Every offensive local route carries DoubleCritical bit 3 while the
     // passive #101 is learned; self buffs deliberately do not trigger it.
     if (this.#activeClassKey === "huntress" && SPECTRAL_FORCE.alwaysLearned) {
@@ -2174,6 +2185,7 @@ export class GameApp {
     if (skill.classicIndex !== 95) this.breakInvisibility();
     this.#player.stop();
     const timing = this.#player.playClassSkill(skill);
+    this.#audio.playSkill(skill.classicIndex);
     this.#attackCooldown = Math.max(
       this.#attackCooldown,
       Math.max(0.42, (timing?.animationDurationSeconds ?? 0.54) - 0.12),
@@ -2233,6 +2245,7 @@ export class GameApp {
     const primary = this.#boundSpawns.snapshot(primaryTargetId);
     const targets = primary ? this.selectSkillTargets(skill, primary) : [];
     this.applySkillDamageToTargets(skill, targets);
+    if (targets.length > 0) this.#audio.playSkillImpact(skill.classicIndex);
     if (showFallbackEffect) {
       this.#combatEffects.burst(position, skill.color, Math.max(0.8, Math.min(3, skill.radius || 0.8)));
     }
@@ -2683,6 +2696,7 @@ export class GameApp {
     if (rewards.levelsGained > 0) {
       const snapshot = this.#playerState.snapshot;
       this.#player?.playLevelUp();
+      this.#audio.playLevelUp();
       if (this.#player) this.#levelUpEffects.playLevelUp(this.#player.object.position);
       this.#hud.addLog(
         `LEVEL UP · nível ${snapshot.level} · ${rewards.attributePointsGained} pontos · ATQ +${rewards.attackGained} (total ${snapshot.attack})!`,

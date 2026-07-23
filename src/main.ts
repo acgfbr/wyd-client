@@ -237,7 +237,7 @@ app.innerHTML = `
     <div data-tooltip-lines hidden></div>
   </aside>
 
-  <div class="controls-hint"><span>WASD</span> mover · <span>Q/E</span> câmera · <span>RODA</span> zoom · <span>ESPAÇO</span> coletar · <span>Z</span> nomes dos drops · <span>C</span> personagem · <span>I</span> inventário · <span>K</span> skills · <span>G</span> GM · <span>R</span> montaria · <span>F</span> auto-combate · <span>V</span> efeitos</div>
+  <div class="controls-hint"><span>WASD</span> mover · <span>Q/E</span> câmera · <span>RODA</span> zoom · <span>ESPAÇO</span> coletar · <span>Z</span> nomes dos drops · <span>C</span> personagem · <span>I</span> inventário · <span>K</span> skills · <span>G</span> GM · <span>R</span> montaria · <span>F</span> auto-combate · <span>V</span> efeitos · <span>M</span> música</div>
 `;
 
 function showBootError(error: unknown): void {

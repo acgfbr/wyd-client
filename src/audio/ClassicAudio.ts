@@ -15,6 +15,39 @@ interface ClassicAudioCatalog {
 const AUDIO_ROOT = "/game-data/classic/";
 
 /**
+ * Effect-event sounds recovered from TMHuman.cpp and the TMSkill* controllers.
+ * Some classic effects intentionally start two samples in the same frame.
+ */
+const CLASSIC_SKILL_SOUNDS: Readonly<Record<number, readonly number[]>> = {
+  2: [160],
+  19: [160],
+  20: [153],
+  24: [161],
+  32: [155],
+  34: [154, 160],
+  37: [105],
+  38: [155],
+  41: [159],
+  43: [159],
+  44: [159],
+  46: [36],
+  51: [167, 157],
+  54: [159],
+  55: [38],
+  72: [160],
+  75: [174],
+  80: [171],
+  85: [37],
+  88: [160],
+  90: [169],
+};
+
+const CLASSIC_SKILL_IMPACT_SOUNDS: Readonly<Record<number, readonly number[]>> = {
+  24: [154],
+  38: [154],
+};
+
+/**
  * Lazy browser bridge for DS_SOUND_MANAGER/CSoundManager data.
  * Nothing is downloaded until a user gesture unlocks audio or a SFX is used.
  */
@@ -24,6 +57,8 @@ export class ClassicAudio {
   #catalogPromise: Promise<ClassicAudioCatalog | null> | null = null;
   #unlocked = false;
   #disposed = false;
+  // WYD installations commonly start with BGM disabled. SFX remain enabled.
+  #musicEnabled = false;
   #requestedMusicIndex: number | null = null;
   #activeMusicIndex: number | null = null;
 
@@ -39,7 +74,48 @@ export class ClassicAudio {
     const index = classicMusicIndex(position, attribute);
     if (index === this.#requestedMusicIndex) return;
     this.#requestedMusicIndex = index;
+    if (this.#unlocked && this.#musicEnabled) void this.playRequestedMusic();
+  }
+
+  get musicEnabled(): boolean {
+    return this.#musicEnabled;
+  }
+
+  toggleMusic(): boolean {
+    this.#musicEnabled = !this.#musicEnabled;
+    if (!this.#musicEnabled) {
+      this.#music.pause();
+      return false;
+    }
     if (this.#unlocked) void this.playRequestedMusic();
+    return true;
+  }
+
+  playBasicAttack(classKey: string, sequence: number): void {
+    // PlayAttackSound in TMHuman.cpp switches by equipped weapon type. These
+    // are the weapon families currently equipped by the offline class presets.
+    const pair = classKey === "huntress"
+      ? [137, 138]
+      : classKey === "foema"
+        ? [131, 132]
+        : classKey === "transknight"
+          ? [124, 125]
+          : [128, 129];
+    void this.playSound(pair[Math.abs(sequence) % pair.length]!, 0.28);
+  }
+
+  playSkill(classicIndex: number): void {
+    this.playSoundSet(CLASSIC_SKILL_SOUNDS[classicIndex], 0.3);
+  }
+
+  playSkillImpact(classicIndex: number): void {
+    this.playSoundSet(CLASSIC_SKILL_IMPACT_SOUNDS[classicIndex], 0.27);
+  }
+
+  playLevelUp(): void {
+    // Generic remote-player level-up sample used by TMHuman when the focused
+    // model has no authored LEVELUP sound in AniSound4.
+    void this.playSound(158, 0.34);
   }
 
   async playSound(index: number, volume = 0.32): Promise<boolean> {
@@ -88,13 +164,21 @@ export class ClassicAudio {
     this.#unlocked = true;
     window.removeEventListener("pointerdown", this.unlock, { capture: true });
     window.removeEventListener("keydown", this.unlock, { capture: true });
-    void this.playRequestedMusic();
+    if (this.#musicEnabled) void this.playRequestedMusic();
   };
 
   private async playRequestedMusic(): Promise<void> {
     const requested = this.#requestedMusicIndex;
-    if (!this.#unlocked || this.#disposed || requested === null) return;
+    if (!this.#unlocked || !this.#musicEnabled || this.#disposed || requested === null) return;
     if (requested === this.#activeMusicIndex && !this.#music.paused) return;
+    if (requested === this.#activeMusicIndex && this.#music.src) {
+      try {
+        await this.#music.play();
+      } catch {
+        // A later trusted gesture will retry through unlock.
+      }
+      return;
+    }
     const catalog = await this.loadCatalog();
     if (this.#disposed || requested !== this.#requestedMusicIndex) return;
     const entry = catalog?.music.find((candidate) => candidate.index === requested);
@@ -120,6 +204,11 @@ export class ClassicAudio {
         .catch(() => null);
     }
     return this.#catalogPromise;
+  }
+
+  private playSoundSet(indices: readonly number[] | undefined, volume: number): void {
+    if (!indices) return;
+    for (const index of indices) void this.playSound(index, volume);
   }
 }
 

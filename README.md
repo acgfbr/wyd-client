@@ -26,6 +26,9 @@ reutilizado.
   classe/master do `SkillData.bin` renovados por 15 minutos.
 - HUD clássico e inventário 7.54 com quatro bolsas, drag/drop, equipamento e
   preview 3D por clique, além do catálogo de skills e seletor de mapas.
+- Trilha clássica roteada por mapa/cidade e catálogo lazy de 332 SFX. A música
+  começa desligada e pode ser alternada com `M`; SFX de ataque, skill, impacto,
+  level up e coleta continuam independentes.
 
 ## Capturas do build atual
 
@@ -162,7 +165,7 @@ bun run import:all
 ```
 
 O comando executa, em ordem, os importadores de mundo/criaturas, personagem,
-skills, UI e comércio. Para depuração, eles também podem ser chamados
+skills, UI, comércio e áudio. Para depuração, eles também podem ser chamados
 separadamente:
 
 ```bash
@@ -171,6 +174,7 @@ bun run import:player -- "/caminho/para/Origem"
 bun run import:skills -- "/caminho/para/Origem"
 bun run import:ui -- "/caminho/para/Origem"
 bun run import:commerce -- "/caminho/para/Origem" "/caminho/para/tools/data"
+bun run import:audio -- "/caminho/para/Origem"
 ```
 
 `import:commerce` gera
@@ -210,6 +214,7 @@ servidor.
 | Abas de bolsa | Alternar entre as quatro páginas de 15 espaços |
 | `K` | Abrir/fechar catálogo de skills |
 | `V` | Ligar/desligar todos os efeitos visuais |
+| `M` | Ligar/desligar somente a música (desligada por padrão) |
 
 ### Loot offline
 
@@ -254,7 +259,8 @@ Git da Vercel:
 4. Clique em **Deploy** e valide `/game-data/classic/manifest.json` na URL
    publicada antes de abrir o jogo.
 
-O pacote atual possui cerca de 135 MB. No plano Hobby, a Vercel limita uploads
+O pacote atual possui cerca de 264 MB depois da importação das músicas e SFX
+clássicos. No plano Hobby, a Vercel limita uploads
 de arquivos-fonte feitos pela CLI a 100 MB; por isso, prefira a integração Git
 para este repositório. O limite documentado e os demais limites atuais estão na
 [documentação oficial da Vercel](https://vercel.com/docs/limits). Se futuramente
@@ -274,6 +280,7 @@ que você tem autorização para distribuí-los.
 | Personagem vira cápsula / traje ou montaria ausente | Rode `bun run import:player`. |
 | HUD sem imagens | Rode `bun run import:ui`. |
 | Menu de skills pede importação | Rode `bun run import:skills`. |
+| Jogo sem música/SFX | Rode `bun run import:audio`; a reprodução começa após clique/toque/tecla por causa da política de autoplay. |
 | `NPCGener.txt` ou `npcdb` ausente | Corrija o segundo caminho passado ao `import:all`. |
 | Erro de nome de arquivo no Linux | Preserve exatamente as pastas `Env`, `Effect`, `UI`, `NUI` e `mesh`. |
 | Tela preta ou erro WebGL | Atualize o navegador/driver e habilite aceleração de hardware. |

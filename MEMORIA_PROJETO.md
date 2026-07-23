@@ -223,7 +223,10 @@ refinamento, Ancient e preco estatico quando aplicavel.
   precisam de baseline manual.
 - Nem todas as 248 skills possuem definicao jogavel e renderer fiel; a matriz
   automatica mostra a cobertura por classe.
-- Audio ainda nao foi importado para o runtime.
+- Audio possui 332 entradas SFX e 13 musicas importadas. O BGM segue o
+  roteamento classico, inicia desligado e `M` alterna apenas a musica. Ataque,
+  skill, impacto, level up e coleta ja usam IDs recuperados do cliente; ainda
+  faltam caminhada, monstros e ambiente do `AniSound4.txt`.
 - Cobertura visual de todos os equipamentos, skins raros e acoes especiais de
   criaturas continua incompleta.
 - WebGPU nao e substituto direto: shaders `onBeforeCompile` e materiais WebGL

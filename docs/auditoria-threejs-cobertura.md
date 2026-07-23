@@ -93,7 +93,7 @@ nos demais Fields fazem parte do proprio manifesto, nao sao links quebrados.
 | Itens/comércio | 6.500 ItemList, ItemPrice, Carry de NPC, tooltips clássicos | `ClassicCommerceCatalog`, `ClassicItemTooltip` | Footprint multicélula EF_GRID e ownership de drops |
 | HUD/chat | Orbes, C.C., menu, chat local, overhead name/HP/balão | `main.ts`, `GameHud`, `ClassicPlayerOverheadHud` | Homologar 1024x768, widescreen e iPhone |
 | Skills/VFX | Vários lotes por classe implementados; skills não citadas bloqueadas | `ClassSkills`, `render/effects` | Épico de skills completo continua aberto |
-| Áudio | Fora do runtime atual | n/a | Importar sons e tocar eventos originais |
+| Áudio | 332 SFX, 13 músicas, BGM opcional por mapa e SFX de ataque/skills/impacto/level up/coleta | `audio/catalog.json`, `ClassicAudio` | Ligar passos, monstros e ambiente do AniSound |
 | Rede/servidor | Deliberadamente fora do escopo atual | n/a | Sessão, economia, dano autoritativo, drops reais |
 
 ## Ordem segura para continuar
