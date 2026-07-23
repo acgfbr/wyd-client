@@ -958,6 +958,12 @@ function treeLookForObjectType(type) {
 function skinnedObjectLooksForType(type) {
   const tree = treeLookForObjectType(type);
   if (tree) return { kind: "tree", skin: tree.skin, looks: [tree] };
+  // TMObjectContainer instantiates DAT type 3 as TMFloat. Its constructor
+  // fixes m_nSkinMeshType to 62 and leaves LOOK_INFO zeroed, so TMSkinMesh
+  // resolves the sole fl01 part/variant (fl010101) from BoneAni4.txt.
+  if (type === 3) {
+    return { kind: "float", skin: 62, looks: [{ mesh0: 0, skin0: 0 }] };
+  }
   if (type >= 311 && type <= 322) {
     const late = type >= 317;
     return {

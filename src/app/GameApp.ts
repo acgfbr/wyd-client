@@ -89,10 +89,11 @@ const HELD_GROUND_DESTINATION_EPSILON = 0.08;
 const NPC_INTERACTION_DEBOUNCE_SECONDS = 1;
 const NPC_HOVER_DIRTY_INTERVAL_SECONDS = 0.04;
 const NPC_HOVER_REFRESH_INTERVAL_SECONDS = 0.12;
-// TMHuman::MoveGet throttles MSG_GetItem to one request per second and sends
-// it from BASE_GetDistance <= 1 (the item cell or one of its 8 neighbours).
-// TMItem also unloads outside the focused 18-cell square.
+// TMHuman::MoveGet uses BASE_GetDistance <= 1. The offline client intentionally
+// widens that interaction comfort to 3 cells, as requested, while preserving
+// the same height/collision line check so walls and bridge layers still block.
 const GROUND_ITEM_PICKUP_COOLDOWN_SECONDS = 1;
+const OFFLINE_GROUND_ITEM_PICKUP_RANGE = 3;
 const GROUND_ITEM_STREAM_RADIUS = 18;
 // The server-owned retail expiration is unavailable in the recovered client.
 // Bound only the offline residency so continuous C.C cannot retain unlimited
@@ -795,9 +796,8 @@ export class GameApp {
     let nearestDistanceSquared = Number.POSITIVE_INFINITY;
     for (const item of manager.snapshots()) {
       if (!manager.isMaterialized(item.id) || !this.#offlineGroundItems.get(item.id)) continue;
-      if (!isWithinClassicPickupRange(player.position, item.position)) continue;
+      if (!isWithinGroundItemPickupRange(player.position, item.position)) continue;
       const center = centeredGroundItemPosition(item.position);
-      if (!world.navigation.canTravelDirectly(player.position, center)) continue;
       const dx = center.x - player.position.x;
       const dy = center.y - player.position.y;
       const distanceSquared = dx * dx + dy * dy;
@@ -830,12 +830,9 @@ export class GameApp {
       return;
     }
     const center = centeredGroundItemPosition(item.position);
-    const alreadyInRange = isWithinClassicPickupRange(player.position, item.position);
-    if (alreadyInRange && !world.navigation.canTravelDirectly(player.position, center)) {
-      this.#hud.addLog("Não há rota válida até esse item.", "system");
-      return;
-    }
-    if (!alreadyInRange && !player.moveTo(center)) {
+    const alreadyInRange = isWithinGroundItemPickupRange(player.position, item.position)
+      && world.navigation.canTravelDirectly(player.position, center);
+    if (!alreadyInRange && !this.moveToGroundItemPickupPosition(item)) {
       this.#hud.addLog("Não há rota válida até esse item.", "system");
       return;
     }
@@ -854,6 +851,35 @@ export class GameApp {
       : Math.hypot(center.x - player.position.x, center.y - player.position.y);
     this.#groundItemPickupOwnsMovement = !alreadyInRange;
     this.#clickMarker.visible = false;
+  }
+
+  private moveToGroundItemPickupPosition(item: ClassicGroundItemSnapshot): boolean {
+    const player = this.#player;
+    const navigation = this.#world?.navigation;
+    if (!player || !navigation) return false;
+    const itemCenter = centeredGroundItemPosition(item.position);
+    const itemCellX = Math.floor(item.position.x);
+    const itemCellY = Math.floor(item.position.y);
+    const candidates: WydPosition[] = [];
+    for (let y = itemCellY - OFFLINE_GROUND_ITEM_PICKUP_RANGE; y <= itemCellY + OFFLINE_GROUND_ITEM_PICKUP_RANGE; y++) {
+      for (let x = itemCellX - OFFLINE_GROUND_ITEM_PICKUP_RANGE; x <= itemCellX + OFFLINE_GROUND_ITEM_PICKUP_RANGE; x++) {
+        const candidate = { x: x + 0.5, y: y + 0.5 };
+        if (!isWithinGroundItemPickupRange(candidate, item.position)) continue;
+        if (navigation.sample(candidate).walkability !== "walkable") continue;
+        if (!navigation.canTravelDirectly(candidate, itemCenter)) continue;
+        candidates.push(candidate);
+      }
+    }
+    candidates.sort((left, right) => {
+      const leftDistance = squaredDistance(left, player.position);
+      const rightDistance = squaredDistance(right, player.position);
+      if (leftDistance !== rightDistance) return leftDistance - rightDistance;
+      return squaredDistance(left, itemCenter) - squaredDistance(right, itemCenter);
+    });
+    for (const candidate of candidates) {
+      if (player.moveTo(candidate)) return true;
+    }
+    return false;
   }
 
   private updateGroundItemPickup(deltaSeconds: number): void {
@@ -887,7 +913,7 @@ export class GameApp {
       this.cancelGroundItemPickup();
       return;
     }
-    if (!isWithinClassicPickupRange(player.position, item.position)) {
+    if (!isWithinGroundItemPickupRange(player.position, item.position)) {
       const center = centeredGroundItemPosition(item.position);
       const distance = Math.hypot(center.x - player.position.x, center.y - player.position.y);
       this.#groundItemPickupApproachRemaining -= Math.max(0, deltaSeconds);
@@ -1036,6 +1062,7 @@ export class GameApp {
     this.#npcHoverRefreshRemaining = NPC_HOVER_REFRESH_INTERVAL_SECONDS;
     if (!pointerState) {
       spawns?.setFriendlyHover(null);
+      spawns?.setHostileHover(null);
       groundItems?.setHovered(null);
       return;
     }
@@ -1043,6 +1070,7 @@ export class GameApp {
     this.#npcHoverRaycastCooldown = NPC_HOVER_DIRTY_INTERVAL_SECONDS;
     this.#raycaster.setFromCamera(this.#npcHoverPointer, this.#camera);
     let friendlyId: string | null = null;
+    let hostileId: string | null = null;
     let actorOwnsHover = false;
     if (spawns) {
       const actorHits = this.#raycaster.intersectObject(spawns.object, true);
@@ -1053,12 +1081,14 @@ export class GameApp {
         const target = spawns.targetFromObject(candidate.object);
         if (!target) continue;
         actorOwnsHover = true;
-        if (target.alive && !target.hostile) friendlyId = target.id;
+        if (target.alive && target.hostile) hostileId = target.id;
+        else if (target.alive) friendlyId = target.id;
         // The nearest actor always owns the hover, even when it is hostile.
         break;
       }
     }
     spawns?.setFriendlyHover(friendlyId);
+    spawns?.setHostileHover(hostileId);
 
     let groundItemId: string | null = null;
     if (!actorOwnsHover && groundItems) {
@@ -1076,7 +1106,11 @@ export class GameApp {
   private clearNpcHover(): void {
     const worldSpawns = this.#world?.spawns ?? null;
     this.#boundSpawns?.setFriendlyHover(null);
-    if (worldSpawns && worldSpawns !== this.#boundSpawns) worldSpawns.setFriendlyHover(null);
+    this.#boundSpawns?.setHostileHover(null);
+    if (worldSpawns && worldSpawns !== this.#boundSpawns) {
+      worldSpawns.setFriendlyHover(null);
+      worldSpawns.setHostileHover(null);
+    }
     this.#groundItems?.setHovered(null);
   }
 
@@ -1084,6 +1118,8 @@ export class GameApp {
     const spawns = this.#world?.spawns ?? null;
     if (!spawns || spawns === this.#boundSpawns) return;
     this.#boundSpawns?.setFriendlyHover(null);
+    this.#boundSpawns?.setHostileHover(null);
+    this.#boundSpawns?.setSelectedHostile(null);
     this.#pendingBowAttacks.length = 0;
     this.#weakenedMonsters.clear();
     this.#macroUnreachableTargets.clear();
@@ -1103,6 +1139,7 @@ export class GameApp {
       }),
     ];
     this.#boundSpawns = spawns;
+    spawns.setSelectedHostile(this.#selectedTargetId);
   }
 
   private updateCombat(deltaSeconds: number, manualMouseForward = false): void {
@@ -2454,6 +2491,8 @@ export class GameApp {
     this.#macroOwnsTarget = target !== null && macroOwned;
     this.#targetApproachCooldown = 0;
     this.#hud.setTarget(target);
+    const spawns = this.#world?.spawns ?? this.#boundSpawns;
+    spawns?.setSelectedHostile(target?.hostile ? target.id : null);
     this.#clickMarker.visible = false;
   }
 
@@ -2592,9 +2631,7 @@ export class GameApp {
     this.cancelGroundItemPickup();
     this.resetGroundPortalPrompt();
     this.closeNpcInteraction();
-    this.#selectedTargetId = null;
-    this.#macroOwnsTarget = false;
-    this.#hud.setTarget(null);
+    this.selectTarget(null);
     playOptionalPlayerAction(this.#player, "playDeath");
     this.#hud.addLog("Você morreu · retornando a Armia…", "system");
   }
@@ -2658,9 +2695,7 @@ export class GameApp {
     this.#weakenedMonsters.clear();
     this.#queuedSkillSlot = null;
     this.#queuedSkillOrigin = null;
-    this.#selectedTargetId = null;
-    this.#macroOwnsTarget = false;
-    this.#hud.setTarget(null);
+    this.selectTarget(null);
     this.#skills.clearBuffs();
     this.#buffVisualPulseRemaining.clear();
     this.#skillEffects.clear();
@@ -3184,10 +3219,21 @@ function centeredGroundItemPosition(position: WydPosition): WydPosition {
   return { x: Math.floor(position.x) + 0.5, y: Math.floor(position.y) + 0.5 };
 }
 
-/** BASE_GetDistance's 0..1 neighbourhood from the classic lookup table. */
-function isWithinClassicPickupRange(player: WydPosition, item: WydPosition): boolean {
-  return Math.abs(Math.floor(player.x) - Math.floor(item.x)) <= 1
-    && Math.abs(Math.floor(player.y) - Math.floor(item.y)) <= 1;
+function isWithinGroundItemPickupRange(player: WydPosition, item: WydPosition): boolean {
+  return classicGridDistance(player, item) <= OFFLINE_GROUND_ITEM_PICKUP_RANGE;
+}
+
+function classicGridDistance(left: WydPosition, right: WydPosition): number {
+  const dx = Math.abs(Math.floor(left.x) - Math.floor(right.x));
+  const dy = Math.abs(Math.floor(left.y) - Math.floor(right.y));
+  if (dx <= 6 && dy <= 6) return CLASSIC_GRID_DISTANCE_TABLE[dy]![dx]!;
+  return dx <= dy ? dy + 1 : dx + 1;
+}
+
+function squaredDistance(left: WydPosition, right: WydPosition): number {
+  const dx = left.x - right.x;
+  const dy = left.y - right.y;
+  return dx * dx + dy * dy;
 }
 
 function canAcceptInventoryItem(snapshot: PlayerSnapshot, item: InventoryItem): boolean {
@@ -3197,6 +3243,16 @@ function canAcceptInventoryItem(snapshot: PlayerSnapshot, item: InventoryItem): 
     || (stack.item.key === item.key && stack.quantity < maxStack)
   ));
 }
+
+const CLASSIC_GRID_DISTANCE_TABLE = Object.freeze([
+  Object.freeze([0, 1, 2, 3, 4, 5, 6]),
+  Object.freeze([1, 1, 2, 3, 4, 5, 6]),
+  Object.freeze([2, 2, 3, 4, 4, 5, 6]),
+  Object.freeze([3, 3, 4, 4, 5, 5, 6]),
+  Object.freeze([4, 4, 4, 5, 5, 5, 6]),
+  Object.freeze([5, 5, 5, 5, 5, 6, 6]),
+  Object.freeze([6, 6, 6, 6, 6, 6, 6]),
+] as const);
 
 function createClickMarker(): THREE.Mesh {
   const marker = new THREE.Mesh(

@@ -101,6 +101,7 @@ export class ClassicWorld {
       assets,
       origin,
       (position) => this.heightAt(position),
+      (position) => this.colorAt(position),
       this.models,
     );
     for (const field of assets.manifest.fields) {
@@ -157,6 +158,7 @@ export class ClassicWorld {
       predictiveLead(previous, position, deltaSeconds),
     );
     this.retryObjectLoads();
+    this.#mapObjects.update(deltaSeconds);
     this.#spawns?.update(deltaSeconds, position);
   }
 
@@ -584,6 +586,37 @@ export class ClassicWorld {
       : Math.max(terrainHeight, collisionHeight);
   }
 
+  /** Terrain colour sampled at the same triangle used by the rendered TRN. */
+  colorAt(position: WydPosition): THREE.Color {
+    const field = fieldAt(position);
+    const block = this.#blocks.get(fieldKey(field.column, field.row));
+    if (!block) return new THREE.Color(0xaaaaaa);
+    const localX = (position.x - field.column * FIELD_WORLD_SIZE) / TILE_WORLD_SIZE;
+    const localY = (position.y - field.row * FIELD_WORLD_SIZE) / TILE_WORLD_SIZE;
+    const x0 = Math.max(0, Math.min(TRN_SIDE - 1, Math.floor(localX)));
+    const y0 = Math.max(0, Math.min(TRN_SIDE - 1, Math.floor(localY)));
+    const x1 = Math.min(TRN_SIDE - 1, x0 + 1);
+    const y1 = Math.min(TRN_SIDE - 1, y0 + 1);
+    const tx = localX - x0;
+    const ty = localY - y0;
+    const c00 = colorFromArgb(block.tiles[y0 * TRN_SIDE + x0]?.colorArgb ?? 0xffaaaaaa);
+    const c10 = colorFromArgb(block.tiles[y0 * TRN_SIDE + x1]?.colorArgb ?? 0xffaaaaaa);
+    const c01 = colorFromArgb(block.tiles[y1 * TRN_SIDE + x0]?.colorArgb ?? 0xffaaaaaa);
+    const c11 = colorFromArgb(block.tiles[y1 * TRN_SIDE + x1]?.colorArgb ?? 0xffaaaaaa);
+    if (tx + ty <= 1) {
+      return new THREE.Color(
+        c00.r + tx * (c10.r - c00.r) + ty * (c01.r - c00.r),
+        c00.g + tx * (c10.g - c00.g) + ty * (c01.g - c00.g),
+        c00.b + tx * (c10.b - c00.b) + ty * (c01.b - c00.b),
+      );
+    }
+    return new THREE.Color(
+      (1 - tx) * c01.r + (1 - ty) * c10.r + (tx + ty - 1) * c11.r,
+      (1 - tx) * c01.g + (1 - ty) * c10.g + (tx + ty - 1) * c11.g,
+      (1 - tx) * c01.b + (1 - ty) * c10.b + (tx + ty - 1) * c11.b,
+    );
+  }
+
   /**
    * Returns the untouched AttributeMap byte for a resident world coordinate.
    * Bit 0x10 is the retail ground-portal trigger; callers must still apply
@@ -732,4 +765,12 @@ function copyHeightAndColor(
     height: sourceTile.height,
     colorArgb: sourceTile.colorArgb,
   };
+}
+
+function colorFromArgb(argb: number): THREE.Color {
+  return new THREE.Color(
+    ((argb >>> 16) & 0xff) / 255,
+    ((argb >>> 8) & 0xff) / 255,
+    (argb & 0xff) / 255,
+  );
 }

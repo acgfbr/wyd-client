@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import type { ClassicAssetSource } from "../../assets/ClassicAssetSource";
 import type { MapObjectRecord } from "../../formats/classic/Dat";
-import { FIELD_WORLD_SIZE, toScene, type WydPosition } from "../../world/coordinates";
+import { FIELD_WORLD_SIZE, fieldAt, toScene, type WydPosition } from "../../world/coordinates";
 import { fieldKey } from "../../world/regions";
 import type { ModelLibrary } from "../objects/ModelLibrary";
 import { ClassicDdsTextureLoader } from "../textures/ClassicDdsTextureLoader";
@@ -28,7 +28,7 @@ const surfaceVertexShader = /* glsl */ `
     vUv1 = uv + vec2(0.0, time / 12.0);
     vUv2 = uv2 + vec2(time / 18.0, time / 12.0);
     vec3 animated = position;
-    animated.y += sin(position.x * 1.5707963 + time * 6.2831853) * 0.05 - 0.1;
+    animated.y += sin(uv.x * 3.14159265 + time * 1.04719755) * 0.05 - 0.1;
     gl_Position = projectionMatrix * modelViewMatrix * vec4(animated, 1.0);
   }
 `;
@@ -74,6 +74,7 @@ export class MapWater {
   readonly #materials = new Map<string, Promise<THREE.ShaderMaterial | null>>();
   readonly #fieldGroups = new Map<string, THREE.Group>();
   readonly #fieldModelTypes = new Map<string, readonly number[]>();
+  readonly #fieldSurfaces = new Map<string, readonly ClassicWaterSurface[]>();
   readonly #generations = new Map<string, number>();
 
   constructor(
@@ -94,6 +95,9 @@ export class MapWater {
     this.#fieldGroups.set(key, group);
     this.object.add(group);
     const waterRecords = records.filter((record) => record.type === 2);
+    // Register before the first await. TMFloat loads concurrently with this
+    // renderer and must be able to resolve its surface immediately.
+    this.#fieldSurfaces.set(key, waterRecords.map((record) => createWaterSurface(column, row, record)));
     const houseRecords = records.filter((record) => HOUSE_WATER_COMPANIONS.has(record.type));
     if (waterRecords.length === 0 && houseRecords.length === 0) return;
     const dungeon = dungeonType(column, row);
@@ -171,6 +175,7 @@ export class MapWater {
   removeBlock(column: number, row: number): void {
     const key = fieldKey(column, row);
     this.#generations.set(key, (this.#generations.get(key) ?? 0) + 1);
+    this.#fieldSurfaces.delete(key);
     const modelTypes = this.#fieldModelTypes.get(key);
     if (modelTypes) {
       this.#fieldModelTypes.delete(key);
@@ -187,6 +192,39 @@ export class MapWater {
       // O ShaderMaterial e as texturas sao compartilhados entre todos os
       // Fields; somente a geometria pertencente ao bloco e descartada aqui.
     });
+  }
+
+  /** Exact TMScene::GroundGetWaterHeight lookup for resident Fields. */
+  waterHeightAt(
+    position: WydPosition,
+    timeMilliseconds = performance.now(),
+    preferredField?: string,
+  ): number | null {
+    const field = fieldAt(position);
+    const keys = [
+      fieldKey(field.column, field.row),
+      fieldKey(field.column - 1, field.row),
+      fieldKey(field.column + 1, field.row),
+      fieldKey(field.column, field.row - 1),
+      fieldKey(field.column, field.row + 1),
+    ];
+    if (preferredField && !keys.includes(preferredField)) keys.push(preferredField);
+    const gridX = Math.trunc(position.x);
+    const gridY = Math.trunc(position.y);
+    for (const key of keys) {
+      for (const surface of this.#fieldSurfaces.get(key) ?? []) {
+        if (
+          gridX < surface.left
+          || gridX >= surface.right
+          || gridY < surface.top
+          || gridY >= surface.bottom
+        ) continue;
+        const phase = (position.x - surface.left) * Math.PI / 2
+          + ((timeMilliseconds % 12_000) / 6_000) * Math.PI * 2;
+        return surface.height + Math.sin(phase) * 0.1 - 0.1;
+      }
+    }
+    return null;
   }
 
   private material(dungeon: boolean): Promise<THREE.ShaderMaterial | null> {
@@ -247,6 +285,33 @@ export class MapWater {
     this.#materials.set(key, promise);
     return promise;
   }
+}
+
+interface ClassicWaterSurface {
+  readonly left: number;
+  readonly right: number;
+  readonly top: number;
+  readonly bottom: number;
+  readonly height: number;
+}
+
+function createWaterSurface(
+  column: number,
+  row: number,
+  record: MapObjectRecord,
+): ClassicWaterSurface {
+  const x = column * FIELD_WORLD_SIZE + record.localX;
+  const y = row * FIELD_WORLD_SIZE + record.localY;
+  const gridX = Math.trunc(record.mask / 2);
+  const gridY = Math.trunc(record.textureSet / 2);
+  return {
+    // C++ float-to-int truncation used by TMSea::InitPosition.
+    left: Math.trunc(x - gridX),
+    right: Math.trunc(x + gridX),
+    top: Math.trunc(y - gridY),
+    bottom: Math.trunc(y + gridY),
+    height: record.height,
+  };
 }
 
 function createWaterGeometry(gridX: number, gridY: number): THREE.BufferGeometry {

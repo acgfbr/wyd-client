@@ -326,7 +326,10 @@ button, select { font: inherit; }
   background: #060807;
   box-shadow: inset 0 0 0 1px #111, 1px 2px 2px rgb(0 0 0 / 60%);
   overflow: hidden;
+  pointer-events: auto;
+  cursor: help;
 }
+.classic-buff:focus-visible { outline: 1px solid #ead78e; outline-offset: 1px; }
 .classic-buff::after {
   content: "";
   position: absolute;
@@ -349,6 +352,79 @@ button, select { font: inherit; }
   font: 700 8px/9px Tahoma, sans-serif;
   text-shadow: 1px 1px #000;
 }
+
+.game-tooltip {
+  position: fixed;
+  top: var(--tooltip-top, 0);
+  left: var(--tooltip-left, 0);
+  z-index: 120;
+  box-sizing: border-box;
+  width: min(240px, calc(100vw - 16px));
+  height: min(270px, calc(100vh - 16px));
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: rgb(0 0 0 / 67%);
+  color: #fff;
+  font: 500 12px/18px Tahoma, Arial, sans-serif;
+  text-align: center;
+  text-shadow: none;
+  box-shadow: none;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  overflow: hidden;
+}
+.game-tooltip.is-visible { opacity: 1; visibility: visible; }
+.game-tooltip > strong {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 20px;
+  padding: 0 5px;
+  color: #aaaaff;
+  font: inherit;
+  box-sizing: border-box;
+}
+.game-tooltip > p {
+  width: 100%;
+  min-height: 18px;
+  margin: 0;
+  padding: 0 5px;
+  color: #fff;
+  line-height: 18px;
+  white-space: pre-line;
+  box-sizing: border-box;
+}
+.game-tooltip > div {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0 5px;
+  color: #fff;
+  box-sizing: border-box;
+}
+.game-tooltip > div span {
+  display: block;
+  min-height: 18px;
+  color: #fff;
+  line-height: 18px;
+  white-space: pre-line;
+}
+.game-tooltip > div span[data-tone="muted"] { color: #b8b8b8; }
+.game-tooltip > div span[data-tone="option-common"] { color: #99ee99; }
+.game-tooltip > div span[data-tone="option-good"] { color: #ffffaa; }
+.game-tooltip > div span[data-tone="option-superior"] { color: #ffaa00; }
+.game-tooltip > div span[data-tone="refinement"] { color: #88aaff; }
+.game-tooltip > div span[data-tone="danger"] { color: #ff0000; }
+.game-tooltip > div span[data-tone="special"] { color: #ffff00; }
+.game-tooltip [hidden] { display: none; }
+.game-tooltip[data-tone="skill"] > strong { color: #aaaaff; }
+.game-tooltip[data-tone="buff"] > strong { color: #ffffaa; }
+.game-tooltip[data-tone="item-uncommon"] > strong { color: #99ee99; }
+.game-tooltip[data-tone="item-rare"] > strong { color: #ffffaa; }
+.game-tooltip[data-tone="item-epic"] > strong { color: #ffaa00; }
 
 .target-status {
   position: fixed;

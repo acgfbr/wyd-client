@@ -38,10 +38,18 @@ export interface InventoryItem {
   /** Refinamento dinâmico do STRUCT_ITEM (sSanc), exibido como no grid clássico. */
   readonly refinement?: number;
   readonly ancient?: boolean;
+  /** Three STRUCT_ITEM instance effects preserved from Carry/ground packets. */
+  readonly classicInstanceEffects?: readonly InventoryItemClassicEffect[];
   /** Segunda textura usada pelo passe clássico MODULATE2X + ADDSMOOTH. */
   readonly refinementTextureIndex?: number;
   readonly heal?: number;
   readonly mana?: number;
+}
+
+export interface InventoryItemClassicEffect {
+  readonly effect: number;
+  readonly value: number;
+  readonly packed?: number;
 }
 
 export interface InventoryStack {
@@ -235,6 +243,11 @@ export class PlayerState {
       previewModelType: 762,
       refinement: 15,
       ancient: true,
+      classicInstanceEffects: [
+        { effect: 2, value: 120, packed: 30722 },
+        { effect: 3, value: 120, packed: 30723 },
+        { effect: 43, value: 251, packed: -1237 },
+      ],
       refinementTextureIndex: 165,
     };
     const mulherKalintz: InventoryItem = {

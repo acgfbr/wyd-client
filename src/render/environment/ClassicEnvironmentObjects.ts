@@ -380,6 +380,7 @@ function regionalLeafVariant(
 }
 
 function shaderProfile(type: number, kind: CatalogSkinnedObject["kind"]): ShaderProfile {
+  if (kind === "float") throw new Error("TMFloat pertence à camada aquática animada");
   if (kind === "butterfly") return type === 7 ? "butterfly-tiny" : "butterfly";
   return kind;
 }

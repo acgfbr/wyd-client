@@ -46,8 +46,10 @@ export interface ClassicCommerceItem {
   readonly requirements: ClassicCommerceItemRequirements;
   readonly effects: readonly ClassicCommerceItemEffect[];
   readonly unique: number;
+  readonly reserved: number;
   readonly position: number;
   readonly extra: number;
+  readonly link: number;
   readonly grade: number;
   readonly staticBasePrice: ClassicStaticDisplayPrice;
   readonly staticDisplayPrice: ClassicStaticDisplayPrice;
@@ -107,8 +109,10 @@ interface RawCatalogItem {
   readonly clientStaticPriceOverride: number | null;
   readonly itemPriceOverride: { readonly record: number; readonly price: number } | null;
   readonly unique: number;
+  readonly reserved?: number;
   readonly position: number;
   readonly extra: number;
+  readonly link?: number;
   readonly grade: number;
 }
 
@@ -283,8 +287,10 @@ function normalizeItem(raw: RawCatalogItem): ClassicCommerceItem {
     requirements,
     effects,
     unique: raw.unique,
+    reserved: raw.reserved ?? 0,
     position: raw.position,
     extra: raw.extra,
+    link: raw.link ?? 0,
     grade: raw.grade,
     staticBasePrice: staticDisplayPrice(raw.basePrice, "ItemList.bin"),
     staticDisplayPrice: staticDisplayPrice(
@@ -363,6 +369,8 @@ function validateItem(value: unknown, expectedIndex: number): void {
   for (const field of ["mesh", "texture", "visualEffect", "basePrice", "price", "unique", "position", "extra", "grade"] as const) {
     expectInteger(item[field], `items[${expectedIndex}].${field}`);
   }
+  if (item.reserved !== undefined) expectInteger(item.reserved, `items[${expectedIndex}].reserved`);
+  if (item.link !== undefined) expectInteger(item.link, `items[${expectedIndex}].link`);
   const requirements = expectRecord(item.requirements, `items[${expectedIndex}].requirements`);
   for (const field of ["level", "strength", "intelligence", "dexterity", "constitution"] as const) {
     expectInteger(requirements[field], `items[${expectedIndex}].requirements.${field}`);

@@ -57,15 +57,15 @@ app.innerHTML = `
       <div class="hud-bar is-exp"><b>EXP</b><i id="player-exp-fill"></i><span id="player-exp-text">0 / 1105</span></div>
     </div>
     <div class="classic-hotbar" aria-label="Barra de atalhos">
-      <button id="skill-slot-1" type="button" data-key="1" title="1 · Flecha"><span class="quickslot-icon">➶</span><span class="skill-name">Flecha</span><kbd>1</kbd><span class="skill-cooldown"></span></button>
-      <button id="skill-slot-2" type="button" data-key="2" title="2 · Tempestade"><span class="quickslot-icon">✦</span><span class="skill-name">Temp.</span><kbd>2</kbd><span class="skill-cooldown"></span></button>
-      <button id="skill-slot-3" type="button" data-key="3" title="3 · Veneno"><span class="quickslot-icon">☠</span><span class="skill-name">Veneno</span><kbd>3</kbd><span class="skill-cooldown"></span></button>
-      <button id="skill-slot-4" type="button" data-key="4" title="4 · Evasão"><span class="quickslot-icon">✧</span><span class="skill-name">Evasão</span><kbd>4</kbd><span class="skill-cooldown"></span></button>
-      <button id="skill-slot-5" type="button" data-key="5" title="5 · Fera"><span class="quickslot-icon">♞</span><span class="skill-name">Fera</span><kbd>5</kbd><span class="skill-cooldown"></span></button>
-      <button id="skill-slot-6" type="button" data-key="6" title="6 · Caçada"><span class="quickslot-icon">✣</span><span class="skill-name">Caçada</span><kbd>6</kbd><span class="skill-cooldown"></span></button>
-      <button id="skill-slot-7" type="button" data-key="7" title="7 · Skytalos"><span class="quickslot-icon">♜</span><span class="skill-name">Skytalos</span><kbd>7</kbd><span class="skill-cooldown"></span></button>
-      <button id="skill-slot-8" type="button" data-key="8" title="8 · Montar"><span class="quickslot-icon">♘</span><span class="skill-name">Montar</span><kbd>8</kbd><span class="skill-cooldown"></span></button>
-      <button id="skill-slot-9" type="button" data-key="9" title="9 · Ligação Espectral"><span class="quickslot-icon">◈</span><span class="skill-name">Ligação</span><kbd>9</kbd><span class="skill-cooldown"></span></button>
+      <button id="skill-slot-1" type="button" data-key="1"><span class="quickslot-icon">➶</span><span class="skill-name">Flecha</span><kbd>1</kbd><span class="skill-cooldown"></span></button>
+      <button id="skill-slot-2" type="button" data-key="2"><span class="quickslot-icon">✦</span><span class="skill-name">Temp.</span><kbd>2</kbd><span class="skill-cooldown"></span></button>
+      <button id="skill-slot-3" type="button" data-key="3"><span class="quickslot-icon">☠</span><span class="skill-name">Veneno</span><kbd>3</kbd><span class="skill-cooldown"></span></button>
+      <button id="skill-slot-4" type="button" data-key="4"><span class="quickslot-icon">✧</span><span class="skill-name">Evasão</span><kbd>4</kbd><span class="skill-cooldown"></span></button>
+      <button id="skill-slot-5" type="button" data-key="5"><span class="quickslot-icon">♞</span><span class="skill-name">Fera</span><kbd>5</kbd><span class="skill-cooldown"></span></button>
+      <button id="skill-slot-6" type="button" data-key="6"><span class="quickslot-icon">✣</span><span class="skill-name">Caçada</span><kbd>6</kbd><span class="skill-cooldown"></span></button>
+      <button id="skill-slot-7" type="button" data-key="7"><span class="quickslot-icon">♜</span><span class="skill-name">Skytalos</span><kbd>7</kbd><span class="skill-cooldown"></span></button>
+      <button id="skill-slot-8" type="button" data-key="8"><span class="quickslot-icon">♘</span><span class="skill-name">Montar</span><kbd>8</kbd><span class="skill-cooldown"></span></button>
+      <button id="skill-slot-9" type="button" data-key="9"><span class="quickslot-icon">◈</span><span class="skill-name">Ligação</span><kbd>9</kbd><span class="skill-cooldown"></span></button>
       <button type="button" data-key="0" title="0 · Poção de HP"><span class="quickslot-icon potion">HP</span><kbd>0</kbd><small id="quickslot-1-count">5</small></button>
     </div>
     <div class="classic-menu-actions" aria-label="Ações da interface clássica">
@@ -226,6 +226,12 @@ app.innerHTML = `
     <div id="skill-catalog-status" class="skill-catalog-status">Carregando SkillData.bin…</div>
     <div id="skill-catalog-grid" class="skill-catalog-grid"></div>
   </section>
+
+  <aside id="game-tooltip" class="game-tooltip" role="tooltip" aria-hidden="true">
+    <strong data-tooltip-title></strong>
+    <p data-tooltip-description hidden></p>
+    <div data-tooltip-lines hidden></div>
+  </aside>
 
   <div class="controls-hint"><span>WASD</span> mover · <span>Q/E</span> câmera · <span>RODA</span> zoom · <span>ESPAÇO</span> coletar · <span>Z</span> nomes dos drops · <span>C</span> personagem · <span>I</span> inventário · <span>K</span> skills · <span>G</span> GM · <span>R</span> montaria · <span>F</span> auto-combate · <span>V</span> efeitos</div>
 `;

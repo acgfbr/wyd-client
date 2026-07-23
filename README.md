@@ -177,8 +177,13 @@ bun run import:commerce -- "/caminho/para/Origem" "/caminho/para/tools/data"
 `public/game-data/classic/commerce/catalog.json` a partir dos 6.500 registros
 de `ItemList.bin`, dos overrides de `ItemPrice.bin` e dos 27 slots comerciais
 de `Carry` nos templates de `npcdb` referenciados por `NPCGener.txt`. Esse
-catálogo é estático e somente leitura: compra, venda, saldo, Tax e qualquer
-mutação de inventário continuam sendo responsabilidades do futuro servidor.
+catálogo é estático e somente leitura. Neste corpus, os campos finais de
+`ItemList.bin` usam `unique@132`, `reserved@134`, `position@136`, `extra@138`,
+`link@140` e `grade@142`; esses offsets alimentam os tooltips clássicos de
+inventário/equipamento/cargo/loja com requisitos, efeitos fixos, três
+adicionais de instância, refinação e bônus Ancient. Compra, venda, saldo, Tax e
+qualquer mutação de inventário continuam sendo responsabilidades do futuro
+servidor.
 
 ## Controles
 
@@ -195,7 +200,7 @@ mutação de inventário continuam sendo responsabilidades do futuro servidor.
 | `R` | Montar/desmontar |
 | `F` | Alternar C.C: desligado → físico → mágico → suporte |
 | Clique em `C.C` | Abrir/fechar a caixa clássica de configuração |
-| `Espaço` | Coletar o drop materializado mais próximo dentro do alcance clássico |
+| `Espaço` | Coletar o drop materializado mais próximo dentro do alcance offline ampliado |
 | `Z` | Ligar/desligar os nomes de todos os drops |
 | `1`–`9` | Usar skills da barra |
 | `I` | Abrir/fechar inventário, trajes e montarias |
@@ -212,6 +217,11 @@ Enquanto não há servidor autoritativo, o fallback local pode materializar
 **Poção de HP** (`#400`), **Poção de MP** (`#405`), **Poeira de Oriharucon**
 (`#412`) e **Poeira de Lactolerium** (`#413`). As probabilidades e a tabela de
 drop são mocks exclusivos do modo offline; o servidor deverá substituí-las.
+Os quatro itens são agrupáveis em pilhas de até 50 unidades: uma coleta do chão
+completa primeiro uma pilha existente, e soltar uma pilha sobre outra no
+inventário também as combina. Para reduzir falhas de aproximação, a coleta web
+aceita até três células e procura um ponto caminhável ao redor do item, mantendo
+a validação de colisão e altura para não atravessar paredes ou pisos de pontes.
 
 ### Caixa C.C
 

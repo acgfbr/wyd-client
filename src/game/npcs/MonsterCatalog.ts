@@ -64,7 +64,7 @@ export interface CatalogSkinnedObjectVariant {
 }
 
 export interface CatalogSkinnedObject {
-  readonly kind: "tree" | "leaf" | "ship" | "butterfly" | "fish";
+  readonly kind: "tree" | "leaf" | "ship" | "butterfly" | "fish" | "float";
   readonly skin: number;
   readonly variants: readonly CatalogSkinnedObjectVariant[];
 }

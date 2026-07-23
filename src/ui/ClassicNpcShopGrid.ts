@@ -1,10 +1,11 @@
 import type {
   ClassicCommerceCarryEffect,
   ClassicCommerceItem,
-  ClassicCommerceItemEffect,
   ClassicResolvedCarrySlot,
   ClassicResolvedTemplateCarry,
 } from "../game/commerce/ClassicCommerceCatalog";
+import { classicShopItemTooltip } from "./ClassicItemTooltip";
+import { setGameTooltip } from "./GameTooltip";
 
 export const CLASSIC_NPC_SHOP_VISUAL_CELLS = 40;
 export const CLASSIC_NPC_SHOP_CARRY_CELLS = 27;
@@ -187,7 +188,7 @@ export class ClassicNpcShopGrid {
     cell.classList.remove("has-item", "has-classic-icon", "is-selected", "is-icon-missing");
     cell.classList.add("is-empty");
     cell.disabled = true;
-    cell.title = "";
+    setGameTooltip(cell, null);
     cell.style.removeProperty("background-image");
     cell.style.removeProperty("background-position");
     cell.style.removeProperty("background-size");
@@ -215,7 +216,11 @@ export class ClassicNpcShopGrid {
     cell.classList.add("has-item");
     cell.disabled = false;
     cell.dataset.itemIndex = String(slot.item.index);
-    cell.title = label;
+    setGameTooltip(cell, classicShopItemTooltip({
+      metadata: slot.item,
+      instanceEffects: slot.effects,
+      staticPrice: slot.staticDisplayPrice?.amount,
+    }));
     cell.setAttribute("aria-label", label.replaceAll("\n", ". "));
     cell.setAttribute("aria-selected", String(displayIndex === this.#selectedDisplayIndex));
   }
@@ -272,22 +277,13 @@ function itemDescription(slot: ClassicResolvedCarrySlot): string {
   const item = slot.item;
   if (!item) return "Espaço vazio";
   const requirements = item.requirements;
-  const baseEffects = formatEffects(item.effects);
   const instanceEffects = formatCarryEffects(slot.effects);
   return [
     `${displayName(item.name)} · #${item.index}`,
     `Requisitos: nível ${requirements.level} · FOR ${requirements.strength} · INT ${requirements.intelligence} · DES ${requirements.dexterity} · CON ${requirements.constitution}`,
-    `Efeitos do item: ${baseEffects}`,
     `Efeitos da instância: ${instanceEffects}`,
     `Preço estático (não autoritativo): ${priceFormatter.format(item.staticDisplayPrice.amount)}`,
   ].join("\n");
-}
-
-function formatEffects(effects: readonly ClassicCommerceItemEffect[]): string {
-  const active = effects.filter((effect) => effect.effect !== 0 || effect.value !== 0);
-  return active.length > 0
-    ? active.map((effect) => `#${effect.effect}=${effect.value}`).join(", ")
-    : "nenhum";
 }
 
 function formatCarryEffects(effects: readonly ClassicCommerceCarryEffect[]): string {

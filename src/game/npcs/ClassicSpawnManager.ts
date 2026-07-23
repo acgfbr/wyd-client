@@ -49,6 +49,8 @@ const FRIENDLY_IDLE_MIN_RADIUS = 1;
 const FRIENDLY_IDLE_MAX_RADIUS = 1.75;
 const FRIENDLY_IDLE_HARD_RADIUS = 2.25;
 const FRIENDLY_IDLE_NAVIGATION_STEP = 0.25;
+const HOSTILE_HOVER_OUTLINE_COLOR = 0xff5b4d;
+const HOSTILE_SELECTED_OUTLINE_COLOR = 0xffd45a;
 
 export interface ClassicSpawnEnvironment {
   readonly origin: WydPosition;
@@ -111,6 +113,7 @@ interface SpawnedActor {
   cancellationRemainingSeconds: number;
   readonly affectMaterials: ActorAffectMaterial[];
   friendlyOutline: ClassicFriendlyHoverOutline | null;
+  hostileOutline: ClassicFriendlyHoverOutline | null;
   aiMode: ActorAiMode;
   nextAttackAtSeconds: number;
   attackCount: number;
@@ -161,6 +164,8 @@ export class ClassicSpawnManager {
   #actors: SpawnedActor[] = [];
   readonly #actorsById = new Map<string, SpawnedActor>();
   #friendlyHoverId: string | null = null;
+  #hostileHoverId: string | null = null;
+  #selectedHostileId: string | null = null;
   readonly #lifeStates = new Map<string, PersistentLifeState>();
   readonly #listeners = new Map<
     ClassicMonsterEventName,
@@ -248,6 +253,56 @@ export class ClassicSpawnManager {
     this.#friendlyHoverId = id;
   }
 
+  /** Red while hovered; gold remains after click while the hostile is selected. */
+  setHostileHover(id: string | null): void {
+    const actor = id ? this.#actorsById.get(id) : null;
+    const next = actor?.hostile && isActorAlive(actor) ? actor.id : null;
+    if (next === this.#hostileHoverId) {
+      if (next) this.refreshHostileOutline(next);
+      return;
+    }
+    const previous = this.#hostileHoverId;
+    this.#hostileHoverId = next;
+    if (previous) this.refreshHostileOutline(previous);
+    if (next) this.refreshHostileOutline(next);
+  }
+
+  /** Selection is presentation-only; combat ownership remains in GameApp. */
+  setSelectedHostile(id: string | null): void {
+    const actor = id ? this.#actorsById.get(id) : null;
+    const next = actor?.hostile && isActorAlive(actor) ? actor.id : null;
+    if (next === this.#selectedHostileId) {
+      if (next) this.refreshHostileOutline(next);
+      return;
+    }
+    const previous = this.#selectedHostileId;
+    this.#selectedHostileId = next;
+    if (previous) this.refreshHostileOutline(previous);
+    if (next) this.refreshHostileOutline(next);
+  }
+
+  private refreshHostileOutline(id: string): void {
+    const actor = this.#actorsById.get(id);
+    if (!actor) return;
+    const selected = this.#selectedHostileId === id;
+    const hovered = this.#hostileHoverId === id;
+    const visible = actor.object.parent?.visible !== false;
+    if (!actor.hostile || !isActorAlive(actor) || !visible || (!selected && !hovered)) {
+      disposeActorHostileOutline(actor);
+      return;
+    }
+    const color = selected ? HOSTILE_SELECTED_OUTLINE_COLOR : HOSTILE_HOVER_OUTLINE_COLOR;
+    if (actor.hostileOutline) {
+      actor.hostileOutline.setColor(color);
+      return;
+    }
+    actor.hostileOutline = createClassicFriendlyHoverOutline(actor.lease.model.meshes, {
+      color,
+      opacity: selected ? 0.92 : 0.86,
+      name: "classic-hostile-target-outline",
+    });
+  }
+
   on<K extends ClassicMonsterEventName>(
     type: K,
     listener: ClassicMonsterEventListener<K>,
@@ -333,6 +388,8 @@ export class ClassicSpawnManager {
   ): { readonly respawnInSeconds: number; readonly dropSeed: number } {
     if (this.#friendlyHoverId === actor.id) this.setFriendlyHover(null);
     actor.life.hp = 0;
+    if (this.#hostileHoverId === actor.id) this.#hostileHoverId = null;
+    this.refreshHostileOutline(actor.id);
     actor.life.deathCount++;
     actor.life.deadAtSeconds = nowSeconds;
     const respawnInSeconds = deterministicRespawnSeconds(actor);
@@ -363,6 +420,17 @@ export class ClassicSpawnManager {
         || hovered.object.parent?.visible === false
       ) this.setFriendlyHover(null);
     }
+    if (this.#hostileHoverId) {
+      const hovered = this.#actorsById.get(this.#hostileHoverId);
+      if (
+        !hovered
+        || !hovered.hostile
+        || !isActorAlive(hovered)
+        || hovered.object.parent?.visible === false
+      ) this.setHostileHover(null);
+      else this.refreshHostileOutline(hovered.id);
+    }
+    if (this.#selectedHostileId) this.refreshHostileOutline(this.#selectedHostileId);
     const animateDistanceSquared = FIELD_WORLD_SIZE * FIELD_WORLD_SIZE * 2.25;
     const nowSeconds = this.routeClockSeconds();
     const previousPositions = this.#actors.map((actor) => ({ ...actor.position }));
@@ -543,6 +611,9 @@ export class ClassicSpawnManager {
     actor.lease.model.update(actor.animationPhaseSeconds);
     actor.nextAttackAtSeconds = nowSeconds + 0.5 + stableUnit(actor.separationSeed >>> 7) * 0.8;
     updateStatusSprite(actor);
+    if (this.#selectedHostileId === actor.id || this.#hostileHoverId === actor.id) {
+      this.refreshHostileOutline(actor.id);
+    }
     this.emit("respawn", { target: actorSnapshot(actor) });
   }
 
@@ -753,6 +824,7 @@ export class ClassicSpawnManager {
         cancellationRemainingSeconds: 0,
         affectMaterials: [],
         friendlyOutline: null,
+        hostileOutline: null,
         aiMode: "route",
         nextAttackAtSeconds: nowSeconds + ai.initialAttackDelaySeconds,
         attackCount: 0,
@@ -796,6 +868,8 @@ export class ClassicSpawnManager {
     if (this.#friendlyHoverId === actor.id && actor.friendlyOutline) {
       this.#friendlyHoverId = null;
     }
+    if (this.#hostileHoverId === actor.id) this.#hostileHoverId = null;
+    if (this.#selectedHostileId === actor.id) this.#selectedHostileId = null;
     disposeActor(actor);
     // Most life entries are pristine and need not accumulate while the player
     // explores many maps. Preserve only gameplay-relevant state (damage/death
@@ -1852,9 +1926,15 @@ function disposeActorFriendlyOutline(actor: SpawnedActor): void {
   actor.friendlyOutline = null;
 }
 
+function disposeActorHostileOutline(actor: SpawnedActor): void {
+  actor.hostileOutline?.dispose();
+  actor.hostileOutline = null;
+}
+
 function disposeActor(actor: SpawnedActor): void {
   actor.object.removeFromParent();
   disposeActorFriendlyOutline(actor);
+  disposeActorHostileOutline(actor);
   restoreActorAffectMaterials(actor);
   actor.lease.release();
   actor.labelMaterial.dispose();

@@ -12,6 +12,7 @@ const ORIHARUCON_DUST_ITEM_INDEX = 412;
 const LACTOLERIUM_DUST_ITEM_INDEX = 413;
 const HEALTH_EFFECT = 4;
 const MANA_EFFECT = 5;
+const OFFLINE_STACKABLE_ITEM_MAX = 50;
 
 type OfflineDropItemIndex =
   | typeof HEALTH_POTION_ITEM_INDEX
@@ -60,7 +61,7 @@ export function selectOfflineGroundItemDrop(
  * It does not insert, stack or otherwise mutate the player's inventory.
  */
 export async function offlineGroundItemToInventoryItem(
-  snapshot: Pick<OfflineClassicGroundItemSnapshot, "classicIndex">,
+  snapshot: Pick<OfflineClassicGroundItemSnapshot, "classicIndex" | "effects">,
 ): Promise<InventoryItem> {
   if (
     snapshot.classicIndex !== HEALTH_POTION_ITEM_INDEX
@@ -76,7 +77,7 @@ export async function offlineGroundItemToInventoryItem(
   if (!classicItem) {
     throw new Error(`ItemList #${snapshot.classicIndex} ausente do catálogo clássico`);
   }
-  return classicOfflineInventoryItem(classicItem);
+  return classicOfflineInventoryItem(classicItem, snapshot.effects);
 }
 
 /**
@@ -171,7 +172,7 @@ function offlineGroundItemId(event: ClassicMonsterDropEvent): string {
   return `offline-ground:${event.source.id}:${event.seed >>> 0}`;
 }
 
-function classicOfflineInventoryItem(item: ClassicCommerceItem): InventoryItem {
+function classicOfflineInventoryItem(item: ClassicCommerceItem, effects: ClassicGroundItemEffects): InventoryItem {
   const heal = effectValue(item, HEALTH_EFFECT);
   const mana = effectValue(item, MANA_EFFECT);
   if (item.index === HEALTH_POTION_ITEM_INDEX && heal <= 0) {
@@ -195,12 +196,17 @@ function classicOfflineInventoryItem(item: ClassicCommerceItem): InventoryItem {
       ? `${name} · ItemList #${item.index} · ${restorativeEffect}.`
       : `${name} · material clássico · ItemList #${item.index}.`,
     rarity: "common",
-    // Ordinary STRUCT_ITEM materials have no quantity field; each dust keeps
-    // its own inventory position in this offline representation.
-    maxStack: isPotion ? 50 : 1,
+    // Requested offline inventory policy: the four supported consumables and
+    // powders share one 50-unit stack rule. Ground instances still arrive one
+    // at a time; PlayerState merges them before consuming another bag cell.
+    maxStack: OFFLINE_STACKABLE_ITEM_MAX,
     value: item.staticDisplayPrice.amount,
     kind: isPotion ? "consumable" : "material",
     classicIndex: item.index,
+    classicInstanceEffects: effects.map((effect) => Object.freeze({
+      effect: effect.effect,
+      value: effect.value,
+    })),
     previewModelType: item.mesh,
     ...(heal > 0 ? { heal } : {}),
     ...(mana > 0 ? { mana } : {}),

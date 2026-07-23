@@ -193,9 +193,17 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
    79 templates. O loader runtime é explícito, lazy, cacheado e somente leitura;
    resolve por item/template uma view congelada dos 27 slots, inclusive vazios,
    com item completo, efeitos da instância e preço estático marcado como não
-   autoritativo. Essa view já alimenta as 40 células visuais da loja: os 27
+   autoritativo. Auditoria no binário confirmou que o registro de `ItemList.bin`
+   tem `unique@132`, `reserved@134`, `position@136`, `extra@138`, `link@140` e
+   `grade@142`; o layout antigo `position@134/grade@138` estava errado para este
+   corpus e gerava opções/Ancient incoerentes. Essa view já alimenta as 40 células visuais da loja: os 27
    slots `Carry` preservam seus vazios e os 13 restantes ficam vazios como no
-   atlas; ícone, nome, requisitos, efeitos e preço estático vêm do catálogo. O
+   atlas; ícone, nome, requisitos, efeitos, adicionais de instância e preço
+   estático vêm do catálogo. Os tooltips de inventário/equipamento/cargo/loja
+   usam o painel clássico de `240×270`, Tahoma 12, preto `0xAA000000`, paleta do
+   `SGrid` e fórmula real de refino/Ancient. O Skytalos `#2551` preserva os
+   adicionais do `Carry` de `Utilidades`: `EF2=120`, `EF3=120`, `EF43=251`
+   (`+15`) e `grade=5`, exibindo `Dano de Perfuração : 480` como no cliente. O
    Aki, por exemplo, expõe os 14 itens recuperados de seu template. Selecionar
    continua sendo apenas apresentação; ainda faltam no servidor compra/venda,
    saldo, Tax, combinação, missões e persistência, e nenhuma dessas operações
@@ -220,17 +228,23 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
    índice e os três efeitos do `STRUCT_ITEM`, `GridX/Y` inteiros, centro
    `+0,5`, altura `+0,1`, rotação em quartos, nome/hover branco, brilho por
    `EF38`, toggle global de efeitos e descarte fora do quadrado de 18 células.
-   Clique e aproximação reproduzem `MoveGet`: alcance `BASE_GetDistance <= 1`,
-   validação do segmento com altura máxima 8, cooldown de 1 s, teste de espaço
-   no inventário e mutação somente após a confirmação equivalente a
-   `CNFGetItem`. O cliente recuperado não contém as drop tables do servidor;
+   Clique e aproximação partem do `MoveGet`: o cliente recuperado usa
+   `BASE_GetDistance <= 1`, enquanto o fallback web adota explicitamente o
+   alcance de conforto solicitado de três células. A rota termina no ponto
+   caminhável válido mais próximo ao redor do item e conserva validação do
+   segmento/altura, cooldown de 1 s, teste de espaço no inventário e mutação
+   somente após a confirmação equivalente a `CNFGetItem`. O cliente recuperado
+   não contém as drop tables do servidor;
    portanto a demonstração permanece explicitamente isolada em uma política
    offline determinística para as poções reais `#400/#405` e as Poeiras de
    Oriharucon/Lactolerium `#412/#413`, sem o antigo Fragmento de Oriharucon
    inventado. Os modelos `53/56/61/62` e dados estáticos vêm do catálogo
-   clássico. `Espaço` coleta somente uma instância materializada no mesmo bloco
-   de `BASE_GetDistance <= 1`, e `Z` alterna a visibilidade de todos os nomes
-   residentes sem interferir na digitação do chat. Falhas de A*/segmento e
+   clássico. No fallback offline, os quatro itens são agrupáveis em até 50
+   unidades; tanto a confirmação da coleta quanto o drag/drop completam uma
+   pilha compatível antes de consumir outro slot. `Espaço` coleta somente uma
+   instância materializada dentro do alcance web de três células, e `Z` alterna
+   a visibilidade de todos os nomes residentes sem interferir na digitação do
+   chat. Falhas de A*/segmento e
    aproximações sem progresso cancelam a coleta e liberam novamente o C.C.; a
    rota iniciada pelo drop também é encerrada ao cancelar, sem parar um caminho
    posterior que não pertença à coleta. Como o TTL real depende do servidor, o

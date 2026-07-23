@@ -7,6 +7,7 @@ import { ModelLibrary } from "./ModelLibrary";
 import { MapEffects } from "../effects/MapEffects";
 import { ClassicEnvironmentObjects, isClassicEnvironmentType } from "../environment/ClassicEnvironmentObjects";
 import { MapWater } from "../water/MapWater";
+import { ClassicFloatObjects } from "../water/ClassicFloatObjects";
 
 const nonStaticTypes = new Set([2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 121, 343, 344]);
 
@@ -24,6 +25,7 @@ export class MapObjects {
   readonly #effects: MapEffects;
   readonly #environment: ClassicEnvironmentObjects;
   readonly #water: MapWater;
+  readonly #floats: ClassicFloatObjects;
   readonly #fieldGroups = new Map<string, THREE.Group>();
   readonly #fieldTypes = new Map<string, ReadonlySet<number>>();
   readonly #generations = new Map<string, number>();
@@ -32,21 +34,36 @@ export class MapObjects {
     assets: ClassicAssetSource,
     private readonly origin: WydPosition,
     heightAt: (position: WydPosition) => number,
+    colorAt: (position: WydPosition) => THREE.Color,
     models?: ModelLibrary,
   ) {
     this.#models = models ?? new ModelLibrary(assets);
     this.#effects = new MapEffects(assets, origin, this.#models, heightAt);
     this.#environment = new ClassicEnvironmentObjects(assets, origin);
     this.#water = new MapWater(assets, origin, this.#models);
+    this.#floats = new ClassicFloatObjects(
+      assets,
+      origin,
+      (position, timeMilliseconds, preferredField) => (
+        this.#water.waterHeightAt(position, timeMilliseconds, preferredField)
+      ),
+      colorAt,
+    );
     this.object.name = "map-objects";
     this.object.add(this.#effects.object);
     this.object.add(this.#environment.object);
     this.object.add(this.#water.object);
+    this.object.add(this.#floats.object);
   }
 
   setEffectsEnabled(enabled: boolean): void {
     this.#effects.setEnabled(enabled);
     this.#environment.setEffectsEnabled(enabled);
+    this.#floats.setEffectsEnabled(enabled);
+  }
+
+  update(deltaSeconds: number): void {
+    this.#floats.update(deltaSeconds);
   }
 
   async addBlock(column: number, row: number, records: readonly MapObjectRecord[]): Promise<void> {
@@ -61,7 +78,10 @@ export class MapObjects {
 
     const effects = this.#effects.addBlock(column, row, records);
     const environment = this.#environment.addBlock(column, row, records);
+    // MapWater registers its type-2 descriptors synchronously before awaiting
+    // textures, so TMFloat can resolve the correct surface in the same tick.
     const water = this.#water.addBlock(column, row, records);
+    const floats = this.#floats.addBlock(column, row, records);
     const prototypes = new Map<number, THREE.Group | null>();
     const typeSet = new Set(records.map((record) => record.type).filter(isStaticMeshType));
     // TMHouse(474) possui uma segunda MSA: as pas animadas do catavento.
@@ -104,6 +124,7 @@ export class MapObjects {
     await effects;
     await environment;
     await water;
+    await floats;
   }
 
   removeBlock(column: number, row: number): void {
@@ -124,6 +145,7 @@ export class MapObjects {
     }
     this.#effects.removeBlock(column, row);
     this.#environment.removeBlock(column, row);
+    this.#floats.removeBlock(column, row);
     this.#water.removeBlock(column, row);
   }
 }

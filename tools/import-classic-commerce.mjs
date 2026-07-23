@@ -330,9 +330,11 @@ function readCatalogItem(index) {
     clientStaticPriceOverride: staticPriceOverride,
     itemPriceOverride: filePriceOverride ? { record: filePriceOverride.record, price: filePriceOverride.price } : null,
     unique: decodedItemList.readInt16LE(offset + 132),
-    position: decodedItemList.readInt16LE(offset + 134),
-    extra: decodedItemList.readInt16LE(offset + 136),
-    grade: decodedItemList.readInt16LE(offset + 138),
+    reserved: decodedItemList.readInt16LE(offset + 134),
+    position: decodedItemList.readInt16LE(offset + 136),
+    extra: decodedItemList.readInt16LE(offset + 138),
+    link: decodedItemList.readInt16LE(offset + 140),
+    grade: decodedItemList.readInt16LE(offset + 142),
     ...(unmappedTail.some((value) => value !== 0) ? { unmappedTailHex: unmappedTail.toString("hex") } : {}),
   };
 }

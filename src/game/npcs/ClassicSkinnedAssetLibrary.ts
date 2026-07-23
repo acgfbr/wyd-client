@@ -39,6 +39,8 @@ export interface ClassicSkinnedLook {
   /** Per-action overrides used when classic state changes select another bank. */
   readonly animationWeaponTypeByAction?: Readonly<Record<string, number>>;
   readonly actionVariant?: number;
+  /** Overrides TMSkinMesh::m_dwFPS for rigs such as TMFloat (80 ms). */
+  readonly quarterStepMs?: number;
 }
 
 export interface ClassicSkinnedInstanceLease {
@@ -175,6 +177,7 @@ export class ClassicSkinnedAssetLibrary {
       look.skin,
       actions.join(","),
       look.initialAction ?? "",
+      look.quarterStepMs ?? "source-fps",
       look.animationWeaponType ?? "base",
       animationWeaponTypeOverrides,
       actionVariant,
@@ -214,7 +217,10 @@ export class ClassicSkinnedAssetLibrary {
       if (!actionValues && action !== "STAND01") return null;
       const pairOffset = actionValues && actionValues.length >= 9 ? actionVariant * 2 : 0;
       const clipSlot = actionValues?.[pairOffset] ?? actionValues?.[0] ?? 0;
-      const quarterStepMs = Math.max(1, actionValues?.[pairOffset + 1] ?? actionValues?.[1] ?? 20);
+      const quarterStepMs = Math.max(
+        1,
+        look.quarterStepMs ?? actionValues?.[pairOffset + 1] ?? actionValues?.[1] ?? 20,
+      );
       const animationWeaponType = look.animationWeaponTypeByAction?.[action]
         ?? look.animationWeaponType;
       const clipPath = (animationWeaponType === undefined

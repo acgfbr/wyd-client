@@ -49,7 +49,14 @@ if ( classicFriendlyOutlineLength > 0.00001 ) {
 }
 
 export interface ClassicFriendlyHoverOutline {
+  setColor(color: THREE.ColorRepresentation): void;
   dispose(): void;
+}
+
+export interface ClassicActorOutlineOptions {
+  readonly color?: THREE.ColorRepresentation;
+  readonly opacity?: number;
+  readonly name?: string;
 }
 
 /**
@@ -59,12 +66,13 @@ export interface ClassicFriendlyHoverOutline {
  */
 export function createClassicFriendlyHoverOutline(
   sources: readonly THREE.SkinnedMesh[],
+  options: ClassicActorOutlineOptions = {},
 ): ClassicFriendlyHoverOutline | null {
   const material = new THREE.MeshBasicMaterial({
-    color: CLASSIC_FRIENDLY_OUTLINE_COLOR,
+    color: options.color ?? CLASSIC_FRIENDLY_OUTLINE_COLOR,
     side: THREE.BackSide,
     transparent: true,
-    opacity: 0.82,
+    opacity: options.opacity ?? 0.82,
     depthTest: true,
     depthWrite: false,
     fog: false,
@@ -75,7 +83,7 @@ export function createClassicFriendlyHoverOutline(
 
   for (const source of sources) {
     const outline = new THREE.SkinnedMesh(source.geometry, material);
-    outline.name = "classic-friendly-hover-outline";
+    outline.name = options.name ?? "classic-friendly-hover-outline";
     outline.bindMode = source.bindMode;
     outline.bind(source.skeleton, source.bindMatrix);
     outline.frustumCulled = false;
@@ -94,6 +102,9 @@ export function createClassicFriendlyHoverOutline(
 
   let disposed = false;
   return {
+    setColor: (color) => {
+      if (!disposed) material.color.set(color);
+    },
     dispose: () => {
       if (disposed) return;
       disposed = true;

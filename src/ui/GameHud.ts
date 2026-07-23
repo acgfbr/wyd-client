@@ -22,12 +22,18 @@ import type {
   ClassicNpcInteractionKind,
 } from "../game/npcs/ClassicMonsterGameplay";
 import type { ClassicGroundPortal } from "../game/portals/ClassicGroundPortals";
-import type { ClassicResolvedTemplateCarry } from "../game/commerce/ClassicCommerceCatalog";
+import {
+  loadClassicCommerceCatalog,
+  type ClassicCommerceCatalog,
+  type ClassicResolvedTemplateCarry,
+} from "../game/commerce/ClassicCommerceCatalog";
+import { classicInventoryItemTooltip } from "./ClassicItemTooltip";
 import { ClassicNpcShopGrid } from "./ClassicNpcShopGrid";
 import {
   makeClassicWindowDraggable,
   type ClassicWindowDragController,
 } from "./ClassicWindowDrag";
+import { GameTooltip, setGameTooltip, type GameTooltipContent } from "./GameTooltip";
 
 type InventoryItemSource =
   | { readonly kind: "inventory"; readonly slot: number }
@@ -63,6 +69,11 @@ export interface SkillHudEntry {
   readonly classicIndex?: number;
   /** True only for an aggressive enemy skill that actually occupies the bar. */
   readonly offensive?: boolean;
+  readonly cooldownSeconds?: number;
+  readonly runtimeDurationSeconds?: number;
+  readonly range?: number;
+  readonly kind?: string;
+  readonly target?: "enemy" | "self";
 }
 
 export interface BuffHudEntry {
@@ -71,6 +82,9 @@ export interface BuffHudEntry {
   readonly iconIndex: number;
   readonly durationSeconds: number;
   readonly remainingSeconds: number;
+  readonly classKey?: string;
+  readonly affectType?: number;
+  readonly affectValue?: number;
 }
 
 export type ChatChannel = "general" | "party" | "guild";
@@ -94,6 +108,7 @@ interface ClassicSkillCatalogEntry {
   readonly manaSpent: number;
   readonly delaySeconds: number;
   readonly range: number;
+  readonly affectTimeSeconds?: number;
   readonly iconIndex: number | null;
 }
 
@@ -175,6 +190,8 @@ export class GameHud {
   #skillCatalogJob: Promise<void> | null = null;
   #itemIconCatalog: ClassicItemIconCatalog | null = null;
   #itemIconCatalogJob: Promise<ClassicItemIconCatalog | null> | null = null;
+  #classicCommerceCatalog: ClassicCommerceCatalog | null = null;
+  #classicCommerceCatalogJob: Promise<ClassicCommerceCatalog | null> | null = null;
   #inventorySignature = "";
   #cargoSignature = "";
   #activeInventoryBag = 0;
@@ -201,6 +218,7 @@ export class GameHud {
   #activeNpcShopTemplateKey: string | null = null;
 
   constructor() {
+    new GameTooltip(requireElement<HTMLElement>("#game-tooltip"));
     this.#npcShopGrid = new ClassicNpcShopGrid(this.#npcInteractionSlots);
     this.#cargoPageNav = createCargoPageNavigation();
     this.#cargoOfflineNotice = document.createElement("p");
@@ -562,8 +580,8 @@ export class GameHud {
       const icon = button.querySelector<HTMLElement>(".quickslot-icon");
       if (!skill) {
         button.disabled = true;
-        button.title = `${slot} · espaço de skill vazio`;
-        button.setAttribute("aria-label", button.title);
+        button.setAttribute("aria-label", `${slot} · espaço de skill vazio`);
+        setGameTooltip(button, null);
         if (name) name.textContent = "";
         if (icon) {
           icon.classList.remove("is-classic-skill");
@@ -576,8 +594,8 @@ export class GameHud {
         continue;
       }
       button.disabled = false;
-      button.title = `${skill.slot} · ${skill.name} · ${skill.mana} MP`;
-      button.setAttribute("aria-label", button.title);
+      button.setAttribute("aria-label", `${skill.slot} · ${skill.name} · ${skill.mana} MP`);
+      setGameTooltip(button, skillTooltip(skill));
       if (name) name.textContent = skill.shortName;
       if (icon && skill.classicIndex !== undefined) {
         const iconIndex = Math.max(0, Math.min(152, Math.trunc(skill.classicIndex)));
@@ -616,25 +634,34 @@ export class GameHud {
       .join("|");
     if (signature === this.#buffSignature) return;
     this.#buffSignature = signature;
+    const current = new Map([...this.#buffStatus.querySelectorAll<HTMLElement>(".classic-buff")]
+      .map((element) => [Number(element.dataset.buffIndex), element]));
     const entries = buffs.map((buff) => {
-      const element = document.createElement("div");
+      const element = current.get(buff.classicIndex) ?? document.createElement("div");
       element.className = "classic-buff";
-      element.title = `${buff.name} · ${Math.max(0, buff.remainingSeconds).toFixed(1)}s`;
-      element.setAttribute("aria-label", element.title);
-      const icon = document.createElement("i");
+      element.dataset.buffIndex = String(buff.classicIndex);
+      element.tabIndex = 0;
+      element.setAttribute(
+        "aria-label",
+        `${buff.name}, ${Math.max(0, buff.remainingSeconds).toFixed(1)} segundos restantes`,
+      );
+      setGameTooltip(element, buffTooltip(buff));
+      const icon = element.querySelector<HTMLElement>("i") ?? document.createElement("i");
       const iconIndex = Math.max(0, Math.min(152, Math.trunc(buff.iconIndex)));
       icon.style.setProperty("--buff-icon-x", `${-(iconIndex % 16) * 24}px`);
       icon.style.setProperty("--buff-icon-y", `${-Math.floor(iconIndex / 16) * 24}px`);
-      const time = document.createElement("small");
+      const time = element.querySelector<HTMLElement>("small") ?? document.createElement("small");
       time.textContent = String(Math.max(0, Math.ceil(buff.remainingSeconds)));
       const ratio = buff.durationSeconds <= 0
         ? 0
         : Math.max(0, Math.min(1, buff.remainingSeconds / buff.durationSeconds));
       element.style.setProperty("--buff-remaining", String(ratio));
-      element.append(icon, time);
+      if (!icon.isConnected || !time.isConnected) element.replaceChildren(icon, time);
       return element;
     });
-    this.#buffStatus.replaceChildren(...entries);
+    const sameOrder = entries.length === this.#buffStatus.children.length
+      && entries.every((entry, index) => this.#buffStatus.children.item(index) === entry);
+    if (!sameOrder) this.#buffStatus.replaceChildren(...entries);
     this.#buffStatus.classList.toggle("is-visible", entries.length > 0);
   }
 
@@ -1038,7 +1065,7 @@ export class GameHud {
       "aria-label",
       `${stack.item.name}, quantidade ${stack.quantity}. ${stack.item.description}`,
     );
-    button.title = `${stack.item.name}\nClique: pegar/preview · clique em outro espaço para mover`;
+    setGameTooltip(button, this.inventoryTooltip(stack.item, stack.quantity));
     const icon = this.createInventoryIcon(stack.item);
     const quantity = document.createElement("small");
     quantity.textContent = stack.quantity > 1 ? String(stack.quantity) : "";
@@ -1144,9 +1171,7 @@ export class GameHud {
       `${stack.item.name}, quantidade ${stack.quantity}. ${stack.item.description}`,
     );
     button.setAttribute("aria-pressed", "false");
-    button.title = source.kind === "inventory"
-      ? `${stack.item.name}\nClique: pegar/preview · mova o cursor e clique para soltar · duplo clique: ${stack.item.kind === "equipment" ? "equipar" : "usar"}`
-      : `${stack.item.name}\nClique: pegar/preview · mova o cursor e clique em uma bolsa para retirar`;
+    setGameTooltip(button, this.inventoryTooltip(stack.item, stack.quantity));
 
     const icon = this.createInventoryIcon(stack.item);
     const quantity = document.createElement("small");
@@ -1718,6 +1743,40 @@ export class GameHud {
       columns: catalog.columns,
     };
   }
+
+  private inventoryTooltip(item: InventoryItem, quantity: number): GameTooltipContent {
+    const classicMetadata = item.classicIndex === undefined
+      ? null
+      : this.#classicCommerceCatalog?.item(item.classicIndex) ?? null;
+    if (!classicMetadata) void this.ensureClassicCommerceCatalog();
+    return classicInventoryItemTooltip({
+      item,
+      quantity,
+      metadata: classicMetadata,
+      player: this.#lastSnapshot,
+      activeClassKey: this.#activeClassKey,
+    });
+  }
+
+  private ensureClassicCommerceCatalog(): Promise<ClassicCommerceCatalog | null> {
+    if (this.#classicCommerceCatalog) return Promise.resolve(this.#classicCommerceCatalog);
+    if (this.#classicCommerceCatalogJob) return this.#classicCommerceCatalogJob;
+    const job = loadClassicCommerceCatalog()
+      .then((catalog) => {
+        this.#classicCommerceCatalog = catalog;
+        if (this.#lastSnapshot) {
+          this.updateInventory(this.#lastSnapshot, true);
+          this.updateCargo(this.#lastSnapshot, true);
+        }
+        return catalog;
+      })
+      .catch((error: unknown) => {
+        console.warn("Falha ao carregar catálogo clássico de comércio", error);
+        return null;
+      });
+    this.#classicCommerceCatalogJob = job;
+    return job;
+  }
 }
 
 function createSkillCatalogEntry(
@@ -1727,7 +1786,8 @@ function createSkillCatalogEntry(
 ): HTMLElement {
   const entry = document.createElement("article");
   entry.className = `skill-catalog-entry is-${skill.kind}${skill.category === "master" ? " is-master" : ""}${learned ? " is-learned" : ""}${onUse ? " is-castable" : ""}`;
-  entry.title = `#${skill.index} · ${skill.name}\nMP ${skill.manaSpent} · delay ${skill.delaySeconds}s · alcance ${skill.range}`;
+  entry.tabIndex = 0;
+  setGameTooltip(entry, catalogSkillTooltip(skill));
   const icon = document.createElement("i");
   if (skill.iconIndex !== null) {
     const iconIndex = Math.max(0, Math.min(152, Math.trunc(skill.iconIndex)));
@@ -1747,7 +1807,6 @@ function createSkillCatalogEntry(
   index.textContent = `#${skill.index}`;
   entry.append(icon, copy, index);
   if (onUse) {
-    entry.tabIndex = 0;
     entry.setAttribute("role", "button");
     entry.setAttribute("aria-label", `Usar ${skill.name}`);
     entry.addEventListener("click", onUse);
@@ -1756,8 +1815,110 @@ function createSkillCatalogEntry(
       event.preventDefault();
       onUse();
     });
+  } else {
+    entry.setAttribute("aria-label", `${skill.name}, ${kind.toLocaleLowerCase("pt-BR")}`);
   }
   return entry;
+}
+
+function skillTooltip(skill: SkillHudEntry): GameTooltipContent {
+  const lines = [
+    `Atalho: ${skill.slot}`,
+    `Tipo: ${skillKindLabel(skill.kind, skill.offensive)}`,
+    `Custo: ${skill.mana} MP`,
+  ];
+  if (skill.cooldownSeconds !== undefined) lines.push(`Recarga: ${formatDuration(skill.cooldownSeconds)}`);
+  if (skill.range !== undefined) lines.push(`Alcance: ${skill.range}`);
+  if (skill.runtimeDurationSeconds !== undefined && skill.runtimeDurationSeconds > 0) {
+    lines.push(`Duração: ${formatDuration(skill.runtimeDurationSeconds)}`);
+  }
+  if (skill.target) lines.push(`Alvo: ${skill.target === "self" ? "próprio personagem" : "inimigo"}`);
+  if (skill.classicIndex !== undefined) lines.push(`Skill clássica: #${skill.classicIndex}`);
+  return {
+    title: skill.name,
+    description: skill.offensive ? "Skill ofensiva da barra ativa." : "Skill da barra ativa.",
+    lines,
+    tone: "skill",
+  };
+}
+
+function catalogSkillTooltip(skill: ClassicSkillCatalogEntry): GameTooltipContent {
+  const kind = skill.kind === "active" ? "Ativa" : skill.kind === "buff" ? "Buff" : "Passiva";
+  const category = skill.category === "master" ? "Mestre" : skill.category === "special" ? "Especial" : "Classe";
+  const lines = [
+    `Custo: ${skill.manaSpent} MP`,
+    `Recarga: ${formatDuration(skill.delaySeconds)}`,
+    `Alcance: ${skill.range}`,
+  ];
+  if ((skill.affectTimeSeconds ?? 0) > 0) lines.push(`Duração clássica: ${formatDuration(skill.affectTimeSeconds ?? 0)}`);
+  return {
+    title: `${skill.name} · #${skill.index}`,
+    description: `${kind} · ${category}`,
+    lines,
+    tone: skill.kind === "buff" ? "buff" : "skill",
+  };
+}
+
+function buffTooltip(buff: BuffHudEntry): GameTooltipContent {
+  const lines = [
+    `Restante: ${formatDuration(Math.max(0, buff.remainingSeconds))}`,
+    `Duração total: ${formatDuration(Math.max(0, buff.durationSeconds))}`,
+    `Buff clássico: #${buff.classicIndex}`,
+  ];
+  if (buff.classKey) lines.push(`Classe de origem: ${buff.classKey}`);
+  if ((buff.affectType ?? 0) !== 0 || (buff.affectValue ?? 0) !== 0) {
+    lines.push(`Efeito clássico: #${buff.affectType ?? 0} = ${buff.affectValue ?? 0}`);
+  }
+  return {
+    title: buff.name,
+    description: "Buff ativo no personagem.",
+    lines,
+    tone: "buff",
+  };
+}
+
+function inventoryItemTooltip(item: InventoryItem, quantity: number): GameTooltipContent {
+  const lines = [
+    `Tipo: ${inventoryItemKindLabel(item)}`,
+    `Raridade: ${ITEM_RARITY_LABELS[item.rarity]}`,
+  ];
+  if (item.maxStack > 1 || quantity > 1) lines.push(`Quantidade: ${quantity} / ${item.maxStack}`);
+  if (item.refinement !== undefined && item.refinement > 0) lines.push(`Refinação: +${item.refinement}`);
+  if (item.ancient) lines.push("Ancient: ativo");
+  if (item.heal !== undefined && item.heal > 0) lines.push(`Recuperação: +${item.heal} HP`);
+  if (item.mana !== undefined && item.mana > 0) lines.push(`Recuperação: +${item.mana} MP`);
+  if (item.value > 0) lines.push(`Valor: ${formatNumber(item.value)}`);
+  if (item.classicIndex !== undefined) lines.push(`Item clássico: #${item.classicIndex}`);
+  return {
+    title: item.name,
+    description: item.description,
+    lines,
+    tone: `item-${item.rarity}`,
+  };
+}
+
+function skillKindLabel(kind: string | undefined, offensive: boolean | undefined): string {
+  if (kind === "buff") return "Buff";
+  if (kind === "summon") return "Evocação";
+  if (kind === "area") return "Ataque em área";
+  if (kind === "volley") return "Disparos múltiplos";
+  if (kind === "cone") return "Ataque em cone";
+  if (kind === "shadow") return "Ataque de sombra";
+  if (kind === "direct") return "Ataque direto";
+  return offensive ? "Ofensiva" : "Ativa";
+}
+
+function inventoryItemKindLabel(item: InventoryItem): string {
+  if (item.kind === "consumable") return "Consumível";
+  if (item.kind === "material") return "Material";
+  if (item.kind === "quest") return "Missão";
+  return item.equipSlot ? `Equipamento · ${EQUIPMENT_SLOT_LABELS[item.equipSlot]}` : "Equipamento";
+}
+
+function formatDuration(seconds: number): string {
+  const safe = Math.max(0, seconds);
+  if (safe >= 60 && Number.isInteger(safe / 60)) return `${safe / 60} min`;
+  return `${safe.toLocaleString("pt-BR", { maximumFractionDigits: safe < 10 ? 1 : 0 })} s`;
 }
 
 function createMacroOrderButton(
@@ -1915,6 +2076,12 @@ const EQUIPMENT_SLOT_LABELS: Readonly<Record<EquipmentSlot, string>> = {
   familiar: "Familiar",
   mount: "Montaria",
   cape: "Mantua",
+};
+const ITEM_RARITY_LABELS: Readonly<Record<InventoryItem["rarity"], string>> = {
+  common: "Comum",
+  uncommon: "Incomum",
+  rare: "Raro",
+  epic: "Épico",
 };
 
 function parseChatChannel(value: string | undefined): ChatChannel | null {
