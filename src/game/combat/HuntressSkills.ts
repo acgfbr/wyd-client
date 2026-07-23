@@ -44,6 +44,9 @@ export const HUNTRESS_SKILLS: readonly HuntressSkill[] = [
   { slot: 7, classicIndex: 76, name: "Imunidade", shortName: "Imune", mana: 42, cooldownSeconds: 6, range: 0, kind: "buff", target: "self", maxTargets: 1, affectType: 19, affectValue: 15, affectTimeSeconds: 12, runtimeDurationSeconds: 180, damageCoefficient: 0, radius: 0, color: 0x99bbff },
   { slot: 8, classicIndex: 95, name: "Invisibilidade", shortName: "Invis.", mana: 200, cooldownSeconds: 13, range: 0, kind: "buff", target: "self", maxTargets: 1, affectType: 28, affectValue: 1, affectTimeSeconds: 3, runtimeDurationSeconds: 180, damageCoefficient: 0, radius: 0, color: 0x661122 },
   { slot: 9, classicIndex: 81, name: "Ligação Espectral", shortName: "Ligação", mana: 108, cooldownSeconds: 6, range: 0, kind: "buff", target: "self", maxTargets: 1, affectType: 37, affectValue: 0, affectTimeSeconds: 14, runtimeDurationSeconds: 180, damageCoefficient: 0, radius: 0, color: 0x999999 },
+  { slot: 10, classicIndex: 77, name: "Meditação", shortName: "Meditação", mana: 90, cooldownSeconds: 6, range: 0, kind: "buff", target: "self", maxTargets: 1, affectType: 21, affectValue: 10, affectTimeSeconds: 12, runtimeDurationSeconds: 180, damageCoefficient: 0, radius: 0, color: 0x5500ff },
+  { slot: 11, classicIndex: 85, name: "Escudo Dourado", shortName: "Escudo", mana: 120, cooldownSeconds: 5, range: 0, kind: "buff", target: "self", maxTargets: 1, affectType: 31, affectValue: 150, affectTimeSeconds: 30, runtimeDurationSeconds: 180, damageCoefficient: 0, radius: 0, color: 0xffff55 },
+  { slot: 12, classicIndex: 89, name: "Evasão Aprimorada", shortName: "Evasão", mana: 24, cooldownSeconds: 6, range: 0, kind: "buff", target: "self", maxTargets: 1, affectType: 26, affectValue: 1, affectTimeSeconds: 12, runtimeDurationSeconds: 180, damageCoefficient: 0, radius: 0, color: 0x4d4d4d },
 ] as const;
 
 export interface ActiveHuntressBuff {

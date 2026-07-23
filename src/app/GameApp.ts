@@ -2249,7 +2249,15 @@ export class GameApp {
       const active = this.#skills.activateBuff(skill);
       if (!active) return;
       if (skill.classicIndex === 76) this.#skillEffects.playImmunityCast(this.#player.object.position);
+      if (skill.classicIndex === 77) this.#skillEffects.playMeditationCast(this.#player.object.position);
       if (skill.classicIndex === 81) this.#skillEffects.playSoulLinkCast(this.#player.object.position);
+      if (skill.classicIndex === 85) this.#levelUpEffects.playGoldenShield(this.#player.object.position);
+      if (skill.classicIndex === 89 && this.#effectsEnabled) {
+        const selection = this.#player.captureShadowBladeAfterimageSelection();
+        this.#skillEffects.playEvasionCast(
+          this.#player.createShadowBladeAfterimages(selection, 5, 0x4d4d4d),
+        );
+      }
       if (skill.classKey === "foema" && skill.classicIndex === 37) {
         this.#foemaSkillEffects?.playThunderCast(
           this.#player.object.position,

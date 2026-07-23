@@ -92,7 +92,7 @@ nos demais Fields fazem parte do proprio manifesto, nao sao links quebrados.
 | Terreno/colisão | TRN, AttributeMap, object.bin, pontes/altura, pathfinding | `ClassicWorld`, `ClassicNavigation` | Casos isolados de máscara/altura que aparecerem em teste |
 | Objetos/props | DAT/WYS/MSH, água, folhas, fogueiras, fontes, floats | `MapObjects`, `MapWater`, `ClassicEnvironmentObjects` | Homologar pontos de grama e objetos raros |
 | Personagem | Quatro classes jogáveis, rigs, traje base, arma, montaria/familiar | `PlayerClasses`, `ClassicPlayerAvatar` | Cobertura completa de equipamentos visuais por classe |
-| Huntress | Mulher Kalintz, Skytalos Ancient +15, Griupan, buffs principais | `HuntressLooks`, `ClassicHuntressSkillEffects` | Matriz completa das skills restantes |
+| Huntress | Mulher Kalintz, Skytalos Ancient +15, Griupan, 12 skills promovidas | `HuntressLooks`, `ClassicHuntressSkillEffects`, `ClassicLevelUpEffects` | 24 registros ainda não promovidos |
 | Montarias | 14 montarias nível 120, Unicórnio padrão, sela/bones | `MountLooks`, `ClassicMount` | Homologação visual de todas as variações |
 | NPCs/monstros | Spawn por Field, animação, hover/seleção, IA offline, drops | `MonsterCatalog`, `ClassicSpawnManager` | Cobertura de todos skins/itens/ações especiais |
 | BeastMaster summons | 8 evocações, 10 por cast, IA offline | `BeastMasterSummons`, `ClassicBeastMasterSummon` | Trocar IA local por packets autoritativos no futuro |

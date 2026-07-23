@@ -79,8 +79,10 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
 - Troca jogável entre TransKnight, Foema, BeastMaster e Huntress: os rigs
   `ch01/ch02`, `bExpand`, armaduras da seleção clássica, armas Ancient, bancos
   a pé/montado e attachments de mão já foram derivados do cliente. Cada classe
-  possui traje base/armadura no seletor e um primeiro loadout auditado de três
-  ataques e dois buffs; a Huntress conserva seus nove slots atuais.
+  possui traje base/armadura no seletor e um primeiro loadout auditado. A
+  Huntress possui nove atalhos visíveis e doze skills promovidas; Meditação
+  `#77`, Escudo Dourado `#85` e Evasão Aprimorada `#89` continuam utilizáveis
+  pelo catálogo `K`.
 - BeastMaster possui as oito evocações de Natureza auditadas (`#56–#63`):
   Condor, Javali, Lobo, Urso, Grande Tigre, Gorila, Dragão Negro e Succubus.
   BON/MSH/DDS, variantes LOOK_INFO e ações AniSound/ValidIndex são reais; no
@@ -482,6 +484,16 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
    novos modelos e a textura indireta fazem parte do importador e do manifesto
    reprodutível. Skills ainda não citadas continuam abertas e não devem cair
    silenciosamente em um efeito genérico ao serem promovidas.
+   O lote seguinte da Huntress promoveu Meditação `#77` e Escudo Dourado
+   `#85`. Meditação porta os cinco pares roxo/branco da textura `101`, com
+   espiral do particle type `8`, fade, escala e vidas de `500–900 ms`.
+   Escudo Dourado reutiliza o caminho real `TMEffectLevelUp(type 1)`, com as
+   oito partículas amarelas `56`, colunas `122`, anel `56`, slope `2` e shade
+   `7`; ambos mantêm o override offline de `180 s`. Evasão Aprimorada `#89`
+   cria as cinco cópias cinzas reais da pose corrente, iniciadas a cada
+   `100 ms`, com vidas de `400–600 ms`; montada, duplica somente o animal.
+   A matriz agora registra doze skills Huntress no runtime e 24 registros
+   ainda não promovidos.
    `#76/#81/#86/#101` estão homologadas; `#88` está implementada e aguarda a
    inspeção visual no navegador. O épico só fecha depois da matriz completa das
    quatro classes. As oito evocações reais do BeastMaster já têm

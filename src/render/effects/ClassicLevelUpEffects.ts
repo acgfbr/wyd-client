@@ -6,6 +6,7 @@ import { ClassicDdsTextureLoader } from "../textures/ClassicDdsTextureLoader";
 const EFFECT_LIFETIME_SECONDS = 3;
 const START_VISIBLE_DELAY_SECONDS = EFFECT_LIFETIME_SECONDS * 0.05;
 const LEVEL_UP_RING_LIFETIME_SECONDS = 2;
+const GOLDEN_SHIELD_LIFETIME_SECONDS = 4.1;
 const POOL_LIMIT = 40;
 const LEVEL_UP_COLOR = 0x558833;
 const LEVEL_UP_SHADE_COLOR = 0x335511;
@@ -17,12 +18,17 @@ const LEVEL_UP_COLUMN_OFFSETS = [
   [-0.5, -0.5],
 ] as const;
 const LEVEL_UP_COLUMN_LIFETIMES_SECONDS = [1.5, 1.9, 2.3, 2.7] as const;
+const GOLDEN_SHIELD_COLOR = 0x666600;
+const GOLDEN_SHIELD_SHADE_COLOR = 0x333300;
+const GOLDEN_SHIELD_PARTICLE_COLOR = 0xffff00;
 
 interface ClassicLevelUpResources {
   readonly startGeometry: THREE.BufferGeometry;
   readonly startTexture: THREE.Texture;
   readonly columnTexture: THREE.Texture;
   readonly ringTexture: THREE.Texture;
+  readonly goldenColumnTexture: THREE.Texture;
+  readonly goldenRingTexture: THREE.Texture;
   readonly slopeTexture: THREE.Texture;
   readonly shadeTexture: THREE.Texture;
 }
@@ -31,11 +37,13 @@ interface ClassicLevelUpVisual {
   readonly root: THREE.Group;
   readonly start: THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>;
   readonly columns: readonly THREE.Sprite[];
+  readonly particles: readonly THREE.Sprite[];
   readonly ring: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
   readonly slope: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
   readonly shade: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
   active: boolean;
   includeStart: boolean;
+  variant: 0 | 1;
   elapsed: number;
   serial: number;
 }
@@ -95,12 +103,17 @@ export class ClassicLevelUpEffects {
 
   /** `TMEffectLevelUp(position, 0)` without the summon materialization mesh. */
   playLevelUp(worldPosition: THREE.Vector3): void {
-    this.play(worldPosition, false);
+    this.play(worldPosition, false, 0);
   }
 
   /** `TMEffectStart(position, 1)` plus `TMEffectLevelUp(position, 0)`. */
   playSummonSpawn(worldPosition: THREE.Vector3): void {
-    this.play(worldPosition, true);
+    this.play(worldPosition, true, 0);
+  }
+
+  /** Huntress #85: exact `TMEffectLevelUp(position, 1)` presentation. */
+  playGoldenShield(worldPosition: THREE.Vector3): void {
+    this.play(worldPosition, false, 1);
   }
 
   setEnabled(enabled: boolean): void {
@@ -133,6 +146,7 @@ export class ClassicLevelUpEffects {
     for (const visual of this.#pool) {
       visual.start.material.dispose();
       for (const column of visual.columns) column.material.dispose();
+      for (const particle of visual.particles) particle.material.dispose();
       visual.ring.material.dispose();
       visual.slope.material.dispose();
       visual.shade.material.dispose();
@@ -146,17 +160,29 @@ export class ClassicLevelUpEffects {
     this.#owner.remove(this.object);
   }
 
-  private play(worldPosition: THREE.Vector3, includeStart: boolean): void {
+  private play(worldPosition: THREE.Vector3, includeStart: boolean, variant: 0 | 1): void {
     if (this.#disposed || !this.#enabled || !isFiniteVector(worldPosition)) return;
     const visual = this.acquireVisual();
     visual.active = true;
     visual.includeStart = includeStart;
+    visual.variant = variant;
     visual.elapsed = 0;
     visual.serial = ++this.#serial;
     visual.root.position.copy(worldPosition);
     // TMFieldScene builds the summon effect at GroundGetMask(...)*.1 + .05.
     visual.root.position.y += 0.05;
     visual.root.visible = true;
+    for (let index = 0; index < visual.particles.length; index++) {
+      const particle = visual.particles[index]!;
+      const offsetSeed = visual.serial + index * 17;
+      particle.position.set(
+        (classicRandomStep(offsetSeed, 0, 5) - 3) * 0.2,
+        0.3,
+        (classicRandomStep(offsetSeed, 1, 5) - 3) * 0.2,
+      );
+      particle.userData.startX = particle.position.x;
+      particle.userData.startZ = particle.position.z;
+    }
     this.applyClassicResources(visual);
     this.updateVisual(visual);
   }
@@ -205,6 +231,16 @@ export class ClassicLevelUpEffects {
       return column;
     });
 
+    const particles = Array.from({ length: 8 }, (_, particleIndex) => {
+      const particle = createBrightSprite(
+        this.#fallbackGlow,
+        GOLDEN_SHIELD_PARTICLE_COLOR,
+        `classic-golden-shield-particle-56-${particleIndex}`,
+      );
+      root.add(particle);
+      return particle;
+    });
+
     const ring = createGroundPlane(
       this.#planeGeometry,
       this.#fallbackGlow,
@@ -242,11 +278,13 @@ export class ClassicLevelUpEffects {
       root,
       start,
       columns,
+      particles,
       ring,
       slope,
       shade,
       active: false,
       includeStart: false,
+      variant: 0,
       elapsed: 0,
       serial: 0,
     };
@@ -257,15 +295,31 @@ export class ClassicLevelUpEffects {
     visual.start.geometry = resources?.startGeometry ?? this.#fallbackStartGeometry;
     setMaterialMap(visual.start.material, resources?.startTexture ?? this.#fallbackGlow);
     for (const column of visual.columns) {
-      setMaterialMap(column.material, resources?.columnTexture ?? this.#fallbackGlow);
+      setMaterialMap(
+        column.material,
+        visual.variant === 1
+          ? resources?.goldenColumnTexture ?? this.#fallbackGlow
+          : resources?.columnTexture ?? this.#fallbackGlow,
+      );
     }
-    setMaterialMap(visual.ring.material, resources?.ringTexture ?? this.#fallbackGlow);
+    for (const particle of visual.particles) {
+      setMaterialMap(particle.material, resources?.goldenRingTexture ?? this.#fallbackGlow);
+    }
+    setMaterialMap(
+      visual.ring.material,
+      visual.variant === 1
+        ? resources?.goldenRingTexture ?? this.#fallbackGlow
+        : resources?.ringTexture ?? this.#fallbackGlow,
+    );
     setMaterialMap(visual.slope.material, resources?.slopeTexture ?? this.#fallbackGlow);
     setMaterialMap(visual.shade.material, resources?.shadeTexture ?? this.#fallbackGlow);
   }
 
   private updateVisual(visual: ClassicLevelUpVisual): void {
-    if (visual.elapsed >= EFFECT_LIFETIME_SECONDS) {
+    const totalLifetime = visual.variant === 1
+      ? GOLDEN_SHIELD_LIFETIME_SECONDS
+      : EFFECT_LIFETIME_SECONDS;
+    if (visual.elapsed >= totalLifetime) {
       deactivateVisual(visual);
       return;
     }
@@ -275,6 +329,9 @@ export class ClassicLevelUpEffects {
     visual.start.visible = visual.includeStart && visual.elapsed >= START_VISIBLE_DELAY_SECONDS;
     visual.start.scale.setScalar(startProgress * 0.7 + 0.2);
     setFadedColor(visual.start.material, 0xffffff, startIntensity, false);
+
+    const mainColor = visual.variant === 1 ? GOLDEN_SHIELD_COLOR : LEVEL_UP_COLOR;
+    const shadeColor = visual.variant === 1 ? GOLDEN_SHIELD_SHADE_COLOR : LEVEL_UP_SHADE_COLOR;
 
     for (let index = 0; index < visual.columns.length; index++) {
       const column = visual.columns[index]!;
@@ -286,7 +343,30 @@ export class ClassicLevelUpEffects {
       column.scale.set(0.8, scaleY, 1);
       // m_bStickGround translates by half the current vertical scale.
       column.position.y = -1 + scaleY / 2;
-      setFadedColor(column.material, LEVEL_UP_COLOR, fade, true);
+      setFadedColor(column.material, mainColor, fade, true);
+    }
+
+    for (let index = 0; index < visual.particles.length; index++) {
+      const particle = visual.particles[index]!;
+      const lifetime = index * 0.3 + 2;
+      const visible = visual.variant === 1 && visual.elapsed < lifetime;
+      particle.visible = visible;
+      if (!visible) {
+        particle.material.opacity = 0;
+        continue;
+      }
+      const progress = THREE.MathUtils.clamp(visual.elapsed / lifetime, 0, 1);
+      const scale = (index % 2) * 0.1 + 0.1;
+      const angle = progress * Math.PI * 6;
+      const startX = particle.userData.startX as number;
+      const startZ = particle.userData.startZ as number;
+      particle.position.set(
+        startX + Math.sin(angle) * 0.5,
+        0.3 + progress * 1.5,
+        startZ + Math.cos(angle) * 0.5,
+      );
+      particle.scale.set(scale, scale, 1);
+      particle.material.opacity = Math.max(0, Math.sin(progress * Math.PI));
     }
 
     const ringProgress = Math.min(1, visual.elapsed / LEVEL_UP_RING_LIFETIME_SECONDS);
@@ -295,20 +375,20 @@ export class ClassicLevelUpEffects {
       && visual.elapsed < LEVEL_UP_RING_LIFETIME_SECONDS;
     visual.ring.visible = ringsVisible;
     visual.ring.scale.setScalar(0.01 + visual.elapsed * 2);
-    setFadedColor(visual.ring.material, LEVEL_UP_COLOR, ringFade, true);
+    setFadedColor(visual.ring.material, mainColor, ringFade, true);
     visual.slope.visible = ringsVisible;
     setFadedColor(visual.slope.material, LEVEL_UP_SLOPE_COLOR, ringFade, true);
 
     const shadeFade = Math.max(0, Math.sin(startProgress * Math.PI));
     visual.shade.visible = true;
-    setFadedColor(visual.shade.material, LEVEL_UP_SHADE_COLOR, shadeFade, true);
+    setFadedColor(visual.shade.material, shadeColor, shadeFade, true);
   }
 
   private async loadClassicResources(assets: ClassicAssetSource): Promise<ClassicLevelUpResources> {
     const source = await assets.loadModel(703);
     if (!source) throw new Error("Modelo clássico 703/start.msa ausente do manifesto");
 
-    const textureIndices = [2, 7, 52, 54, 55] as const;
+    const textureIndices = [2, 7, 52, 54, 55, 122, 56] as const;
     const loadedTextures: THREE.Texture[] = [];
     let startGeometry: THREE.BufferGeometry | null = null;
     try {
@@ -326,8 +406,18 @@ export class ClassicLevelUpEffects {
         (result) => (result as PromiseFulfilledResult<THREE.Texture>).value,
       );
       startGeometry = parseMsa(source.buffer).geometry;
-      const [slopeTexture, shadeTexture, startTexture, columnTexture, ringTexture] = textures;
+      const [
+        slopeTexture,
+        shadeTexture,
+        startTexture,
+        columnTexture,
+        ringTexture,
+        goldenColumnTexture,
+        goldenRingTexture,
+      ] = textures;
       configureClassicBillboardUvs(columnTexture!);
+      configureClassicBillboardUvs(goldenColumnTexture!);
+      configureClassicBillboardUvs(goldenRingTexture!);
       configureClassicGroundPlaneUvs(slopeTexture!);
       configureClassicGroundPlaneUvs(ringTexture!);
       return {
@@ -335,6 +425,8 @@ export class ClassicLevelUpEffects {
         startTexture: startTexture!,
         columnTexture: columnTexture!,
         ringTexture: ringTexture!,
+        goldenColumnTexture: goldenColumnTexture!,
+        goldenRingTexture: goldenRingTexture!,
         slopeTexture: slopeTexture!,
         shadeTexture: shadeTexture!,
       };
@@ -441,10 +533,15 @@ function configureClassicGroundPlaneUvs(texture: THREE.Texture): void {
 function deactivateVisual(visual: ClassicLevelUpVisual): void {
   visual.active = false;
   visual.includeStart = false;
+  visual.variant = 0;
   visual.elapsed = 0;
   visual.root.visible = false;
   visual.start.visible = false;
   for (const column of visual.columns) column.visible = false;
+  for (const particle of visual.particles) {
+    particle.visible = false;
+    particle.material.opacity = 0;
+  }
   visual.ring.visible = false;
   visual.slope.visible = false;
   visual.shade.visible = false;
@@ -452,6 +549,11 @@ function deactivateVisual(visual: ClassicLevelUpVisual): void {
 
 function isFiniteVector(position: THREE.Vector3): boolean {
   return Number.isFinite(position.x) && Number.isFinite(position.y) && Number.isFinite(position.z);
+}
+
+function classicRandomStep(seed: number, lane: number, modulus: number): number {
+  const value = Math.imul(seed + lane * 0x9e37, 1_103_515_245) + 12_345;
+  return (value >>> 16) % modulus;
 }
 
 function createFallbackGlowTexture(): THREE.DataTexture {
@@ -484,6 +586,8 @@ function disposeResources(resources: ClassicLevelUpResources): void {
   resources.startTexture.dispose();
   resources.columnTexture.dispose();
   resources.ringTexture.dispose();
+  resources.goldenColumnTexture.dispose();
+  resources.goldenRingTexture.dispose();
   resources.slopeTexture.dispose();
   resources.shadeTexture.dispose();
 }

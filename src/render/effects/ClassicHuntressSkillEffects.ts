@@ -28,6 +28,9 @@ const IMMUNITY_COLORS = [0x99bbff, 0x00ffaa] as const;
 // composed in the current linear WebGL pipeline. Keep the retail colors and
 // blend mode, but compensate only the state-owned persistent meshes.
 const IMMUNITY_PERSISTENT_OPACITY = 0.18;
+const MEDITATION_POOL_LIMIT = 12;
+const MEDITATION_LAYER_COUNT = 5;
+const MEDITATION_COLOR = 0x5500ff;
 const SOUL_LINK_CAST_POOL_LIMIT = 12;
 const SOUL_LINK_CAST_LIFETIMES_SECONDS = [0.8, 0.85, 0.9, 0.95, 1, 1.05] as const;
 const SOUL_LINK_ROTATION_SECONDS = 2;
@@ -81,6 +84,7 @@ interface ClassicResources {
   readonly shadeTexture: THREE.Texture;
   readonly attackTextures: Readonly<Record<ClassicHuntressAttackBurstIndex, THREE.Texture>>;
   readonly particleTexture: THREE.Texture;
+  readonly meditationTexture: THREE.Texture;
   readonly immunityTexture: THREE.Texture;
   readonly immunityGeometry: THREE.BufferGeometry;
   readonly soulLinkTexture: THREE.Texture;
@@ -110,6 +114,24 @@ interface ImmunityVisual {
 interface ImmunityCastVisual {
   readonly root: THREE.Group;
   readonly meshes: readonly THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>[];
+  active: boolean;
+  elapsed: number;
+  serial: number;
+}
+
+interface MeditationLayer {
+  readonly sprite: THREE.Sprite;
+  readonly pairIndex: number;
+  readonly secondary: boolean;
+  lifetime: number;
+  startHeight: number;
+  baseScaleX: number;
+  baseScaleY: number;
+}
+
+interface MeditationVisual {
+  readonly root: THREE.Group;
+  readonly layers: readonly MeditationLayer[];
   active: boolean;
   elapsed: number;
   serial: number;
@@ -162,6 +184,13 @@ interface ShadowBladeVisual {
   particleAccumulator: number;
 }
 
+interface EvasionAfterimageVisual {
+  readonly afterimage: ClassicSkinnedAfterimage;
+  readonly delay: number;
+  readonly lifetime: number;
+  elapsed: number;
+}
+
 interface ShadowBladeParticleVisual {
   readonly sprite: THREE.Sprite;
   active: boolean;
@@ -172,7 +201,7 @@ interface ShadowBladeParticleVisual {
 }
 
 /**
- * Exact local presentation for Huntress skills 72/75/76/80/81/88.
+ * Exact local presentation for Huntress skills 72/75/76/77/80/81/88/89.
  *
  * `worldPosition` is the actor/target base position. The original client adds
  * +1.0 to attack billboards. Persistent buffs are anchored to the actor every
@@ -185,11 +214,13 @@ export class ClassicHuntressSkillEffects {
   readonly #attackPool: AttackVisual[] = [];
   readonly #enchantIcePool: EnchantIceVisual[] = [];
   readonly #immunityCastPool: ImmunityCastVisual[] = [];
+  readonly #meditationPool: MeditationVisual[] = [];
   readonly #soulLinkCastPool: SoulLinkCastVisual[] = [];
   readonly #immunityVisual: ImmunityVisual;
   readonly #soulLinkVisual: SoulLinkVisual;
   readonly #soulParticlePool: SoulParticleVisual[] = [];
   readonly #shadowBladeVisuals: ShadowBladeVisual[] = [];
+  readonly #evasionVisuals: EvasionAfterimageVisual[] = [];
   readonly #shadowBladeParticlePool: ShadowBladeParticleVisual[] = [];
   readonly #planeGeometry = new THREE.PlaneGeometry(1, 1);
   readonly #fallbackImmunityGeometry = new THREE.IcosahedronGeometry(1, 2);
@@ -228,6 +259,7 @@ export class ClassicHuntressSkillEffects {
         for (const visual of this.#attackPool) this.applyAttackAssets(visual);
         for (const visual of this.#enchantIcePool) this.applyEnchantIceAssets(visual);
         for (const visual of this.#immunityCastPool) this.applyImmunityCastAssets(visual);
+        for (const visual of this.#meditationPool) this.applyMeditationAssets(visual);
         for (const visual of this.#soulLinkCastPool) this.applySoulLinkCastAssets(visual);
         this.applyImmunityAssets(this.#immunityVisual);
         this.applySoulLinkAssets(this.#soulLinkVisual);
@@ -235,7 +267,7 @@ export class ClassicHuntressSkillEffects {
         for (const particle of this.#shadowBladeParticlePool) this.applyShadowBladeParticleAsset(particle);
       })
       .catch((error: unknown) => {
-        console.warn("Efeitos clássicos 72/75/76/80/81/88 indisponíveis; usando fallback.", error);
+        console.warn("Efeitos clássicos 72/75/76/77/80/81/88/89 indisponíveis; usando fallback.", error);
       })
       .finally(() => {
         this.#preload = null;
@@ -271,6 +303,11 @@ export class ClassicHuntressSkillEffects {
       visual.elapsed += delta;
       this.updateImmunityCastVisual(visual);
     }
+    for (const visual of this.#meditationPool) {
+      if (!visual.active) continue;
+      visual.elapsed += delta;
+      this.updateMeditationVisual(visual);
+    }
     for (const visual of this.#soulLinkCastPool) {
       if (!visual.active) continue;
       visual.elapsed += delta;
@@ -286,6 +323,7 @@ export class ClassicHuntressSkillEffects {
     }
     this.updateSoulParticles(delta);
     this.updateShadowBladeVisuals(delta);
+    this.updateEvasionVisuals(delta);
     this.updateShadowBladeParticles(delta);
   }
 
@@ -315,6 +353,38 @@ export class ClassicHuntressSkillEffects {
     visual.root.visible = true;
     this.applyImmunityCastAssets(visual);
     this.updateImmunityCastVisual(visual);
+  }
+
+  /**
+   * Huntress #77, Meditação. TMHuman.cpp:9239-9274 creates five purple/white
+   * texture-101 pairs using TMEffectBillBoard particle type 8.
+   */
+  playMeditationCast(worldPosition: THREE.Vector3): void {
+    if (this.#disposed || !this.#enabled || !isFiniteVector(worldPosition)) return;
+    const visual = this.acquireMeditationVisual();
+    visual.active = true;
+    visual.elapsed = 0;
+    visual.serial = ++this.#serial;
+    visual.root.position.copy(worldPosition);
+    visual.root.visible = true;
+    for (const layer of visual.layers) {
+      const pairIndex = layer.pairIndex;
+      layer.lifetime = pairIndex * 0.1 + 0.5;
+      layer.startHeight = pairIndex * 0.2 + 0.2;
+      if (layer.secondary) {
+        const randomStep = classicRandomStep(visual.serial, pairIndex, 5);
+        const scale = randomStep * 0.01 + 0.1;
+        layer.baseScaleX = scale;
+        layer.baseScaleY = scale;
+        layer.sprite.material.rotation = randomStep * Math.PI / 3;
+      } else {
+        layer.baseScaleX = 0.12 - pairIndex * 0.01;
+        layer.baseScaleY = 0.2 - pairIndex * 0.01;
+        layer.sprite.material.rotation = 0;
+      }
+    }
+    this.applyMeditationAssets(visual);
+    this.updateMeditationVisual(visual);
   }
 
   /** TMHuman.cpp:9276-9294 — the six texture-56 Soul Link cast layers. */
@@ -443,15 +513,43 @@ export class ClassicHuntressSkillEffects {
     for (let index = total; index < afterimages.length; index++) afterimages[index]!.dispose();
   }
 
+  /**
+   * Huntress #89, Evasão Aprimorada. Five pose copies remain at the caster,
+   * start 100 ms apart and fade during 400/450/500/550/600 ms.
+   */
+  playEvasionCast(afterimages: readonly ClassicSkinnedAfterimage[]): void {
+    if (this.#disposed || !this.#enabled) {
+      for (const afterimage of afterimages) afterimage.dispose();
+      return;
+    }
+    this.clearEvasionVisuals();
+    const total = Math.min(afterimages.length, 5);
+    for (let index = 0; index < total; index++) {
+      const afterimage = afterimages[index]!;
+      afterimage.object.position.y += 0.1;
+      afterimage.setIntensity(0);
+      this.object.add(afterimage.object);
+      this.#evasionVisuals.push({
+        afterimage,
+        delay: index * 0.1,
+        lifetime: index * 0.05 + 0.4,
+        elapsed: 0,
+      });
+    }
+    for (let index = total; index < afterimages.length; index++) afterimages[index]!.dispose();
+  }
+
   clear(): void {
     for (const visual of this.#attackPool) deactivateAttack(visual);
     for (const visual of this.#enchantIcePool) deactivateEnchantIce(visual);
     for (const visual of this.#immunityCastPool) deactivateImmunityCast(visual);
+    for (const visual of this.#meditationPool) deactivateMeditation(visual);
     for (const visual of this.#soulLinkCastPool) deactivateSoulLinkCast(visual);
     deactivateImmunity(this.#immunityVisual);
     deactivateSoulLink(this.#soulLinkVisual);
     this.clearSoulParticles();
     this.clearShadowBladeVisuals();
+    this.clearEvasionVisuals();
     this.clearShadowBladeParticles();
   }
 
@@ -472,6 +570,9 @@ export class ClassicHuntressSkillEffects {
     for (const visual of this.#immunityCastPool) {
       for (const mesh of visual.meshes) mesh.material.dispose();
     }
+    for (const visual of this.#meditationPool) {
+      for (const layer of visual.layers) layer.sprite.material.dispose();
+    }
     for (const visual of this.#soulLinkCastPool) {
       for (const billboard of visual.billboards) billboard.material.dispose();
     }
@@ -485,6 +586,7 @@ export class ClassicHuntressSkillEffects {
     this.#attackPool.length = 0;
     this.#enchantIcePool.length = 0;
     this.#immunityCastPool.length = 0;
+    this.#meditationPool.length = 0;
     this.#soulLinkCastPool.length = 0;
     this.#soulParticlePool.length = 0;
     this.#shadowBladeParticlePool.length = 0;
@@ -676,6 +778,79 @@ export class ClassicHuntressSkillEffects {
       visual.meshes[index]!.visible = visual.elapsed < IMMUNITY_CAST_LIFETIMES_SECONDS[index]!;
     }
     if (visual.elapsed >= IMMUNITY_CAST_LIFETIMES_SECONDS.at(-1)!) deactivateImmunityCast(visual);
+  }
+
+  private acquireMeditationVisual(): MeditationVisual {
+    const free = this.#meditationPool.find((visual) => !visual.active);
+    if (free) return free;
+    if (this.#meditationPool.length < MEDITATION_POOL_LIMIT) {
+      const visual = this.createMeditationVisual();
+      this.#meditationPool.push(visual);
+      this.object.add(visual.root);
+      return visual;
+    }
+    return oldestVisual(this.#meditationPool);
+  }
+
+  private createMeditationVisual(): MeditationVisual {
+    const root = new THREE.Group();
+    root.name = `classic-huntress-meditation-${this.#meditationPool.length}`;
+    root.visible = false;
+    const layers: MeditationLayer[] = [];
+    for (let pairIndex = 0; pairIndex < MEDITATION_LAYER_COUNT; pairIndex++) {
+      for (const secondary of [false, true] as const) {
+        const sprite = createBrightSprite(
+          this.#fallbackGlow,
+          secondary ? 0xffffff : MEDITATION_COLOR,
+          `classic-meditation-texture-101-${pairIndex}-${secondary ? "white" : "purple"}`,
+        );
+        root.add(sprite);
+        layers.push({
+          sprite,
+          pairIndex,
+          secondary,
+          lifetime: pairIndex * 0.1 + 0.5,
+          startHeight: pairIndex * 0.2 + 0.2,
+          baseScaleX: secondary ? 0.1 : 0.12 - pairIndex * 0.01,
+          baseScaleY: secondary ? 0.1 : 0.2 - pairIndex * 0.01,
+        });
+      }
+    }
+    return { root, layers, active: false, elapsed: 0, serial: 0 };
+  }
+
+  private applyMeditationAssets(visual: MeditationVisual): void {
+    const texture = this.#resources?.meditationTexture ?? this.#fallbackGlow;
+    for (const layer of visual.layers) {
+      setMaterialMap(layer.sprite.material, texture);
+      layer.sprite.material.color.setHex(layer.secondary ? 0xffffff : MEDITATION_COLOR);
+    }
+  }
+
+  private updateMeditationVisual(visual: MeditationVisual): void {
+    let anyVisible = false;
+    for (const layer of visual.layers) {
+      const visible = visual.elapsed < layer.lifetime;
+      layer.sprite.visible = visible;
+      if (!visible) {
+        layer.sprite.material.opacity = 0;
+        continue;
+      }
+      anyVisible = true;
+      const progress = THREE.MathUtils.clamp(visual.elapsed / layer.lifetime, 0, 1);
+      // TMEffectBillBoard particle type 8: an expanding six-turn spiral with
+      // a faster vertical oscillation. Scale velocity .002/ms is +2 units/s.
+      const angle = progress * Math.PI * 6;
+      layer.sprite.position.set(
+        progress * Math.cos(angle),
+        layer.startHeight + Math.cos(progress * Math.PI * 36) * 2,
+        progress * Math.sin(angle),
+      );
+      const growth = visual.elapsed * 2;
+      layer.sprite.scale.set(layer.baseScaleX + growth, layer.baseScaleY + growth, 1);
+      layer.sprite.material.opacity = Math.max(0, Math.sin(progress * Math.PI));
+    }
+    if (!anyVisible) deactivateMeditation(visual);
   }
 
   private acquireSoulLinkCastVisual(): SoulLinkCastVisual {
@@ -938,6 +1113,23 @@ export class ClassicHuntressSkillEffects {
     }
   }
 
+  private updateEvasionVisuals(deltaSeconds: number): void {
+    for (let index = this.#evasionVisuals.length - 1; index >= 0; index--) {
+      const visual = this.#evasionVisuals[index]!;
+      visual.elapsed += deltaSeconds;
+      const localElapsed = visual.elapsed - visual.delay;
+      if (localElapsed < 0) continue;
+      if (localElapsed >= visual.lifetime) {
+        visual.afterimage.dispose();
+        this.#evasionVisuals.splice(index, 1);
+        continue;
+      }
+      const progress = THREE.MathUtils.clamp(localElapsed / visual.lifetime, 0, 1);
+      visual.afterimage.setIntensity(Math.max(0, Math.sin(progress * Math.PI)));
+      visual.afterimage.update(deltaSeconds);
+    }
+  }
+
   private spawnShadowBladeParticle(worldPosition: THREE.Vector3): void {
     const particle = this.acquireShadowBladeParticle();
     const serial = ++this.#shadowBladeParticleSerial;
@@ -1016,12 +1208,17 @@ export class ClassicHuntressSkillEffects {
     this.#shadowBladeVisuals.length = 0;
   }
 
+  private clearEvasionVisuals(): void {
+    for (const visual of this.#evasionVisuals) visual.afterimage.dispose();
+    this.#evasionVisuals.length = 0;
+  }
+
   private clearShadowBladeParticles(): void {
     for (const particle of this.#shadowBladeParticlePool) deactivateShadowBladeParticle(particle);
   }
 
   private async loadClassicResources(assets: ClassicAssetSource): Promise<ClassicResources> {
-    const textureIndices = [7, 56, 60, 0] as const;
+    const textureIndices = [7, 56, 60, 0, 101] as const;
     const textureResults = await Promise.allSettled(
       textureIndices.map((index) => this.loadTexture(assets, index)),
     );
@@ -1031,7 +1228,7 @@ export class ClassicHuntressSkillEffects {
     const failure = textureResults.find((result) => result.status === "rejected") as PromiseRejectedResult | undefined;
     if (failure || textures.length !== textureIndices.length) {
       for (const texture of textures) texture.dispose();
-      throw failure?.reason ?? new Error("Texturas de efeito 7/56/60/0 ausentes");
+      throw failure?.reason ?? new Error("Texturas de efeito 7/56/60/0/101 ausentes");
     }
 
     let immunitySource: Awaited<ReturnType<ClassicAssetSource["loadModel"]>>;
@@ -1077,15 +1274,17 @@ export class ClassicHuntressSkillEffects {
       throw error;
     }
 
-    const [shadeTexture, fatalTexture, felineTexture, particleTexture] = textures;
+    const [shadeTexture, fatalTexture, felineTexture, particleTexture, meditationTexture] = textures;
     const [immunityTexture, soulLinkTexture] = modelTextures;
     configureClassicBillboardUvs(fatalTexture!);
     configureClassicBillboardUvs(felineTexture!);
     configureClassicBillboardUvs(particleTexture!);
+    configureClassicBillboardUvs(meditationTexture!);
     return {
       shadeTexture: shadeTexture!,
       attackTextures: { 72: fatalTexture!, 80: felineTexture! },
       particleTexture: particleTexture!,
+      meditationTexture: meditationTexture!,
       immunityTexture: immunityTexture!,
       immunityGeometry,
       soulLinkTexture: soulLinkTexture!,
@@ -1186,6 +1385,16 @@ function deactivateImmunityCast(visual: ImmunityCastVisual): void {
   for (const mesh of visual.meshes) mesh.visible = false;
 }
 
+function deactivateMeditation(visual: MeditationVisual): void {
+  visual.active = false;
+  visual.elapsed = 0;
+  visual.root.visible = false;
+  for (const layer of visual.layers) {
+    layer.sprite.visible = false;
+    layer.sprite.material.opacity = 0;
+  }
+}
+
 function deactivateSoulLinkCast(visual: SoulLinkCastVisual): void {
   visual.active = false;
   visual.elapsed = 0;
@@ -1282,6 +1491,7 @@ function disposeClassicResources(resources: ClassicResources): void {
   resources.attackTextures[72].dispose();
   resources.attackTextures[80].dispose();
   resources.particleTexture.dispose();
+  resources.meditationTexture.dispose();
   resources.immunityTexture.dispose();
   resources.immunityGeometry.dispose();
   resources.soulLinkTexture.dispose();

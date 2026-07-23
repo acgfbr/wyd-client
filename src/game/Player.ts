@@ -441,6 +441,7 @@ export class Player {
   createShadowBladeAfterimages(
     selection: PlayerShadowBladeAfterimageSelection | null,
     count = 5,
+    color?: THREE.ColorRepresentation,
   ): ClassicSkinnedAfterimage[] {
     if (this.#dead || this.#disposed || !selection) return [];
     if (
@@ -464,6 +465,7 @@ export class Player {
       for (let index = 0; index < total; index++) {
         const afterimage = createClassicSkinnedAfterimage(source, {
           excludedObjectNames: excluded,
+          color,
           animationControllerFactory: (cloneRoot) => selection.kind === "mounted"
             ? selection.mount.createAfterimageAnimationController(cloneRoot, selection.animation)
             : selection.avatar.createAfterimageAnimationController(cloneRoot, selection.animation),

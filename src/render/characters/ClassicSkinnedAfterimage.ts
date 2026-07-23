@@ -19,6 +19,8 @@ export interface ClassicSkinnedAfterimageOptions {
   readonly animationControllerFactory?: (
     cloneRoot: THREE.Group,
   ) => ClassicSkinnedCloneAnimationController | null;
+  /** Fixed-function RGB multiplier used by the originating TMEffectSkinMesh. */
+  readonly color?: THREE.ColorRepresentation;
 }
 
 /**
@@ -33,6 +35,7 @@ export function createClassicSkinnedAfterimage(
   options: ClassicSkinnedAfterimageOptions = {},
 ): ClassicSkinnedAfterimage | null {
   const excluded = options.excludedObjectNames ?? new Set<string>();
+  const effectColor = new THREE.Color(options.color ?? SHADOW_BLADE_COLOR);
   source.updateWorldMatrix(true, true);
 
   // SkeletonUtils retains the concrete Group root but exposes Object3D in its
@@ -47,7 +50,11 @@ export function createClassicSkinnedAfterimage(
     if (!(child instanceof THREE.Mesh)) return;
     const sourceMaterials = Array.isArray(child.material) ? child.material : [child.material];
     const owned = sourceMaterials.map((material) => {
-      const next = createAfterimageMaterial(material, child.geometry.hasAttribute("color"));
+      const next = createAfterimageMaterial(
+        material,
+        child.geometry.hasAttribute("color"),
+        effectColor,
+      );
       materials.push(next);
       return next;
     });
@@ -73,7 +80,7 @@ export function createClassicSkinnedAfterimage(
   let disposed = false;
   const setIntensity = (intensity: number): void => {
     const value = THREE.MathUtils.clamp(Number.isFinite(intensity) ? intensity : 0, 0, 1);
-    for (const material of materials) material.color.copy(SHADOW_BLADE_COLOR).multiplyScalar(value);
+    for (const material of materials) material.color.copy(effectColor).multiplyScalar(value);
     object.visible = value > 0.001;
   };
 
@@ -103,6 +110,7 @@ export function createClassicSkinnedAfterimage(
 function createAfterimageMaterial(
   source: THREE.Material,
   vertexColors: boolean,
+  color: THREE.Color,
 ): THREE.MeshBasicMaterial {
   const textured = source as THREE.Material & {
     readonly map?: THREE.Texture | null;
@@ -113,7 +121,7 @@ function createAfterimageMaterial(
     name: "WYD Lâmina das Sombras #88",
     map: textured.map ?? null,
     alphaMap: textured.alphaMap ?? null,
-    color: SHADOW_BLADE_COLOR,
+    color,
     vertexColors,
     transparent: true,
     opacity: 1,

@@ -142,6 +142,14 @@ O passe Ancient segue `MODULATE2X + ADDSMOOTH`. Os adicionais atuais do Carry
 de Utilidades sao `EF2=120`, `EF3=120`, `EF43=251`, grade 5; o tooltip calcula
 `Dano de Perfuracao: 480`.
 
+As skills Huntress promovidas ao runtime somam doze. Meditacao `#77` foi
+recuperada de `TMHuman.cpp` como cinco pares de billboards `101` em espiral;
+Escudo Dourado `#85` usa o mesmo `TMEffectLevelUp` tipo `1` do cliente, com
+texturas `122/56/2/7`. Esses casts nao usam o pulso generico e seus buffs
+mantem o override offline de `180 s`. Evasao Aprimorada `#89` usa cinco clones
+skinned cinza da pose atual, com delays e vidas originais; montada, conserva a
+regra de copiar apenas o animal.
+
 Montarias conservam rig, partes, bancos ANI, escala e bone de sela proprios.
 Nunca aplicar ANI de cavaleiro diretamente ao animal. A MATT3 da Huntress pode
 referenciar indice 99, inexistente no `hs01`; nesse caso o animal fica em
@@ -298,6 +306,9 @@ atualizado para remover a divergencia.
 - Gameplay: combate, critico, C.C, skills iniciais, buffs, progressao e drops.
 - UI: HUD 7.54, chat, overhead, inventario/equipamento/cargo/lojas e tooltips.
 - Classes: TransKnight, Foema, BeastMaster, Huntress e evocacoes.
+- Skills: Meditacao `#77`, Escudo Dourado `#85` e Evasao Aprimorada `#89`
+  promovidos no lote Huntress, reduzindo a lacuna total de 97 para 94
+  registros.
 - Distribuicao: README, capturas dos 111 mapas, Vercel/iPhone, minificacao,
   telemetria, dispose e code splitting.
 - Auditoria: matriz automatica de arquivos/cobertura e memoria canonica.

@@ -1,6 +1,6 @@
 # Matriz automatica de cobertura do cliente classico
 
-Gerado por `bun run audit:coverage` em 2026-07-23T03:18:04.788Z. Este arquivo e
+Gerado por `bun run audit:coverage` em 2026-07-23T03:42:56.924Z. Este arquivo e
 derivado dos artefatos importados e do runtime; nao deve ser editado
 manualmente. A analise e as decisoes ficam em `auditoria-threejs-cobertura.md`.
 
@@ -90,7 +90,7 @@ manual e rastreada em `PENDENCIAS.md`.
 | TransKnight | 36 (24 normais + 12 master) | 7 | 0, 1, 2, 3, 5, 19, 23 | 29 |
 | Foema | 36 (24 normais + 12 master) | 15 | 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 43, 44, 45, 46, 47 | 21 |
 | BeastMaster | 36 (24 normais + 12 master) | 16 | 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63 | 20 |
-| Huntress | 36 (24 normais + 12 master) | 9 | 72, 75, 76, 79, 80, 81, 86, 88, 95 | 27 |
+| Huntress | 36 (24 normais + 12 master) | 12 | 72, 75, 76, 77, 79, 80, 81, 85, 86, 88, 89, 95 | 24 |
 
 ## Lacunas objetivas
 
