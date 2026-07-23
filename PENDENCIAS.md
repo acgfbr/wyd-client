@@ -34,14 +34,32 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
   está implementado. Os buffs
   persistem por `180 s`, com efeitos suavizados; a passiva `#101` acrescenta
   alcance e acopla o `SForce` clássico aos ataques.
-- Assalto `#11`, Espada da Fênix `#12` e Possuído `#13` do TransKnight estão
-  jogáveis com os registros exatos de `SkillData.bin`. Assalto usa os dois
-  billboards clássicos `56/60`, cores, crescimento, fade e som `168`; Espada
-  da Fênix usa o `TMSkillDoubleSwing` de nível `1`, malha `702`, textura `91`,
-  escala `5×2`, rastro rosa, shade vermelho e som `160`; Possuído usa a malha
-  `2838`, textura `413`, expansão type `4` de `500 ms` e a armadura crítica
-  persistente com brilho de `1,5 s`. Os affects offline duram `180 s`, mas as
-  fórmulas de status continuam reservadas ao futuro servidor.
+- Carga `#8`, Golpe Mortal `#10`, Assalto `#11`, Espada da Fênix `#12`,
+  Fanatismo `#4`, Fúria Divina `#6`, Destino `#7`, Possuído `#13`, Espada
+  Flamejante `#17`, Contra Ataque `#18`, Ataque da Alma `#20` e Punhalada
+  Venenosa `#21` do
+  TransKnight estão jogáveis com os
+  registros exatos de `SkillData.bin`. `#8/#10/#18` preservam o branch sem
+  projétil do cliente: animação do registro, som `160` e `EarthQuake(2)`.
+  Assalto usa os dois billboards clássicos `56/60`, cores, crescimento, fade e
+  som `168`; Espada da Fênix usa o `TMSkillDoubleSwing` de nível `1`, malha
+  `702`, textura `91`, escala `5×2`, rastro rosa, shade vermelho e som `160`;
+  Possuído usa a malha `2838`, textura `413`, expansão type `4` de `500 ms` e
+  a armadura crítica persistente com brilho de `1,5 s`; Punhalada Venenosa
+  reproduz as dez partículas `texture 0`, crescimento, posições, tempos
+  escalonados, cor `0xFF33FF66` e som `156` do `TMSkillPoison`. O `TickType 20`
+  permanece documentado, mas seu dano periódico pertence ao servidor. Fúria
+  Divina mantém cinco segmentos `texture 128` presos ao alvo vivo por `900 ms`,
+  com shades `7` e som `178`; Destino cria uma `TMArrow` por alvo do pacote,
+  usa malha `2840`, beam `410`, rastro `0`, impacto `8/7`, voo de `600 ms` e
+  som final `26`. Fanatismo captura a pose corrente a cada `300 ms` por
+  `1,5 s`, inclusive os dois rigs quando montado, com clone cinza de `700 ms`
+  e som `160`; Espada Flamejante acompanha a matriz real da arma durante o
+  restante do golpe e emite o billboard azul `11` com som `155`; Ataque da
+  Alma clona o LOOK/rig real do alvo em `STAND01`, aplica cinza `0,5`, fade
+  cosseno, subida motion type `1` por `3 s` e som `153`. Os affects offline
+  duram `180 s`, mas as fórmulas de status continuam reservadas ao futuro
+  servidor.
 - HUD clássico, minimapa, seletor de mapas, câmera, zoom e modo G estão ligados.
   A composição inferior passou a usar a proporção da interface 7.54: trilho em
   toda a base, orbes nos cantos, readout compacto dentro da barra e áreas reais
@@ -425,24 +443,45 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
    unidade ao alcance e acopla o `SForce` clássico de três camadas à arma em
    ataques normais e skills ofensivas, sem ocupar slot ou criar buff temporário.
    O primeiro lote de TransKnight agora possui renderers dedicados para Giro da
-   Fúria `#0`, Toque Sagrado `#1`, Golpe Duplo `#2`, Samaritano `#3`, Aura da
-   Vida `#5`, Assalto `#11`, Espada da Fênix `#12`, Possuído `#13`, Lâmina
-   Congelada `#19` e Tempestade de Gelo `#23`, usando as malhas
-   `10/702/703/706/707/2838`, DDS, alpha DWORD, offsets, tempos e pools
-   derivados do cliente. Assalto não recebe o antigo pulso genérico: reproduz
-   somente as texturas `56/60` do evento original. Espada da Fênix reutiliza o
+   Fúria `#0`, Toque Sagrado `#1`, Golpe Duplo `#2`, Samaritano `#3`,
+   Fanatismo `#4`, Aura da Vida `#5`, Fúria Divina `#6`, Destino `#7`, Carga
+   `#8`, Golpe Mortal `#10`, Assalto `#11`, Espada da Fênix `#12`, Possuído
+   `#13`, Espada Flamejante `#17`, Contra Ataque `#18`, Lâmina Congelada `#19`,
+   Ataque da Alma `#20`, Punhalada Venenosa `#21` e Tempestade de Gelo `#23`,
+   usando as malhas
+   `10/702/703/706/707/2838/2840`, DDS, alpha DWORD, offsets, tempos e pools
+   derivados do cliente. Carga, Golpe Mortal e Contra Ataque compartilham o
+   branch de `TMHuman` que executa somente quake `2` e som `160`; portanto não
+   recebem o antigo projétil genérico. Assalto reproduz somente as texturas
+   `56/60` do evento original. Espada da Fênix reutiliza o
    controller do Golpe Duplo no nível `1`, preservando a escala horizontal
    `5`, vertical `2`, cor `0xFFFF0000`, trail `0xFFFF9999`, grid de shade `5`
    e percurso até quatro vezes o vetor do alvo. Possuído separa o cast type
    `4` do estado
    `m_cCriticalArmor`: enquanto o affect `24` estiver ativo, mantém a malha
    `2838`/textura `413`, escala `2×1,5`, brilho senoidal de `1,5 s`, yaw e
-   offsets próprios para montaria. O primeiro lote dedicado de Foema cobre
-   Ataque de Fogo `#32`,
+   offsets próprios para montaria. Fúria Divina porta o `TMEffectSpark` de
+   cinco segmentos e segue o alvo durante os `900 ms` úteis do controller.
+   Destino seleciona uma única lista de até oito alvos e reproduz para cada um
+   a `TMArrow` type `10001`, incluindo a trajetória fixa `(+3,+5,-3)`, modelo
+   `2840`, beam `410`, wake `0`, impacto `8/7` e som `26`. Fanatismo não
+   inventa fórmula para o affect `5`: replica apenas os snapshots
+   skinned cinza de `700 ms` produzidos a cada `300 ms`, com ambos os rigs
+   quando montado. Espada Flamejante amostra a matriz final da arma a `30 Hz`
+   durante o restante da animação, portando `m_cFireEffect`, billboard `11`,
+   cor `0xFF0055FF`, escala randômica sem fade e som `155`. Ataque da Alma pede
+   ao gerenciador de spawns um clone do rig e LOOK reais do
+   alvo, compartilha geometria/textura, toca `STAND01`, sobe uma unidade por
+   segundo e some em `3 s`, sem projétil genérico. O primeiro lote
+   dedicado de Foema cobre
+   Flecha Mágica `#24`, Ataque de Fogo `#32`,
    Relâmpago `#33`, Trovão `#37`, Névoa Venenosa `#40` e Velocidade `#41`; o
    Trovão separa o cast transitório de dois segundos dos anéis persistentes do
-   estado do buff. O segundo lote da Foema também está implementado: Lança de
-   Gelo `#34` usa os modelos `708/707`, sombra móvel, flare e partículas do
+   estado do buff. Flecha Mágica usa o `TMSkillMagicArrow` type `0`: malha `701`, frames
+   `20–25`, voo de `50 ms` por unidade, três partículas `0` por emissão, shade
+   móvel `7`, impacto `71/7` e sons `161/154`.
+   O segundo lote da Foema também está implementado: Lança de Gelo `#34` usa
+   os modelos `708/707`, sombra móvel, flare e partículas do
    FreezeBlade; Fênix de Fogo `#38` combina simultaneamente o pássaro `8` e a
    onda `702`, com frames, trilhas, explosão radial e fogo final; Arma Mágica
    `#44` possui o cast único `56/60` e, durante os `180 s` do mock, amostra a

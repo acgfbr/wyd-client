@@ -2173,6 +2173,80 @@ export class GameApp {
       return;
     }
 
+    // #4 sets m_cPunish immediately, then snapshots the actor's current pose
+    // every 300 ms for 1.5 s. Mounted snapshots retain animal and rider.
+    if (skill.classKey === "transknight" && skill.classicIndex === 4) {
+      const currentTarget = spawns.snapshot(targetId);
+      if (currentTarget?.alive && currentTarget.hostile) {
+        this.applySkillImpact(
+          skill,
+          targetId,
+          this.combatPoint(currentTarget.position, 0),
+          false,
+        );
+      }
+      for (let index = 1; index <= 5; index++) {
+        this.scheduleSkillEvent(index * 0.3, () => {
+          if (
+            this.#activeClassKey !== "transknight"
+            || !this.#player
+            || !this.#playerState.snapshot.alive
+          ) return;
+          const afterimages = this.#player.createIllusionAfterimages();
+          const effects = this.#transKnightSkillEffects;
+          for (const afterimage of afterimages) {
+            if (effects) effects.playFanaticismAfterimage(afterimage);
+            else afterimage.dispose();
+          }
+          void this.#audio.playSound(160, 0.3);
+        });
+      }
+      this.#hud.addLog(`${skill.name} · ${skill.mana} MP.`, "system");
+      return;
+    }
+
+    // #6 is instantiated directly by TMFieldScene::OnPacketAttack. Its
+    // TMEffectSpark endpoint follows the live TMObject for the whole 900 ms.
+    if (skill.classKey === "transknight" && skill.classicIndex === 6) {
+      const currentTarget = spawns.snapshot(targetId);
+      if (currentTarget?.alive && currentTarget.hostile) {
+        const targetBase = this.combatPoint(currentTarget.position, 0);
+        this.#transKnightSkillEffects?.playAttack(
+          6,
+          casterBase,
+          targetBase,
+          () => {
+            if (spawns !== this.#boundSpawns) return null;
+            const liveTarget = spawns.snapshot(targetId);
+            return liveTarget ? this.combatPoint(liveTarget.position, 0) : null;
+          },
+        );
+        this.applySkillImpact(skill, targetId, targetBase, false);
+      }
+      this.#hud.addLog(`${skill.name} · ${skill.mana} MP.`, "system");
+      return;
+    }
+
+    // #7 also lives in OnPacketAttack and creates one type-10001 TMArrow for
+    // every ID carried by the area packet. Select once so VFX and offline
+    // damage use the same primary-first list capped at eight records.
+    if (skill.classKey === "transknight" && skill.classicIndex === 7) {
+      const currentTarget = spawns.snapshot(targetId);
+      if (currentTarget?.alive && currentTarget.hostile) {
+        const targets = this.selectSkillTargets(skill, currentTarget);
+        for (const affected of targets) {
+          this.#transKnightSkillEffects?.playDestiny(
+            casterBase,
+            this.combatPoint(affected.position, 0),
+            () => this.#audio.playSkillImpact(7),
+          );
+        }
+        this.applySkillDamageToTargets(skill, targets);
+      }
+      this.#hud.addLog(`${skill.name} · ${skill.mana} MP.`, "system");
+      return;
+    }
+
     this.scheduleSkillEvent(delay, () => {
       if (spawns !== this.#boundSpawns) return;
       const currentTarget = spawns.snapshot(targetId);
@@ -2276,10 +2350,44 @@ export class GameApp {
         return;
       }
 
+      if (skill.classKey === "transknight" && skill.classicIndex === 20) {
+        const afterimage = spawns.createSoulAttackAfterimage(targetId);
+        if (afterimage) {
+          const effects = this.#transKnightSkillEffects;
+          if (effects) effects.playSoulAttackAfterimage(afterimage);
+          else afterimage.dispose();
+        }
+        this.applySkillImpact(skill, targetId, targetBase, false);
+        return;
+      }
+
+      if (skill.classKey === "transknight" && skill.classicIndex === 17) {
+        const remainingSwingSeconds = Math.max(
+          0.15,
+          (timing?.animationDurationSeconds ?? 1) - delay,
+        );
+        this.#transKnightSkillEffects?.playFlamingSword(
+          (out) => this.#player?.sampleWeaponEffectSegments(out) ?? 0,
+          remainingSwingSeconds,
+        );
+        this.applySkillImpact(skill, targetId, targetBase, false);
+        return;
+      }
+
       if (
         skill.classKey === "transknight"
         && this.#transKnightSkillEffects?.playAttack(skill.classicIndex, casterBase, targetBase)
       ) {
+        if (
+          this.#effectsEnabled
+          && (
+            skill.classicIndex === 8
+            || skill.classicIndex === 10
+            || skill.classicIndex === 18
+          )
+        ) {
+          this.#cameraRig.quake(2);
+        }
         this.applySkillImpact(skill, targetId, targetBase, false);
         return;
       }

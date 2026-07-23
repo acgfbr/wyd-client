@@ -1,5 +1,9 @@
 import * as THREE from "three";
 import type { ClassicAssetSource } from "../../assets/ClassicAssetSource";
+import {
+  createClassicSkinnedAfterimage,
+  type ClassicSkinnedAfterimage,
+} from "../../render/characters/ClassicSkinnedAfterimage";
 import { FIELD_WORLD_SIZE, fieldAt, toScene, type WydPosition } from "../../world/coordinates";
 import { fieldKey } from "../../world/regions";
 import { ClassicSkinnedAssetLibrary, type ClassicSkinnedInstanceLease } from "./ClassicSkinnedAssetLibrary";
@@ -226,6 +230,25 @@ export class ClassicSpawnManager {
 
   snapshots(): readonly ClassicMonsterSnapshot[] {
     return this.#actors.map(actorSnapshot);
+  }
+
+  /** Target-owned TMEffectSkinMesh used by TransKnight Ataque da Alma #20. */
+  createSoulAttackAfterimage(id: string): ClassicSkinnedAfterimage | null {
+    const actor = this.#actorsById.get(id);
+    if (
+      !actor
+      || !isActorAlive(actor)
+      || !actor.object.visible
+      || actor.object.parent?.visible === false
+    ) return null;
+    const animation = actor.lease.model.animationSnapshot("STAND01")
+      ?? actor.lease.model.currentAnimationSnapshot();
+    return createClassicSkinnedAfterimage(actor.lease.model.object, {
+      color: 0x808080,
+      animationControllerFactory: (cloneRoot) => (
+        actor.lease.model.createCloneAnimationController(cloneRoot, animation)
+      ),
+    });
   }
 
   /** Remaining local affect-32 lifetime used by its state-owned renderer. */

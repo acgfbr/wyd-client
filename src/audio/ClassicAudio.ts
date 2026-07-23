@@ -28,10 +28,16 @@ const MAX_SIMULTANEOUS_SFX_VOICES = 28;
  */
 const CLASSIC_SKILL_SOUNDS: Readonly<Record<number, readonly number[]>> = {
   2: [160],
+  6: [178],
+  8: [160],
+  10: [160],
   11: [168],
   12: [160],
+  17: [155],
+  18: [160],
   19: [160],
   20: [153],
+  21: [156],
   24: [161],
   32: [155],
   34: [154, 160],
@@ -54,6 +60,7 @@ const CLASSIC_SKILL_SOUNDS: Readonly<Record<number, readonly number[]>> = {
 };
 
 const CLASSIC_SKILL_IMPACT_SOUNDS: Readonly<Record<number, readonly number[]>> = {
+  7: [26],
   24: [154],
   38: [154],
 };

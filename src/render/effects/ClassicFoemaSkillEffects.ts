@@ -12,6 +12,7 @@ import {
 import { ClassicFoemaIceSpearEffects } from "./ClassicFoemaIceSpearEffects";
 import { ClassicFoemaManaControlEffects } from "./ClassicFoemaManaControlEffects";
 import { ClassicFoemaMagicShieldEffects } from "./ClassicFoemaMagicShieldEffects";
+import { ClassicFoemaMagicArrowEffects } from "./ClassicFoemaMagicArrowEffects";
 import { ClassicFoemaMagicWeaponEffects } from "./ClassicFoemaMagicWeaponEffects";
 import { ClassicFoemaMeteorEffects } from "./ClassicFoemaMeteorEffects";
 
@@ -157,7 +158,7 @@ interface ThunderCastVisual {
 }
 
 /**
- * Retail presentation facade for Foema #32/#33/#34/#35/#36/#37/#38/#39/
+ * Retail presentation facade for Foema #24/#32/#33/#34/#35/#36/#37/#38/#39/
  * #40/#41/#43/#44/#45/#46/#47, including the dedicated meteor and skinned
  * controllers. #47 is state-only because retail has no cast-event branch.
  *
@@ -192,6 +193,7 @@ export class ClassicFoemaSkillEffects {
   readonly #athenaTouchEffects: ClassicFoemaAthenaTouchEffects;
   readonly #manaControlEffects: ClassicFoemaManaControlEffects;
   readonly #cancellationEffects: ClassicFoemaCancellationEffects;
+  readonly #magicArrowEffects: ClassicFoemaMagicArrowEffects;
   #resources: ClassicFoemaResources | null = null;
   #preload: Promise<void> | null = null;
   #serial = 0;
@@ -214,6 +216,7 @@ export class ClassicFoemaSkillEffects {
     this.#athenaTouchEffects = new ClassicFoemaAthenaTouchEffects(this.object);
     this.#manaControlEffects = new ClassicFoemaManaControlEffects(this.object);
     this.#cancellationEffects = new ClassicFoemaCancellationEffects(this.object);
+    this.#magicArrowEffects = new ClassicFoemaMagicArrowEffects(this.object);
     scene.add(this.object);
   }
 
@@ -253,6 +256,7 @@ export class ClassicFoemaSkillEffects {
       this.#athenaTouchEffects.prepareClassic(assets),
       this.#manaControlEffects.prepareClassic(assets),
       this.#cancellationEffects.prepareClassic(assets),
+      this.#magicArrowEffects.prepareClassic(assets),
     ])
       .then((results) => {
         for (const result of results.slice(1)) {
@@ -281,6 +285,7 @@ export class ClassicFoemaSkillEffects {
     this.#athenaTouchEffects.setEnabled(enabled);
     this.#manaControlEffects.setEnabled(enabled);
     this.#cancellationEffects.setEnabled(enabled);
+    this.#magicArrowEffects.setEnabled(enabled);
     if (!enabled) this.clear();
   }
 
@@ -298,6 +303,7 @@ export class ClassicFoemaSkillEffects {
     this.#athenaTouchEffects.update(delta);
     this.#manaControlEffects.update(delta);
     this.#cancellationEffects.update(delta);
+    this.#magicArrowEffects.update(delta);
 
     // Existing independent children advance before their parent controllers
     // emit this frame, so a newly emitted classic billboard starts at t=0.
@@ -377,6 +383,9 @@ export class ClassicFoemaSkillEffects {
     poisonEffectLevel: FoemaPoisonEffectLevel = 0,
   ): boolean {
     switch (classicIndex) {
+      case 24:
+        this.#magicArrowEffects.play(casterFeet, targetFeet);
+        return true;
       case 34:
         this.#iceSpearEffects.play(casterFeet, targetFeet);
         return true;
@@ -579,6 +588,7 @@ export class ClassicFoemaSkillEffects {
     this.#athenaTouchEffects.clear();
     this.#manaControlEffects.clear();
     this.#cancellationEffects.clear();
+    this.#magicArrowEffects.clear();
   }
 
   /** Terminal cleanup; clear() intentionally leaves every bounded pool reusable. */
@@ -595,6 +605,7 @@ export class ClassicFoemaSkillEffects {
     this.#athenaTouchEffects.dispose();
     this.#manaControlEffects.dispose();
     this.#cancellationEffects.dispose();
+    this.#magicArrowEffects.dispose();
     this.#owner.remove(this.object);
 
     for (const visual of this.#firePool) visual.shade.material.dispose();

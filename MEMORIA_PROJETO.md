@@ -316,11 +316,22 @@ atualizado para remover a divergencia.
 - UI: HUD 7.54, chat, overhead, inventario/equipamento/cargo/lojas e tooltips.
 - Classes: TransKnight, Foema, BeastMaster, Huntress e evocacoes.
 - Skills: Ilusao `#73`, Meditacao `#77`, Escudo Dourado `#85`, Troca de
-  Espirito `#87` e Evasao Aprimorada `#89` promovidos no lote Huntress; Assalto
-  `#11`, Espada da Fenix `#12` e Possuido `#13` promovidos no TransKnight.
-  Assalto usa billboards `56/60` e som `168`; Espada da Fenix reutiliza o
-  DoubleSwing nivel `1`; Possuido separa o burst type `4` da armadura critica
-  persistente `2838/413`. A lacuna total caiu de 97 para 89 registros.
+  Espirito `#87` e Evasao Aprimorada `#89` promovidos no lote Huntress. No
+  TransKnight, Carga `#8`, Golpe Mortal `#10` e Contra Ataque `#18` preservam o
+  branch sem projetil, com som `160` e quake `2`; Assalto `#11` usa billboards
+  `56/60`; Espada da Fenix `#12` reutiliza o DoubleSwing nivel `1`; Possuido
+  `#13` separa o burst type `4` da armadura critica persistente `2838/413`;
+  Punhalada Venenosa `#21` usa as dez particulas, tempos, cor e som do
+  `TMSkillPoison`, mantendo o `TickType 20` como regra futura do servidor;
+  Furia Divina `#6` segue o alvo com os cinco segmentos do `TMEffectSpark`;
+  Destino `#7` cria uma `TMArrow` type `10001` por alvo, com modelo `2840`,
+  beam, wake, impacto e som final do cliente; Fanatismo `#4` cria snapshots
+  skinned da pose corrente a cada `300 ms`; Espada Flamejante `#17` acompanha
+  a matriz viva da arma e porta o `m_cFireEffect` azul; Ataque da Alma `#20`
+  clona o rig/LOOK real do alvo, sobe e desvanece por `3 s`. Na Foema, Flecha
+  Magica `#24` porta o controller type `0`, modelo `701`, frames `20-25`,
+  particulas, shades, impacto e sons. A lacuna total caiu de 97 para 79
+  registros.
 - Backend futuro: a ultima tarefa da fila deve inventariar o servidor-base e
   produzir o guia de um multiplayer autoritativo, sem ativar rede durante o
   escopo frontend atual.

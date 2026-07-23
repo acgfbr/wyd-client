@@ -1,9 +1,11 @@
 import * as THREE from "three";
 import type { ClassicAssetSource } from "../../assets/ClassicAssetSource";
 import { parseMsa } from "../../formats/classic/Msa";
+import type { ClassicWeaponEffectSegmentSample } from "../../game/player/ClassicPlayerAvatar";
+import type { ClassicSkinnedAfterimage } from "../characters/ClassicSkinnedAfterimage";
 import { ClassicDdsTextureLoader } from "../textures/ClassicDdsTextureLoader";
 
-export type ClassicTransKnightAttackIndex = 0 | 1 | 2 | 12 | 19 | 23;
+export type ClassicTransKnightAttackIndex = 0 | 1 | 2 | 4 | 6 | 7 | 8 | 10 | 12 | 17 | 18 | 19 | 20 | 21 | 23;
 export type ClassicTransKnightBuffIndex = 3 | 5 | 11 | 13;
 export type ClassicTransKnightSkillIndex =
   | ClassicTransKnightAttackIndex
@@ -16,6 +18,9 @@ const START_POOL_LIMIT = 16;
 const FREEZE_POOL_LIMIT = 48;
 const JUDGEMENT_POOL_LIMIT = 16;
 const CRITICAL_ARMOR_POOL_LIMIT = 16;
+const SPARK_POOL_LIMIT = 16;
+const DESTINY_POOL_LIMIT = 32;
+const FLAMING_SWORD_EMITTER_LIMIT = 8;
 const BILLBOARD_VISIBLE_FRACTION = 0.05;
 
 const DUST_LIFETIMES_SECONDS = [1.5, 1.9, 2.3, 2.7, 3.1, 3.5, 3.9, 4.3, 4.7, 5.1] as const;
@@ -35,7 +40,7 @@ const FREEZE_PARTICLE_INTERVAL_SECONDS = 0.1;
 const JUDGEMENT_LIFETIME_SECONDS = 1.5;
 const JUDGEMENT_RING_KILL_SECONDS = 0.3;
 
-type EffectTextureIndex = 0 | 2 | 7 | 19 | 54 | 55 | 56 | 60 | 91 | 122 | 416;
+type EffectTextureIndex = 0 | 2 | 7 | 8 | 11 | 19 | 54 | 55 | 56 | 60 | 91 | 122 | 128 | 416;
 type BillboardMotion = "static" | "rise" | "rise-sine" | "fall-orbit";
 
 interface ClassicTransKnightResources {
@@ -45,6 +50,7 @@ interface ClassicTransKnightResources {
   readonly freezeGeometry: THREE.BufferGeometry;
   readonly freezeStormGeometry: THREE.BufferGeometry;
   readonly criticalArmorGeometry: THREE.BufferGeometry;
+  readonly destinyGeometry: THREE.BufferGeometry;
   readonly judgementModelTexture: THREE.Texture;
   readonly particleTexture: THREE.Texture;
   readonly slopeTexture: THREE.Texture;
@@ -56,8 +62,13 @@ interface ClassicTransKnightResources {
   readonly magicParticleTexture: THREE.Texture;
   readonly assaultFlameTexture: THREE.Texture;
   readonly criticalArmorTexture: THREE.Texture;
+  readonly destinyModelTexture: THREE.Texture;
+  readonly destinyImpactTexture: THREE.Texture;
+  readonly destinyBeamTexture: THREE.Texture;
+  readonly flamingSwordTexture: THREE.Texture;
   readonly doubleSwingTexture: THREE.Texture;
   readonly hasteRayTexture: THREE.Texture;
+  readonly sparkTexture: THREE.Texture;
   readonly judgementRingTexture: THREE.Texture;
 }
 
@@ -75,6 +86,7 @@ interface BillboardVisual {
   scaleVelocityY: number;
   stickGround: boolean;
   color: number;
+  fade: boolean;
   motion: BillboardMotion;
   motionHeight: number;
   motionDistance: number;
@@ -149,6 +161,64 @@ interface CriticalArmorVisual {
   serial: number;
 }
 
+interface SparkSegmentVisual {
+  readonly root: THREE.Group;
+  readonly planes: readonly [
+    THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>,
+    THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>,
+  ];
+  readonly shade: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
+}
+
+interface SparkVisual {
+  readonly root: THREE.Group;
+  readonly segments: readonly SparkSegmentVisual[];
+  readonly start: THREE.Vector3;
+  readonly end: THREE.Vector3;
+  active: boolean;
+  elapsed: number;
+  serial: number;
+  followTarget: (() => THREE.Vector3 | null) | null;
+}
+
+interface DestinyVisual {
+  readonly root: THREE.Group;
+  readonly mesh: THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>;
+  readonly beamRoot: THREE.Group;
+  readonly beamPlanes: readonly [
+    THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>,
+    THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>,
+  ];
+  readonly start: THREE.Vector3;
+  readonly target: THREE.Vector3;
+  readonly current: THREE.Vector3;
+  active: boolean;
+  elapsed: number;
+  lifetime: number;
+  nextEmission: number;
+  targetGroundY: number;
+  serial: number;
+  onImpact: (() => void) | null;
+}
+
+interface FlamingSwordEmitter {
+  readonly segments: ClassicWeaponEffectSegmentSample[];
+  active: boolean;
+  elapsed: number;
+  duration: number;
+  nextEmission: number;
+  serial: number;
+  sample: ((out: ClassicWeaponEffectSegmentSample[]) => number) | null;
+}
+
+interface FanaticismVisual {
+  readonly afterimage: ClassicSkinnedAfterimage;
+  elapsed: number;
+  lifetime: number;
+  baseY: number;
+  risePerSecond: number;
+}
+
 export interface ClassicTransKnightOwnerContext {
   readonly skinAnchor: THREE.Vector3;
   readonly mounted: boolean;
@@ -171,6 +241,7 @@ interface BillboardOptions {
   readonly scaleVelocityY?: number;
   readonly stickGround?: boolean;
   readonly color: number;
+  readonly fade?: boolean;
   readonly motion?: BillboardMotion;
   readonly motionHeight?: number;
   readonly motionDistance?: number;
@@ -191,7 +262,7 @@ interface GroundOptions {
 
 /**
  * Bounded Three.js port of the original TransKnight presentation for records
- * #0/#1/#2/#3/#5/#11/#13/#19/#23.
+ * #0/#1/#2/#3/#4/#5/#6/#7/#8/#10/#11/#12/#13/#17/#18/#19/#20/#21/#23.
  *
  * Public positions are actor or target feet in Three.js world space. The
  * retail +0.5/+1.0 attachment offsets are applied internally. Gameplay,
@@ -215,6 +286,10 @@ export class ClassicTransKnightSkillEffects {
   readonly #freezePool: FreezeVisual[] = [];
   readonly #judgementPool: JudgementVisual[] = [];
   readonly #criticalArmorPool: CriticalArmorVisual[] = [];
+  readonly #sparkPool: SparkVisual[] = [];
+  readonly #destinyPool: DestinyVisual[] = [];
+  readonly #flamingSwordEmitters: FlamingSwordEmitter[] = [];
+  readonly #fanaticismVisuals: FanaticismVisual[] = [];
   readonly #possessedAura: THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>;
   #resources: ClassicTransKnightResources | null = null;
   #preload: Promise<void> | null = null;
@@ -258,6 +333,8 @@ export class ClassicTransKnightSkillEffects {
         for (const visual of this.#freezePool) this.applyFreezeAssets(visual);
         for (const visual of this.#judgementPool) this.applyJudgementAssets(visual);
         for (const visual of this.#criticalArmorPool) this.applyCriticalArmorAsset(visual);
+        for (const visual of this.#sparkPool) this.applySparkAssets(visual);
+        for (const visual of this.#destinyPool) this.applyDestinyAssets(visual);
         this.applyPossessedAuraAsset();
       })
       .catch((error: unknown) => {
@@ -312,6 +389,22 @@ export class ClassicTransKnightSkillEffects {
       visual.elapsed += delta;
       this.updateCriticalArmorVisual(visual);
     }
+    for (const visual of this.#sparkPool) {
+      if (!visual.active) continue;
+      visual.elapsed += delta;
+      this.updateSparkVisual(visual);
+    }
+    for (const visual of this.#destinyPool) {
+      if (!visual.active) continue;
+      visual.elapsed += delta;
+      this.updateDestinyVisual(visual);
+    }
+    for (const emitter of this.#flamingSwordEmitters) {
+      if (!emitter.active) continue;
+      emitter.elapsed += delta;
+      this.updateFlamingSwordEmitter(emitter);
+    }
+    this.updateFanaticismVisuals(delta);
 
     // TMSkillFreezeBlade owns one function-static emission timestamp. Four
     // storm blades therefore share a single particle cadence.
@@ -335,6 +428,7 @@ export class ClassicTransKnightSkillEffects {
     classicIndex: number,
     casterFeet: THREE.Vector3,
     targetFeet: THREE.Vector3,
+    followTarget?: () => THREE.Vector3 | null,
   ): boolean {
     switch (classicIndex) {
       case 0:
@@ -348,11 +442,36 @@ export class ClassicTransKnightSkillEffects {
       case 2:
         this.playDoubleSwing(casterFeet, targetFeet, 0);
         return true;
+      case 4:
+        // The current-pose clone is captured by GameApp every 300 ms.
+        return true;
+      case 6:
+        this.playDivineFury(casterFeet, targetFeet, followTarget);
+        return true;
+      case 7:
+        this.playDestiny(casterFeet, targetFeet);
+        return true;
+      case 8:
+      case 10:
+      case 18:
+        // TMHuman's shared branch deliberately owns no VFX object. The
+        // caller reproduces EarthQuake(2); ClassicAudio owns sound 160.
+        return true;
       case 12:
         this.playDoubleSwing(casterFeet, targetFeet, 1);
         return true;
+      case 17:
+        // Requires the live weapon matrix and is dispatched explicitly by
+        // GameApp through playFlamingSword.
+        return true;
       case 19:
         this.playFreezeBlade(targetFeet, 0);
+        return true;
+      case 20:
+        // Target look/rig ownership is resolved by ClassicSpawnManager.
+        return true;
+      case 21:
+        this.playPoisonStab(targetFeet);
         return true;
       case 23:
         this.playIceStorm(targetFeet);
@@ -585,6 +704,136 @@ export class ClassicTransKnightSkillEffects {
     });
   }
 
+  /**
+   * #21 Punhalada Venenosa: TMSkillPoison with the default event level.
+   * The server packet may select three alternate colors; the offline loadout
+   * has no authoritative effect level and therefore uses retail level 0.
+   */
+  playPoisonStab(targetFeet: THREE.Vector3): void {
+    if (!this.canPlayAt(targetFeet)) return;
+    for (let index = 0; index < 10; index++) {
+      const serial = ++this.#randomSerial;
+      const randomScale = classicRandomStep(serial, 0, 5);
+      const position = targetFeet.clone();
+      position.x += (classicRandomStep(serial, 1, 10) - 5) * 0.1;
+      position.z += (classicRandomStep(serial, 2, 10) - 5) * 0.1;
+      this.spawnBillboard({
+        position,
+        textureIndex: 0,
+        lifetime: index * 0.4 + 1.5,
+        baseScaleX: randomScale * 0.1 + 0.2,
+        scaleVelocityX: 1,
+        scaleVelocityY: 1,
+        stickGround: true,
+        color: 0xff33ff66,
+      });
+    }
+  }
+
+  /**
+   * #6 Fúria Divina: TMEffectSpark follows the selected target for 900 ms.
+   * Five texture-128 billboard strips form the jagged bolt and five texture-7
+   * shades track the segment midpoints on the ground.
+   */
+  playDivineFury(
+    casterFeet: THREE.Vector3,
+    targetFeet: THREE.Vector3,
+    followTarget?: () => THREE.Vector3 | null,
+  ): void {
+    if (!this.canPlayAt(casterFeet) || !isFiniteVector(targetFeet)) return;
+    const visual = this.acquireSparkVisual();
+    visual.active = true;
+    visual.elapsed = 0;
+    visual.serial = ++this.#serial;
+    visual.start.copy(casterFeet);
+    visual.start.y += 1;
+    visual.end.copy(targetFeet);
+    visual.end.y += 1;
+    visual.followTarget = followTarget ?? null;
+    visual.root.visible = true;
+    this.applySparkAssets(visual);
+    this.updateSparkVisual(visual);
+  }
+
+  /**
+   * #7 Destino: a TMArrow type 10001 descends from (+3,+5,-3) to each packet
+   * target. Model 2840, the texture-410 beam and the texture-0 wake share the
+   * controller's exact 600 ms flight for this fixed retail vector.
+   */
+  playDestiny(
+    casterFeet: THREE.Vector3,
+    targetFeet: THREE.Vector3,
+    onImpact?: () => void,
+  ): void {
+    if (!this.canPlayAt(casterFeet) || !isFiniteVector(targetFeet)) return;
+    const visual = this.acquireDestinyVisual();
+    visual.active = true;
+    visual.elapsed = 0;
+    visual.lifetime = 0.6;
+    visual.nextEmission = 0;
+    visual.targetGroundY = targetFeet.y;
+    visual.serial = ++this.#serial;
+    visual.target.set(targetFeet.x, casterFeet.y + 0.5, targetFeet.z);
+    visual.start.copy(visual.target).add(new THREE.Vector3(3, 5, -3));
+    visual.current.copy(visual.start);
+    visual.onImpact = onImpact ?? null;
+    visual.root.visible = true;
+    this.applyDestinyAssets(visual);
+    this.updateDestinyVisual(visual);
+  }
+
+  /** #17: enables TMEffectSWSwing::m_cFireEffect for the remaining attack. */
+  playFlamingSword(
+    sample: (out: ClassicWeaponEffectSegmentSample[]) => number,
+    durationSeconds: number,
+  ): void {
+    if (this.#disposed || !this.#enabled) return;
+    const emitter = this.acquireFlamingSwordEmitter();
+    emitter.active = true;
+    emitter.elapsed = 0;
+    emitter.duration = THREE.MathUtils.clamp(durationSeconds, 0.15, 1.5);
+    emitter.nextEmission = 0;
+    emitter.serial = ++this.#serial;
+    emitter.sample = sample;
+    this.updateFlamingSwordEmitter(emitter);
+  }
+
+  /** One of Fanatismo's current-pose gray clones (700 ms, motion type 0). */
+  playFanaticismAfterimage(afterimage: ClassicSkinnedAfterimage): void {
+    if (this.#disposed || !this.#enabled) {
+      afterimage.dispose();
+      return;
+    }
+    afterimage.object.position.y += 0.1;
+    afterimage.setIntensity(0.5);
+    this.object.add(afterimage.object);
+    this.#fanaticismVisuals.push({
+      afterimage,
+      elapsed: 0,
+      lifetime: 0.7,
+      baseY: afterimage.object.position.y,
+      risePerSecond: 0,
+    });
+  }
+
+  /** #20 target clone: stand animation, gray fade and motion type 1 rise. */
+  playSoulAttackAfterimage(afterimage: ClassicSkinnedAfterimage): void {
+    if (this.#disposed || !this.#enabled) {
+      afterimage.dispose();
+      return;
+    }
+    afterimage.object.position.y += 0.1;
+    afterimage.setIntensity(0.5);
+    this.object.add(afterimage.object);
+    this.#fanaticismVisuals.push({
+      afterimage,
+      elapsed: 0,
+      lifetime: 3,
+      baseY: afterimage.object.position.y,
+      risePerSecond: 1,
+    });
+  }
+
   /** #13 cast event: model 2838, texture 413, type-4 half-second expansion. */
   playPossessedCast(
     ownerFeet: THREE.Vector3,
@@ -684,6 +933,10 @@ export class ClassicTransKnightSkillEffects {
     for (const visual of this.#freezePool) deactivateFreeze(visual);
     for (const visual of this.#judgementPool) deactivateJudgement(visual);
     for (const visual of this.#criticalArmorPool) deactivateCriticalArmor(visual);
+    for (const visual of this.#sparkPool) deactivateSpark(visual);
+    for (const visual of this.#destinyPool) deactivateDestiny(visual);
+    for (const emitter of this.#flamingSwordEmitters) deactivateFlamingSwordEmitter(emitter);
+    this.clearFanaticismVisuals();
     this.#possessedAura.visible = false;
     this.#lastFreezeParticleAt = Number.NEGATIVE_INFINITY;
   }
@@ -710,6 +963,16 @@ export class ClassicTransKnightSkillEffects {
       for (const ring of visual.rings) ring.material.dispose();
     }
     for (const visual of this.#criticalArmorPool) visual.mesh.material.dispose();
+    for (const visual of this.#sparkPool) {
+      for (const segment of visual.segments) {
+        for (const plane of segment.planes) plane.material.dispose();
+        segment.shade.material.dispose();
+      }
+    }
+    for (const visual of this.#destinyPool) {
+      visual.mesh.material.dispose();
+      for (const plane of visual.beamPlanes) plane.material.dispose();
+    }
     this.#possessedAura.material.dispose();
 
     this.#billboardPool.length = 0;
@@ -719,6 +982,9 @@ export class ClassicTransKnightSkillEffects {
     this.#freezePool.length = 0;
     this.#judgementPool.length = 0;
     this.#criticalArmorPool.length = 0;
+    this.#sparkPool.length = 0;
+    this.#destinyPool.length = 0;
+    this.#flamingSwordEmitters.length = 0;
     this.#planeGeometry.dispose();
     this.#fallbackGlow.dispose();
     this.#fallbackDoubleSwingGeometry.dispose();
@@ -732,6 +998,321 @@ export class ClassicTransKnightSkillEffects {
 
   private canPlayAt(position: THREE.Vector3): boolean {
     return !this.#disposed && this.#enabled && isFiniteVector(position);
+  }
+
+  private acquireSparkVisual(): SparkVisual {
+    const free = this.#sparkPool.find((visual) => !visual.active);
+    if (free) return free;
+    if (this.#sparkPool.length < SPARK_POOL_LIMIT) {
+      const root = new THREE.Group();
+      root.name = `classic-transknight-divine-fury-${this.#sparkPool.length}`;
+      root.visible = false;
+      const segments = Array.from({ length: 5 }, (_, segmentIndex): SparkSegmentVisual => {
+        const segmentRoot = new THREE.Group();
+        segmentRoot.name = `classic-transknight-spark-128-${segmentIndex}`;
+        const planes = [0, 1].map((planeIndex) => {
+          const plane = new THREE.Mesh(
+            this.#planeGeometry,
+            createBrightMeshMaterial(this.#fallbackGlow, 0x5555ff),
+          );
+          plane.name = `classic-transknight-spark-plane-${segmentIndex}-${planeIndex}`;
+          plane.rotation.y = planeIndex * Math.PI / 2;
+          plane.renderOrder = 9;
+          segmentRoot.add(plane);
+          return plane;
+        }) as [
+          THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>,
+          THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>,
+        ];
+        const shade = createGroundPlane(
+          this.#planeGeometry,
+          this.#fallbackGlow,
+          `classic-transknight-spark-shade-7-${segmentIndex}`,
+        );
+        shade.scale.setScalar(1);
+        shade.renderOrder = 6;
+        root.add(segmentRoot, shade);
+        return { root: segmentRoot, planes, shade };
+      });
+      const visual: SparkVisual = {
+        root,
+        segments,
+        start: new THREE.Vector3(),
+        end: new THREE.Vector3(),
+        active: false,
+        elapsed: 0,
+        serial: 0,
+        followTarget: null,
+      };
+      this.#sparkPool.push(visual);
+      this.object.add(root);
+      return visual;
+    }
+    const oldest = oldestBySerial(this.#sparkPool);
+    deactivateSpark(oldest);
+    return oldest;
+  }
+
+  private applySparkAssets(visual: SparkVisual): void {
+    const sparkTexture = this.#resources?.sparkTexture ?? this.#fallbackGlow;
+    const shadeTexture = this.#resources?.shadeTexture ?? this.#fallbackGlow;
+    for (const segment of visual.segments) {
+      for (const plane of segment.planes) setMaterialMap(plane.material, sparkTexture);
+      setMaterialMap(segment.shade.material, shadeTexture);
+    }
+  }
+
+  private updateSparkVisual(visual: SparkVisual): void {
+    if (visual.elapsed >= 0.9) {
+      deactivateSpark(visual);
+      return;
+    }
+    const followed = visual.followTarget?.();
+    if (followed && isFiniteVector(followed)) {
+      visual.end.copy(followed);
+      visual.end.y += 1;
+    }
+    const frame = Math.floor(visual.elapsed * 60);
+    const fade = Math.max(0, Math.sin((visual.elapsed / 0.9) * Math.PI));
+    const previous = visual.start.clone();
+    for (let index = 0; index < visual.segments.length; index++) {
+      const progress = (index + 1) / visual.segments.length;
+      const next = visual.start.clone().lerp(visual.end, progress);
+      if (index < visual.segments.length - 1) {
+        const grade = visual.segments.length - index > 2 ? 0.5 : 0.3;
+        const randomSeed = visual.serial * 61 + frame;
+        next.x += (classicRandomStep(randomSeed, index * 3, 9) - 5) * grade;
+        next.y += (classicRandomStep(randomSeed, index * 3 + 1, 9) - 5) * grade;
+        next.z += (classicRandomStep(randomSeed, index * 3 + 2, 9) - 5) * grade;
+      }
+      const segment = visual.segments[index]!;
+      const direction = next.clone().sub(previous);
+      const length = Math.max(0.001, direction.length());
+      segment.root.position.copy(previous).add(next).multiplyScalar(0.5);
+      segment.root.quaternion.setFromUnitVectors(
+        new THREE.Vector3(0, 1, 0),
+        direction.multiplyScalar(1 / length),
+      );
+      for (const plane of segment.planes) {
+        plane.scale.set(0.8, length, 1);
+        setFadedColor(plane.material, 0xff5555ff, fade);
+        plane.visible = true;
+      }
+      segment.shade.position.set(
+        (previous.x + next.x) * 0.5,
+        Math.min(visual.start.y, visual.end.y) - 0.995,
+        (previous.z + next.z) * 0.5,
+      );
+      segment.shade.scale.set(1, 1, 1);
+      setFadedColor(segment.shade.material, 0xff222299, fade);
+      segment.shade.visible = true;
+      previous.copy(next);
+    }
+  }
+
+  private acquireDestinyVisual(): DestinyVisual {
+    const free = this.#destinyPool.find((visual) => !visual.active);
+    if (free) return free;
+    if (this.#destinyPool.length < DESTINY_POOL_LIMIT) {
+      const root = new THREE.Group();
+      root.name = `classic-transknight-destiny-${this.#destinyPool.length}`;
+      root.visible = false;
+      const mesh = new THREE.Mesh(
+        this.#fallbackDoubleSwingGeometry,
+        createBrightMeshMaterial(this.#fallbackGlow, 0x4d4dff),
+      );
+      mesh.name = "classic-transknight-destiny-model-2840";
+      mesh.rotation.set(-Math.PI / 4, -0.69813174, Math.PI / 4, "YXZ");
+      mesh.renderOrder = 9;
+      root.add(mesh);
+      const beamRoot = new THREE.Group();
+      beamRoot.name = "classic-transknight-destiny-beam-410";
+      const beamPlanes = [0, 1].map((planeIndex) => {
+        const plane = new THREE.Mesh(
+          this.#planeGeometry,
+          createBrightMeshMaterial(this.#fallbackGlow, 0x7777ff),
+        );
+        plane.rotation.y = planeIndex * Math.PI / 2;
+        plane.renderOrder = 8;
+        beamRoot.add(plane);
+        return plane;
+      }) as [
+        THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>,
+        THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>,
+      ];
+      root.add(beamRoot);
+      const visual: DestinyVisual = {
+        root,
+        mesh,
+        beamRoot,
+        beamPlanes,
+        start: new THREE.Vector3(),
+        target: new THREE.Vector3(),
+        current: new THREE.Vector3(),
+        active: false,
+        elapsed: 0,
+        lifetime: 0.6,
+        nextEmission: 0,
+        targetGroundY: 0,
+        serial: 0,
+        onImpact: null,
+      };
+      this.#destinyPool.push(visual);
+      this.object.add(root);
+      return visual;
+    }
+    const oldest = oldestBySerial(this.#destinyPool);
+    deactivateDestiny(oldest);
+    return oldest;
+  }
+
+  private applyDestinyAssets(visual: DestinyVisual): void {
+    visual.mesh.geometry = this.#resources?.destinyGeometry ?? this.#fallbackDoubleSwingGeometry;
+    setMaterialMap(
+      visual.mesh.material,
+      this.#resources?.destinyModelTexture ?? this.#fallbackGlow,
+    );
+    for (const plane of visual.beamPlanes) {
+      setMaterialMap(
+        plane.material,
+        this.#resources?.destinyBeamTexture ?? this.#fallbackGlow,
+      );
+    }
+  }
+
+  private updateDestinyVisual(visual: DestinyVisual): void {
+    const progress = Math.min(1, visual.elapsed / visual.lifetime);
+    visual.current.copy(visual.start).lerp(visual.target, progress);
+    visual.mesh.position.copy(visual.current);
+    visual.mesh.visible = true;
+    setFadedColor(visual.mesh.material, 0xff4d4dff, 1);
+
+    const beamDirection = visual.current.clone().sub(visual.start);
+    const beamLength = beamDirection.length();
+    visual.beamRoot.visible = progress > 0.2 && beamLength > 0.001;
+    if (visual.beamRoot.visible) {
+      visual.beamRoot.position.copy(visual.start).add(visual.current).multiplyScalar(0.5);
+      visual.beamRoot.quaternion.setFromUnitVectors(
+        new THREE.Vector3(0, 1, 0),
+        beamDirection.multiplyScalar(1 / beamLength),
+      );
+      for (const plane of visual.beamPlanes) {
+        plane.scale.set(0.5, beamLength, 1);
+        setFadedColor(plane.material, 0xff7777ff, 1);
+        plane.visible = true;
+      }
+    }
+
+    while (visual.nextEmission <= visual.elapsed && visual.nextEmission < visual.lifetime) {
+      const serial = ++this.#randomSerial;
+      const trailProgress = visual.nextEmission / visual.lifetime;
+      const position = visual.start.clone().lerp(visual.target, trailProgress);
+      position.y -= 0.5;
+      const scale = classicRandomStep(serial, 0, 5) * 0.2 + 0.2;
+      this.spawnBillboard({
+        position,
+        textureIndex: 0,
+        lifetime: 1,
+        baseScaleX: scale,
+        stickGround: true,
+        color: 0xffaaaaee,
+      });
+      visual.nextEmission += 1 / 30;
+    }
+
+    if (progress < 1) return;
+    const impact = visual.target.clone();
+    impact.y -= 0.6;
+    this.spawnBillboard({
+      position: impact,
+      textureIndex: 8,
+      lifetime: 1,
+      baseScaleX: 0.01,
+      scaleVelocityX: 3,
+      scaleVelocityY: 3,
+      color: 0xffffffff,
+    });
+    this.spawnGround({
+      position: new THREE.Vector3(visual.target.x, visual.targetGroundY + 0.005, visual.target.z),
+      textureIndex: 7,
+      lifetime: 0.8,
+      baseScale: 4,
+      color: 0xff7777ff,
+      delayed: false,
+    });
+    const onImpact = visual.onImpact;
+    deactivateDestiny(visual);
+    onImpact?.();
+  }
+
+  private acquireFlamingSwordEmitter(): FlamingSwordEmitter {
+    const free = this.#flamingSwordEmitters.find((emitter) => !emitter.active);
+    if (free) return free;
+    if (this.#flamingSwordEmitters.length < FLAMING_SWORD_EMITTER_LIMIT) {
+      const emitter: FlamingSwordEmitter = {
+        segments: [],
+        active: false,
+        elapsed: 0,
+        duration: 0.5,
+        nextEmission: 0,
+        serial: 0,
+        sample: null,
+      };
+      this.#flamingSwordEmitters.push(emitter);
+      return emitter;
+    }
+    const oldest = oldestBySerial(this.#flamingSwordEmitters);
+    deactivateFlamingSwordEmitter(oldest);
+    return oldest;
+  }
+
+  private updateFlamingSwordEmitter(emitter: FlamingSwordEmitter): void {
+    if (emitter.elapsed >= emitter.duration || !emitter.sample) {
+      deactivateFlamingSwordEmitter(emitter);
+      return;
+    }
+    while (emitter.nextEmission <= emitter.elapsed) {
+      const count = Math.max(0, Math.min(2, emitter.sample(emitter.segments)));
+      for (let index = 0; index < count; index++) {
+        const segment = emitter.segments[index];
+        if (!segment || !isFiniteVector(segment.tip)) continue;
+        const serial = ++this.#randomSerial;
+        const randomScale = classicRandomStep(serial, index, 5);
+        const position = segment.tip.clone();
+        position.y += 0.2;
+        this.spawnBillboard({
+          position,
+          textureIndex: 11,
+          lifetime: 1,
+          baseScaleX: randomScale * 0.1 + 0.8,
+          baseScaleY: randomScale * 0.2 + 0.8,
+          color: 0xff0055ff,
+          fade: false,
+        });
+      }
+      emitter.nextEmission += 1 / 30;
+    }
+  }
+
+  private updateFanaticismVisuals(deltaSeconds: number): void {
+    for (let index = this.#fanaticismVisuals.length - 1; index >= 0; index--) {
+      const visual = this.#fanaticismVisuals[index]!;
+      visual.elapsed += deltaSeconds;
+      if (visual.elapsed >= visual.lifetime) {
+        visual.afterimage.dispose();
+        this.#fanaticismVisuals.splice(index, 1);
+        continue;
+      }
+      const progress = visual.elapsed / visual.lifetime;
+      visual.afterimage.object.position.y = visual.baseY + visual.elapsed * visual.risePerSecond;
+      visual.afterimage.setIntensity(0.5 * Math.cos(progress * Math.PI / 2));
+      visual.afterimage.update(deltaSeconds);
+    }
+  }
+
+  private clearFanaticismVisuals(): void {
+    for (const visual of this.#fanaticismVisuals) visual.afterimage.dispose();
+    this.#fanaticismVisuals.length = 0;
   }
 
   private spawnSamaritanHaste(ownerFeet: THREE.Vector3): void {
@@ -813,6 +1394,7 @@ export class ClassicTransKnightSkillEffects {
     visual.scaleVelocityY = options.scaleVelocityY ?? options.scaleVelocityX ?? 0;
     visual.stickGround = options.stickGround ?? false;
     visual.color = options.color;
+    visual.fade = options.fade ?? true;
     visual.motion = options.motion ?? "static";
     visual.motionHeight = options.motionHeight ?? 0;
     visual.motionDistance = options.motionDistance ?? 0;
@@ -844,6 +1426,7 @@ export class ClassicTransKnightSkillEffects {
         scaleVelocityY: 0,
         stickGround: false,
         color: 0xffffff,
+        fade: true,
         motion: "static",
         motionHeight: 0,
         motionDistance: 0,
@@ -892,7 +1475,7 @@ export class ClassicTransKnightSkillEffects {
         break;
     }
     if (visual.stickGround) visual.sprite.position.y += scaleY / 2;
-    const fade = Math.max(0, Math.sin(progress * Math.PI));
+    const fade = visual.fade ? Math.max(0, Math.sin(progress * Math.PI)) : 1;
     setFadedColor(visual.sprite.material, visual.color, fade);
     visual.sprite.visible = progress >= BILLBOARD_VISIBLE_FRACTION;
   }
@@ -1360,6 +1943,10 @@ export class ClassicTransKnightSkillEffects {
         return resources.slopeTexture;
       case 7:
         return resources.shadeTexture;
+      case 8:
+        return resources.destinyImpactTexture;
+      case 11:
+        return resources.flamingSwordTexture;
       case 19:
         return resources.iceTexture;
       case 54:
@@ -1374,6 +1961,8 @@ export class ClassicTransKnightSkillEffects {
         return resources.doubleSwingTexture;
       case 122:
         return resources.hasteRayTexture;
+      case 128:
+        return resources.sparkTexture;
       case 416:
         return resources.judgementRingTexture;
     }
@@ -1389,6 +1978,7 @@ export class ClassicTransKnightSkillEffects {
       freezeSource,
       freezeStormSource,
       criticalArmorSource,
+      destinySource,
     ] =
       await Promise.all([
         assets.loadModel(10),
@@ -1397,6 +1987,7 @@ export class ClassicTransKnightSkillEffects {
         assets.loadModel(706),
         assets.loadModel(707),
         assets.loadModel(2838),
+        assets.loadModel(2840),
       ]);
     if (
       !judgementSource
@@ -1405,11 +1996,14 @@ export class ClassicTransKnightSkillEffects {
       || !freezeSource
       || !freezeStormSource
       || !criticalArmorSource
+      || !destinySource
     ) {
-      throw new Error("Modelos clássicos 10/702/703/706/707/2838 ausentes do manifesto");
+      throw new Error("Modelos clássicos 10/702/703/706/707/2838/2840 ausentes do manifesto");
     }
     const judgementTextureFile = judgementSource.textures[0];
     if (!judgementTextureFile) throw new Error("Modelo clássico 10 sem textura de origem");
+    const destinyTextureFile = destinySource.textures[0];
+    if (!destinyTextureFile) throw new Error("Modelo clássico 2840 sem textura de origem");
 
     let loadedTextures: THREE.Texture[] = [];
     const loadedGeometries: THREE.BufferGeometry[] = [];
@@ -1420,6 +2014,8 @@ export class ClassicTransKnightSkillEffects {
         this.loadEffectTexture(assets, 0),
         this.loadEffectTexture(assets, 2),
         this.loadEffectTexture(assets, 7),
+        this.loadEffectTexture(assets, 8),
+        this.loadEffectTexture(assets, 11),
         this.loadEffectTexture(assets, 19),
         this.loadEffectTexture(assets, 54),
         this.loadEffectTexture(assets, 54),
@@ -1429,8 +2025,11 @@ export class ClassicTransKnightSkillEffects {
         this.loadEffectTexture(assets, 413),
         this.loadEffectTexture(assets, 91),
         this.loadEffectTexture(assets, 122),
+        this.loadEffectTexture(assets, 128),
+        this.loadEffectTexture(assets, 410),
         this.loadEffectTexture(assets, 416),
         this.loadTextureUrl(assets.dataUrl(judgementTextureFile)),
+        this.loadTextureUrl(assets.dataUrl(destinyTextureFile)),
       ]);
       loadedTextures = textureResults
         .filter((result): result is PromiseFulfilledResult<THREE.Texture> => (
@@ -1447,6 +2046,8 @@ export class ClassicTransKnightSkillEffects {
         particleTexture,
         slopeTexture,
         shadeTexture,
+        destinyImpactTexture,
+        flamingSwordTexture,
         iceTexture,
         holyColumnTexture,
         startTexture,
@@ -1456,9 +2057,17 @@ export class ClassicTransKnightSkillEffects {
         criticalArmorTexture,
         doubleSwingTexture,
         hasteRayTexture,
+        sparkTexture,
+        destinyBeamTexture,
         judgementRingTexture,
         judgementModelTexture,
+        destinyModelTexture,
       ] = loadedTextures as [
+        THREE.Texture,
+        THREE.Texture,
+        THREE.Texture,
+        THREE.Texture,
+        THREE.Texture,
         THREE.Texture,
         THREE.Texture,
         THREE.Texture,
@@ -1487,14 +2096,20 @@ export class ClassicTransKnightSkillEffects {
       loadedGeometries.push(freezeStormGeometry);
       const criticalArmorGeometry = parseMsa(criticalArmorSource.buffer).geometry;
       loadedGeometries.push(criticalArmorGeometry);
+      const destinyGeometry = parseMsa(destinySource.buffer).geometry;
+      loadedGeometries.push(destinyGeometry);
 
       configureClassicBillboardUvs(particleTexture);
       configureClassicGroundPlaneUvs(slopeTexture);
+      configureClassicBillboardUvs(destinyImpactTexture);
+      configureClassicBillboardUvs(flamingSwordTexture);
       configureClassicBillboardUvs(holyColumnTexture);
       configureClassicBillboardUvs(holyRingTexture);
       configureClassicBillboardUvs(magicParticleTexture);
       configureClassicBillboardUvs(assaultFlameTexture);
       configureClassicBillboardUvs(hasteRayTexture);
+      configureClassicBillboardUvs(sparkTexture);
+      configureClassicBillboardUvs(destinyBeamTexture);
       configureClassicGroundPlaneUvs(judgementRingTexture);
 
       return {
@@ -1504,7 +2119,9 @@ export class ClassicTransKnightSkillEffects {
         freezeGeometry,
         freezeStormGeometry,
         criticalArmorGeometry,
+        destinyGeometry,
         judgementModelTexture,
+        destinyModelTexture,
         particleTexture,
         slopeTexture,
         shadeTexture,
@@ -1515,8 +2132,12 @@ export class ClassicTransKnightSkillEffects {
         magicParticleTexture,
         assaultFlameTexture,
         criticalArmorTexture,
+        destinyImpactTexture,
+        destinyBeamTexture,
+        flamingSwordTexture,
         doubleSwingTexture,
         hasteRayTexture,
+        sparkTexture,
         judgementRingTexture,
       };
     } catch (error) {
@@ -1679,6 +2300,40 @@ function deactivateCriticalArmor(visual: CriticalArmorVisual): void {
   visual.mesh.visible = false;
 }
 
+function deactivateSpark(visual: SparkVisual): void {
+  visual.active = false;
+  visual.elapsed = 0;
+  visual.followTarget = null;
+  visual.root.visible = false;
+  for (const segment of visual.segments) {
+    for (const plane of segment.planes) {
+      plane.visible = false;
+      plane.material.opacity = 0;
+    }
+    segment.shade.visible = false;
+    segment.shade.material.opacity = 0;
+  }
+}
+
+function deactivateDestiny(visual: DestinyVisual): void {
+  visual.active = false;
+  visual.elapsed = 0;
+  visual.onImpact = null;
+  visual.root.visible = false;
+  visual.mesh.visible = false;
+  visual.beamRoot.visible = false;
+  for (const plane of visual.beamPlanes) {
+    plane.visible = false;
+    plane.material.opacity = 0;
+  }
+}
+
+function deactivateFlamingSwordEmitter(emitter: FlamingSwordEmitter): void {
+  emitter.active = false;
+  emitter.elapsed = 0;
+  emitter.sample = null;
+}
+
 function oldestBySerial<T extends { serial: number }>(visuals: readonly T[]): T {
   let oldest = visuals[0]!;
   for (const visual of visuals) {
@@ -1728,7 +2383,9 @@ function disposeClassicResources(resources: ClassicTransKnightResources): void {
   resources.freezeGeometry.dispose();
   resources.freezeStormGeometry.dispose();
   resources.criticalArmorGeometry.dispose();
+  resources.destinyGeometry.dispose();
   resources.judgementModelTexture.dispose();
+  resources.destinyModelTexture.dispose();
   resources.particleTexture.dispose();
   resources.slopeTexture.dispose();
   resources.shadeTexture.dispose();
@@ -1739,7 +2396,11 @@ function disposeClassicResources(resources: ClassicTransKnightResources): void {
   resources.magicParticleTexture.dispose();
   resources.assaultFlameTexture.dispose();
   resources.criticalArmorTexture.dispose();
+  resources.destinyImpactTexture.dispose();
+  resources.destinyBeamTexture.dispose();
+  resources.flamingSwordTexture.dispose();
   resources.doubleSwingTexture.dispose();
   resources.hasteRayTexture.dispose();
+  resources.sparkTexture.dispose();
   resources.judgementRingTexture.dispose();
 }
