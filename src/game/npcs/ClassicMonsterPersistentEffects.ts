@@ -19,6 +19,7 @@ interface PersistentBillboard {
   readonly color: number;
   readonly scaleX: number;
   readonly scaleY: number;
+  readonly pulse?: boolean;
 }
 
 interface EmittedBillboard {
@@ -31,6 +32,15 @@ interface EmittedBillboard {
   readonly lifeSeconds: number;
   readonly color: number;
   readonly bright?: boolean;
+  ageSeconds: number;
+}
+
+interface GroundShade {
+  readonly texture: number;
+  readonly position: THREE.Vector3;
+  readonly angle: number;
+  readonly color: number;
+  readonly lifeSeconds: number;
   ageSeconds: number;
 }
 
@@ -126,11 +136,13 @@ const TEMP_POINTS: Readonly<Record<number, Readonly<Record<number, TempPoint>>>>
 export class ClassicMonsterPersistentEffects {
   readonly object = new THREE.Group();
   readonly #batches = new Map<string, BillboardBatch>();
+  readonly #shadeBatches = new Map<number, ShadeBatch>();
   readonly #world = new THREE.Vector3();
   readonly #local = new THREE.Vector3();
   readonly #offset = new THREE.Vector3();
   readonly #inverseRoot = new THREE.Matrix4();
   readonly #particles: EmittedBillboard[] = [];
+  readonly #shades: GroundShade[] = [];
   #enabled = true;
   #timeSeconds = 0;
 
@@ -149,6 +161,7 @@ export class ClassicMonsterPersistentEffects {
   beginFrame(timeSeconds: number, deltaSeconds: number): void {
     this.#timeSeconds = Number.isFinite(timeSeconds) ? timeSeconds : 0;
     for (const batch of this.#batches.values()) batch.beginFrame();
+    for (const batch of this.#shadeBatches.values()) batch.beginFrame();
     const parent = this.object.parent;
     if (parent) {
       parent.updateWorldMatrix(true, false);
@@ -166,6 +179,15 @@ export class ClassicMonsterPersistentEffects {
       }
       this.writeParticle(particle);
     }
+    for (let index = this.#shades.length - 1; index >= 0; index--) {
+      const shade = this.#shades[index]!;
+      shade.ageSeconds += delta;
+      if (shade.ageSeconds >= shade.lifeSeconds) {
+        this.#shades.splice(index, 1);
+        continue;
+      }
+      this.writeShade(shade);
+    }
   }
 
   addActor(
@@ -173,9 +195,10 @@ export class ClassicMonsterPersistentEffects {
     body: ClassicSkinnedInstanceLease,
     scale: number,
     animationPhaseSeconds: number,
+    dungeonTwo: boolean,
   ): void {
     if (!this.#enabled || !template.visual) return;
-    const definitions = persistentBillboards(template, this.catalog, scale);
+    const definitions = persistentBillboards(template, this.catalog, scale, dungeonTwo);
     const points = TEMP_POINTS[template.visual.skin];
     if (!definitions.length || !points) return;
     for (const definition of definitions) {
@@ -191,6 +214,11 @@ export class ClassicMonsterPersistentEffects {
         definition.scaleX,
         definition.scaleY,
         definition.color,
+        definition.pulse
+          ? 0.7 + Math.abs(Math.sin(
+            (this.#timeSeconds + animationPhaseSeconds) * Math.PI * 2 / 3,
+          )) * 0.3
+          : 1,
       );
     }
   }
@@ -200,6 +228,7 @@ export class ClassicMonsterPersistentEffects {
     body: ClassicSkinnedInstanceLease,
     scale: number,
     randomState: number,
+    ownerYaw: number,
   ): number {
     if (!this.#enabled || !template.visual) return randomState;
     const visual = template.visual;
@@ -330,6 +359,22 @@ export class ClassicMonsterPersistentEffects {
           ageSeconds: 0,
         });
       }
+      state = randomStep(state);
+      const shadeVariant = state % 3;
+      body.model.object.updateWorldMatrix(true, false);
+      body.model.object.getWorldPosition(this.#world);
+      this.#local.copy(this.#world).applyMatrix4(this.#inverseRoot);
+      this.#local.x += Math.cos(ownerYaw - Math.PI) * 0.5 + shadeVariant * 0.2;
+      this.#local.y += 0.05;
+      this.#local.z += Math.sin(ownerYaw - Math.PI) * 0.5 - shadeVariant * 0.2;
+      this.pushShade({
+        texture: 89,
+        position: this.#local.clone(),
+        angle: shadeVariant * Math.PI / 6,
+        color: 0xcccccc,
+        lifeSeconds: 3,
+        ageSeconds: 0,
+      });
     } else if (characterClass === 32 && faceMesh === 1 && faceSkin === 0) {
       for (let point = 0; point < 6; point++) {
         spawn(point, {
@@ -396,12 +441,16 @@ export class ClassicMonsterPersistentEffects {
 
   endFrame(): void {
     for (const batch of this.#batches.values()) batch.endFrame();
+    for (const batch of this.#shadeBatches.values()) batch.endFrame();
   }
 
   dispose(): void {
     for (const batch of this.#batches.values()) batch.dispose();
+    for (const batch of this.#shadeBatches.values()) batch.dispose();
     this.#batches.clear();
+    this.#shadeBatches.clear();
     this.#particles.length = 0;
+    this.#shades.length = 0;
     this.object.removeFromParent();
     this.object.clear();
   }
@@ -485,6 +534,32 @@ export class ClassicMonsterPersistentEffects {
       Math.sin(progress * Math.PI),
     );
   }
+
+  private pushShade(shade: GroundShade): void {
+    if (this.#shades.length >= 128) this.#shades.shift();
+    this.#shades.push(shade);
+    this.writeShade(shade);
+  }
+
+  private writeShade(shade: GroundShade): void {
+    const progress = shade.ageSeconds / shade.lifeSeconds;
+    const opacity = 0.8 * Math.abs(Math.cos(progress * Math.PI * 0.5));
+    this.shadeBatch(shade.texture).write(
+      shade.position,
+      shade.angle,
+      shade.color,
+      opacity,
+    );
+  }
+
+  private shadeBatch(textureIndex: number): ShadeBatch {
+    const cached = this.#shadeBatches.get(textureIndex);
+    if (cached) return cached;
+    const created = new ShadeBatch(this.assets, textureIndex);
+    this.#shadeBatches.set(textureIndex, created);
+    this.object.add(created.object);
+    return created;
+  }
 }
 
 class BillboardBatch {
@@ -551,8 +626,9 @@ class BillboardBatch {
         varying float vOpacity;
         void main() {
           vec4 texel = texture2D(map, vUv);
-          if (texel.a <= 0.003) discard;
-          gl_FragColor = vec4(texel.rgb * vColor, texel.a * vOpacity);
+          float alpha = texel.a * vOpacity;
+          if (alpha <= 0.003) discard;
+          gl_FragColor = vec4(texel.rgb * vColor, alpha);
         }
       `,
       transparent: true,
@@ -625,6 +701,151 @@ class BillboardBatch {
   }
 }
 
+class ShadeBatch {
+  readonly object: THREE.Mesh<THREE.InstancedBufferGeometry, THREE.ShaderMaterial>;
+  readonly #centers = new Float32Array(128 * 3);
+  readonly #angles = new Float32Array(128);
+  readonly #colors = new Float32Array(128 * 3);
+  readonly #opacities = new Float32Array(128);
+  readonly #centerAttribute: THREE.InstancedBufferAttribute;
+  readonly #angleAttribute: THREE.InstancedBufferAttribute;
+  readonly #colorAttribute: THREE.InstancedBufferAttribute;
+  readonly #opacityAttribute: THREE.InstancedBufferAttribute;
+  #texture: THREE.Texture | null = null;
+  #count = 0;
+
+  constructor(assets: ClassicAssetSource, textureIndex: number) {
+    const geometry = new THREE.InstancedBufferGeometry();
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute([
+      -2, 0, -2,
+      2, 0, -2,
+      2, 0, 2,
+      -2, 0, 2,
+    ], 3));
+    geometry.setAttribute("uv", new THREE.Float32BufferAttribute([
+      0, 0,
+      1, 0,
+      1, 1,
+      0, 1,
+    ], 2));
+    geometry.setIndex([0, 2, 1, 0, 3, 2]);
+    this.#centerAttribute = new THREE.InstancedBufferAttribute(this.#centers, 3);
+    this.#angleAttribute = new THREE.InstancedBufferAttribute(this.#angles, 1);
+    this.#colorAttribute = new THREE.InstancedBufferAttribute(this.#colors, 3);
+    this.#opacityAttribute = new THREE.InstancedBufferAttribute(this.#opacities, 1);
+    geometry.setAttribute("instanceCenter", this.#centerAttribute);
+    geometry.setAttribute("instanceAngle", this.#angleAttribute);
+    geometry.setAttribute("instanceColor", this.#colorAttribute);
+    geometry.setAttribute("instanceOpacity", this.#opacityAttribute);
+    geometry.instanceCount = 0;
+
+    const material = new THREE.ShaderMaterial({
+      uniforms: { map: { value: null } },
+      vertexShader: `
+        attribute vec3 instanceCenter;
+        attribute float instanceAngle;
+        attribute vec3 instanceColor;
+        attribute float instanceOpacity;
+        varying vec2 vUv;
+        varying vec3 vColor;
+        varying float vOpacity;
+        void main() {
+          float c = cos(instanceAngle);
+          float s = sin(instanceAngle);
+          vec3 local = vec3(
+            position.x * c - position.z * s,
+            position.y,
+            position.x * s + position.z * c
+          );
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(instanceCenter + local, 1.0);
+          vec2 centered = uv - 0.5;
+          vUv = vec2(
+            centered.x * c - centered.y * s + 0.5,
+            1.0 - (centered.x * s + centered.y * c + 0.5)
+          );
+          vColor = instanceColor;
+          vOpacity = instanceOpacity;
+        }
+      `,
+      fragmentShader: `
+        uniform sampler2D map;
+        varying vec2 vUv;
+        varying vec3 vColor;
+        varying float vOpacity;
+        void main() {
+          vec4 texel = texture2D(map, vUv);
+          float alpha = texel.a * vOpacity;
+          if (alpha <= 0.003) discard;
+          gl_FragColor = vec4(texel.rgb * vColor, alpha);
+        }
+      `,
+      transparent: true,
+      blending: THREE.NormalBlending,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      toneMapped: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -1,
+      polygonOffsetUnits: -1,
+    });
+    this.object = new THREE.Mesh(geometry, material);
+    this.object.name = `classic-monster-shade-${textureIndex}`;
+    this.object.frustumCulled = false;
+    this.object.renderOrder = 2;
+    this.object.visible = false;
+
+    const url = assets.effectTextureUrl(textureIndex);
+    if (url) {
+      const loader = new ClassicDdsTextureLoader();
+      void loader.loadAsync(url).then((texture) => {
+        texture.colorSpace = THREE.SRGBColorSpace;
+        texture.wrapS = THREE.RepeatWrapping;
+        texture.wrapT = THREE.RepeatWrapping;
+        this.#texture = texture;
+        material.uniforms.map!.value = texture;
+        material.needsUpdate = true;
+        this.object.visible = this.#count > 0;
+      }).catch(() => undefined);
+    }
+  }
+
+  beginFrame(): void {
+    this.#count = 0;
+  }
+
+  write(position: THREE.Vector3, angle: number, color: number, opacity: number): void {
+    if (this.#count >= 128) return;
+    const slot = this.#count++;
+    const offset = slot * 3;
+    this.#centers[offset] = position.x;
+    this.#centers[offset + 1] = position.y;
+    this.#centers[offset + 2] = position.z;
+    this.#angles[slot] = angle;
+    this.#colors[offset] = ((color >>> 16) & 0xff) / 255;
+    this.#colors[offset + 1] = ((color >>> 8) & 0xff) / 255;
+    this.#colors[offset + 2] = (color & 0xff) / 255;
+    this.#opacities[slot] = opacity;
+  }
+
+  endFrame(): void {
+    this.object.geometry.instanceCount = this.#count;
+    this.object.visible = this.#texture !== null && this.#count > 0;
+    if (!this.#count) return;
+    this.#centerAttribute.needsUpdate = true;
+    this.#angleAttribute.needsUpdate = true;
+    this.#colorAttribute.needsUpdate = true;
+    this.#opacityAttribute.needsUpdate = true;
+  }
+
+  dispose(): void {
+    this.object.removeFromParent();
+    this.object.geometry.dispose();
+    this.object.material.dispose();
+    this.#texture?.dispose();
+    this.#texture = null;
+  }
+}
+
 export function classicMonsterEmissionPeriod(
   template: MonsterTemplate,
   scale: number,
@@ -665,6 +886,7 @@ function persistentBillboards(
   template: MonsterTemplate,
   catalog: MonsterCatalog,
   scale: number,
+  dungeonTwo: boolean,
 ): readonly PersistentBillboard[] {
   const visual = template.visual;
   if (!visual) return [];
@@ -720,6 +942,17 @@ function persistentBillboards(
       color: 0xaa8800,
       scaleX: 1.2 * scale,
       scaleY: 1.8 * scale,
+    }));
+  }
+  if (characterClass === 33 && faceMesh === 1 && dungeonTwo) {
+    return Array.from({ length: 7 }, (_, point) => ({
+      point,
+      texture: 101,
+      cycleCount: 8,
+      color: 0xff5500,
+      scaleX: 2 * scale,
+      scaleY: 3 * scale,
+      pulse: true,
     }));
   }
   if (characterClass === 39) {

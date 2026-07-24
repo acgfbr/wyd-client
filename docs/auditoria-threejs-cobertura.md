@@ -122,7 +122,7 @@ nos demais Fields fazem parte do proprio manifesto, nao sao links quebrados.
 | Personagem | Quatro classes jogáveis, rigs, traje base, arma, montaria/familiar | `PlayerClasses`, `ClassicPlayerAvatar` | Cobertura completa de equipamentos visuais por classe |
 | Huntress | Mulher Kalintz, Skytalos Ancient +15, Griupan, 17 skills promovidas | `HuntressLooks`, `ClassicHuntressSkillEffects`, `ClassicAlchemyCatalog`, `ClassicLevelUpEffects` | 17 passivas e 2 casts ainda fora do runtime |
 | Montarias | 16 montarias nível 120, Unicórnio padrão, sela/bones | `MountLooks`, `ClassicMount` | Homologação visual de todas as variações |
-| NPCs/monstros | Spawn por Field, animação, hover/seleção, IA offline, drops, armas Equip[6]/[7], 14 montarias Equip[14], 50 mantuas Equip[15], Nyerdes e efeitos intrínsecos instanciados em 61+47 templates | `MonsterCatalog`, `ClassicSpawnManager`, `ClassicNyerdesParticles`, `ClassicMonsterPersistentEffects` | Homologar skins/equipamentos e efeitos especiais por amostragem; completar branches default/shade/fauna restantes |
+| NPCs/monstros | Spawn por Field, animação, hover/seleção, IA offline, drops, armas Equip[6]/[7], 14 montarias Equip[14], 50 mantuas Equip[15], Nyerdes, efeitos intrínsecos 61+56, crater TMShade e Gárgulas dungeon-2 | `MonsterCatalog`, `ClassicSpawnManager`, `ClassicNyerdesParticles`, `ClassicMonsterPersistentEffects` | Homologar por amostragem; TMButterFly de owner, Krill ATTACK02 e MeshRotate de Guer_Caveira aguardam evidência/port específico |
 | BeastMaster | 8 evocações (10 por cast), IA offline e 5 transformações de rig | `BeastMasterSummons`, `ClassicBeastMasterSummon`, `BeastMasterTransformations` | Invocação Final e fórmulas autoritativas ainda dependem do servidor |
 | Inventário/equipamento | UI 7.54, bolsas, equip/unequip, cargo, preview 3D, Extração e Alquimia somente leitura | `GameHud`, `ClassicInventoryPreview`, `ClassicAlchemyCatalog` | Compra/venda/economia e resultado das combinações somente com servidor |
 | Itens/comércio | 6.500 ItemList, ItemPrice, Carry de NPC, tooltips clássicos e footprint EF_GRID | `ClassicCommerceCatalog`, `PlayerState`, `ClassicItemTooltip` | Ownership/decadência de drops e economia autoritativa |
@@ -150,7 +150,7 @@ nos demais Fields fazem parte do proprio manifesto, nao sao links quebrados.
   `CheckWeapon` para escolher seu banco ANI. `Equip[14]`, `Equip[15]` e o
   Nyerdes `769` de `Equip[13]` também possuem os attachments, ações e
   lifecycle de streaming derivados de `TMHuman`. `RenderEffect` cobre ainda
-  61 perfis persistentes e 47 perfis de emissão aditiva por meio dos pontos
+  61 perfis persistentes e 56 perfis de emissão aditiva/default por meio dos pontos
   exatos de `CFrame::UpdateFrames`. A lacuna restante é validar
   famílias visuais, armas e ações especiais por amostragem; casos com skin
   incorreta devem ser corrigidos no catálogo/importador para beneficiar todos

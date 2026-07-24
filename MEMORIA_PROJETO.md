@@ -374,8 +374,9 @@ offsets distintos para cada `m_nBoneAniIndex`. A tabela exata dos rigs
 `0/1/2/4/6/7/8/20/25/26/28/29` foi portada para
 `ClassicMonsterPersistentEffects`. No corpus atual, 61 templates usam
 billboards persistentes (caveiras, olhos, golems, demônios e elfos com
-mantua), enquanto 47 satisfazem emissores aditivos de dragões, minotauros,
-javalis/lobos, elfos, trolls ou orcs. Texturas sequenciais são trocadas a cada
+mantua), enquanto 56 satisfazem emissores aditivos/default de dragões,
+minotauros, golems, ursos, javalis/lobos, elfos, trolls ou orcs. Texturas
+sequenciais são trocadas a cada
 `80 ms` como `m_nCycleIndex`, e todos os quads são agrupados por textura em
 instancing global. A pool transitória é limitada a 2.048 partículas.
 
@@ -384,6 +385,22 @@ Há uma inconsistência real no branch do Dragão Esmeralda: a criação preench
 `m_pEyeFire2[1/2]`, que não recebe valor em nenhum outro ponto do fonte
 recuperado. O port não inventa uma ligação entre esses arrays; conserva
 somente a partícula cinza executável desse branch.
+
+O `TMShade` de Troll/Zumbi é uma geometria horizontal distinta do billboard.
+O runtime usa um segundo batch instanciado com grid de quatro unidades,
+textura `89`, rotação em passos de `π/6`, cor `0xCCCCCC`, vida `3 s` e a
+curva `bFI=0` (`cos(progress·π/2)`). Gárgulas de classe `33` também respeitam
+a condição original de dungeon tipo 2 (`row > 25` e `8 < column < 16`):
+sete pontos, ciclo `101..108`, escala `2×3` e pulso entre `0,7..1`.
+
+Três branches continuam deliberadamente bloqueados por evidência
+insuficiente. `TMButterFly(6,3,owner)` é criado por 16 templates, mas seu
+construtor sobrescreve `m_fParticleH` e jamais inicializa
+`m_fParticleV`, lido em todos os movimentos. Os seis Krill em `ATTACK02`
+tentam usar `m_vecTempPos[1]`, embora o rig `22` escreva apenas o ponto zero.
+`Guer_Caveira` usa sete `TMEffectMeshRotate`, que exigem portar a família de
+malhas rotativas em vez de tratá-la como partícula. Não preencher esses casos
+com valores visuais arbitrários.
 
 O C.C possui modos desligado, fisico, magico e suporte. No continuo, procura um
 hostil alem do alcance imediato e entrega a aproximacao ao A*. Alvos sem rota
@@ -470,7 +487,7 @@ refinamento, Ancient e preco estatico quando aplicavel.
 
 - Homologacao visual ainda e necessaria em 1024x768, widescreen e iPhone.
 - O cache persistente inicial usa `precache-armia.json` e o service worker
-  `/wyd-cache-sw.js`. O pacote atual contém 810 arquivos/33,4 MiB necessários
+  `/wyd-cache-sw.js`. O pacote atual contém 812 arquivos/33,4 MiB necessários
   ao primeiro cenário de Armia, tem chave derivada do conteúdo, valida quota,
   pede persistência, retoma entradas ausentes e pode ser interrompido ou limpo
   sem bloquear o fallback de rede. Os demais mapas continuam lazy. A

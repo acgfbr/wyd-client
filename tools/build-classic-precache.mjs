@@ -152,9 +152,9 @@ await addFile("monsters/skeletons/ch02.bon");
 for (const effectIndex of [
   0, 2,
   ...Array.from({ length: 8 }, (_, index) => 11 + index),
-  56, 60, 71,
+  56, 60, 71, 89,
   ...Array.from({ length: 8 }, (_, index) => 101 + index),
-  123, 165, 452,
+  119, 123, 165, 452,
 ]) {
   const effect = manifest.effectTextures[String(effectIndex)];
   if (effect) await addFile(effect.file);

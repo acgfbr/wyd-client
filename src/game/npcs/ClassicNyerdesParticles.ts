@@ -64,7 +64,7 @@ export class ClassicNyerdesParticles {
           vec4 center = modelViewMatrix * vec4(instanceCenter, 1.0);
           center.xy += position.xy * instanceScale;
           gl_Position = projectionMatrix * center;
-          vUv = uv;
+          vUv = vec2(0.02 + uv.x * 0.96, 0.98 - uv.y * 0.96);
           vOpacity = instanceOpacity;
         }
       `,

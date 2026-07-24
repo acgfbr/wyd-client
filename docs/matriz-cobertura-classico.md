@@ -1,6 +1,6 @@
 # Matriz automatica de cobertura do cliente classico
 
-Gerado por `bun run audit:coverage` em 2026-07-24T02:21:05.030Z. Este arquivo e
+Gerado por `bun run audit:coverage` em 2026-07-24T02:29:44.952Z. Este arquivo e
 derivado dos artefatos importados e do runtime; nao deve ser editado
 manualmente. A analise e as decisoes ficam em `auditoria-threejs-cobertura.md`.
 

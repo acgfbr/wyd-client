@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-24T02:21:05.030Z",
+  "generatedAt": "2026-07-24T02:29:44.952Z",
   "command": "bun run audit:coverage",
   "source": "WYD classic",
   "referencedFiles": {

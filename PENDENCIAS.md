@@ -560,14 +560,32 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
     `CFrame::UpdateFrames` para os rigs `0/1/2/4/6/7/8/20/25/26/28/29`,
     incluindo bones e offsets locais. Com isso, 61 templates recebem os
     billboards persistentes de caveiras, olhos, golems, demônios e elfos com
-    mantua, inclusive os ciclos `11..18` e `101..108`; outros 47 templates
-    entram nos emissores aditivos comprovados de dragões, minotauros,
-    javalis/lobos, elfos, trolls e orcs. A implementação agrega por textura em
+    mantua, inclusive os ciclos `11..18` e `101..108`; outros 56 templates
+    entram nos emissores aditivos/default comprovados de dragões, minotauros,
+    golems, ursos, javalis/lobos, elfos, trolls e orcs. A implementação agrega por textura em
     batches instanciados globais de até 512 quads e mantém no máximo 2.048
     partículas transitórias, todos obedecendo `V`, distância e streaming. A
     contradição do Dragão Esmeralda foi preservada: o construtor recuperado
     preenche `m_pEyeFire[8/9]`, mas o renderer lê `m_pEyeFire2[1/2]`; somente
     a emissão cinza comprovadamente alcançável foi portada.
+    O crater/shade dos seis perfis Troll/Zumbi também usa agora um batch
+    horizontal próprio: grid clássico de quatro unidades, textura `89`,
+    rotação em passos de `π/6`, cor `0xCCCCCC`, vida de `3 s` e fade
+    `cos(progress·π/2)`. A condição de dungeon também foi restaurada para os
+    oito templates de Gárgula: os sete pontos `m_vecTempPos`, textura animada
+    `101..108`, escala `2×3`, cor laranja e pulso de três segundos aparecem
+    somente nos Fields `row > 25, 8 < column < 16`, equivalentes ao
+    `RenderDevice::m_bDungeon == 2`.
+    Permanecem fora deste lote 16 templates que criam quatro `TMButterFly`
+    auxiliares: o construtor recuperado atribui `m_fParticleH` duas vezes e
+    nunca inicializa `m_fParticleV`, embora `FrameMove` leia esse valor em
+    todos os movimentos. Não reproduzir memória indefinida nem escolher uma
+    amplitude vertical no achismo; a implementação exige outra versão do
+    cliente ou captura que prove o valor. Os seis Krill condicionados a
+    `ATTACK02` têm inconsistência semelhante: o rig `22` só escreve
+    `m_vecTempPos[0]`, mas o renderer emite também de `[1]`. Há ainda um
+    `TMEffectMeshRotate` exclusivo de `Guer_Caveira`, a ser portado em lote
+    próprio por usar malhas, não billboards.
     Falta homologar visualmente uma amostra de cada skin humanoide armada.
     As verificações que exigem navegador/dispositivo estão isoladas em
     `docs/checklist-homologacao-manual.md`, com cenário, duração, coordenadas e

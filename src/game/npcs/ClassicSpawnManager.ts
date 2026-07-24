@@ -321,6 +321,7 @@ export class ClassicSpawnManager {
     this.#listeners.clear();
     this.#nyerdesParticles.dispose();
     this.#persistentEffects.dispose();
+    this.#assets.dispose();
     this.object.removeFromParent();
     this.object.clear();
   }
@@ -702,6 +703,7 @@ export class ClassicSpawnManager {
               actor.lease,
               actorScale,
               actor.specialEffectRandomState,
+              actor.yaw,
             );
           }
         } else {
@@ -712,6 +714,7 @@ export class ClassicSpawnManager {
           actor.lease,
           actorScale,
           actor.animationPhaseSeconds,
+          isClassicDungeonTwo(actor.position),
         );
       }
     }
@@ -1598,6 +1601,11 @@ function classicNpcMountLook(template: MonsterTemplate): ClassicMountLookDefinit
 
 function classicNyerdesPhase(ownerStartX: number): number {
   return ((((ownerStartX * 100) % 1_000) + 1_000) % 1_000) / 1_000 * Math.PI * 2;
+}
+
+function isClassicDungeonTwo(position: WydPosition): boolean {
+  const field = fieldAt(position);
+  return field.row > 25 && field.column > 8 && field.column < 16;
 }
 
 function xorshift32(value: number): number {
