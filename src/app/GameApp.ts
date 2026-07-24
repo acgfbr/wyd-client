@@ -3609,13 +3609,11 @@ export class GameApp {
     } else if (!this.#player.hasClassicFamiliar) {
       void this.#player.loadClassicFamiliar(this.#assets);
     }
-    if (this.#activeClassKey !== "huntress") return;
-
-    const definition = classicPlayerClass("huntress");
+    const definition = classicPlayerClass(this.#activeClassKey);
     const desiredLookKey = costume
       ? definition.looks.find((look) => look.itemIndex === costume.classicIndex)?.key
         ?? definition.defaultLookKey
-      : definition.looks.find((look) => look.key === "huntress-base")?.key
+      : definition.looks.find((look) => look.key === `${definition.key}-base`)?.key
         ?? definition.defaultLookKey;
     if (this.#player.avatarLookKey === desiredLookKey) return;
 
@@ -3624,7 +3622,7 @@ export class GameApp {
     const status = document.querySelector<HTMLElement>("#outfit-status");
     if (select) select.disabled = true;
     if (status) status.textContent = costume ? `Vestindo ${costume.name}…` : "Retirando traje…";
-    void this.#player.loadClassicAvatar(this.#assets, "huntress", desiredLookKey).then((loaded) => {
+    void this.#player.loadClassicAvatar(this.#assets, definition.key, desiredLookKey).then((loaded) => {
       if (requestId !== this.#outfitLoadId) return;
       const current = this.#playerState.snapshot;
       this.#player?.setWeaponVisible(

@@ -4,6 +4,7 @@ import process from "node:process";
 import { HUNTRESS_LOOKS } from "../src/game/player/HuntressLooks.ts";
 import { MOUNT_LOOKS } from "../src/game/player/MountLooks.ts";
 import { CLASSIC_PLAYER_CLASSES } from "../src/game/player/PlayerClasses.ts";
+import { CLASSIC_COSTUME_LOOKS } from "../src/game/player/ClassicCostumeLooks.ts";
 import { BEAST_MASTER_SUMMONS } from "../src/game/combat/BeastMasterSummons.ts";
 import { BEAST_MASTER_TRANSFORMATIONS } from "../src/game/combat/BeastMasterTransformations.ts";
 
@@ -25,8 +26,8 @@ await mkdir(summonsRoot, { recursive: true });
 await mkdir(transformationsRoot, { recursive: true });
 await mkdir(griupanRoot, { recursive: true });
 
-// LOOK_INFO equipment and SetHumanCostume cases used by the Huntress wardrobe.
-// Mesh and texture choices live in one shared table consumed by the runtime.
+// LOOK_INFO equipment plus the complete SetHumanCostume range 4150..4183
+// shared by every class. Mesh/texture choices live in the runtime tables.
 const importedMeshes = new Set();
 const importedTextures = new Set();
 for (const look of HUNTRESS_LOOKS) {
@@ -236,7 +237,7 @@ await writeFile(
 );
 
 console.log(
-  `${CLASSIC_PLAYER_CLASSES.length} classes (${HUNTRESS_LOOKS.length} looks da Huntress), ${importedWeapons.size} armas, ${MOUNT_LOOKS.length} montarias, ${BEAST_MASTER_SUMMONS.length} evocacoes, ${BEAST_MASTER_TRANSFORMATIONS.length} transformacoes e Griupan/fadas importados para ${outputRoot}`,
+  `${CLASSIC_PLAYER_CLASSES.length} classes, ${CLASSIC_COSTUME_LOOKS.length} trajes 4150..4183, ${HUNTRESS_LOOKS.length} looks especializados da Huntress, ${importedWeapons.size} armas, ${MOUNT_LOOKS.length} montarias, ${BEAST_MASTER_SUMMONS.length} evocacoes, ${BEAST_MASTER_TRANSFORMATIONS.length} transformacoes e Griupan/fadas importados para ${outputRoot}`,
 );
 
 function decodeWys(encoded) {

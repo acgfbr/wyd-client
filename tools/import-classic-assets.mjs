@@ -244,6 +244,9 @@ usedObjectTypes.add(2839); // Effect/unsole.msa
 usedObjectTypes.add(10);
 usedObjectTypes.add(19);
 usedObjectTypes.add(20);
+// TMHuman creates seven TMEffectMeshRotate children for the helmet-10
+// Guer_Caveira. They resolve the real bnsh01..05 common meshes indirectly.
+for (const type of [3, 4, 5, 6, 7]) usedObjectTypes.add(type);
 // Dependências de itens fora dos DAT: preview 3D e materialização de drops.
 // São itens equipáveis/consumíveis/materiais e por isso não aparecem nos mapas.
 usedObjectTypes.add(53); // mesh/hpotion1.msa

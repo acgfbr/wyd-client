@@ -168,10 +168,17 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
    Terreno antecipa somente na direção do movimento (até 60 unidades), mantém
    histerese em 42 e descarrega Fields fora da janela. Criaturas entram a 56 e
    saem a 64, inclusive antes de o jogador cruzar para o terreno vizinho.
-3. `LOOK_INFO` da Huntress e guarda-roupa real. Implementado a partir de
-   `SetPacketMOBItem`, `SetHumanCostume` e `SetCostume`: rosto/cabeça base,
-   Rake, Loki, Waha e fantasias clássicas, incluindo a Mulher Kalintz do item
-   `4156`, agora definida como traje padrão do personagem.
+3. `LOOK_INFO` e guarda-roupa real — **faixa clássica de trajes concluída**.
+   Além dos looks especializados da Huntress, os 34 itens `4150..4183` de
+   `SetHumanCostume`, `SetOldCostume` e `SetCostume` agora estão disponíveis
+   nas quatro classes. Cada entrada conserva as seis MSH, WYS/DDS, alpha e a
+   troca de `m_nSkinMeshType`; ao mudar entre esqueleto `ch01/ch02`, o banco
+   ANI e o bone/transform da arma acompanham o rig efetivo. Equipar ou retirar
+   o traje pelo inventário reconstrói a classe ativa, sem voltar
+   silenciosamente para Huntress. Mulher Kalintz `4156` continua sendo o
+   padrão da Huntress. Combinações ordinárias de rosto/cabeça/armadura dos
+   demais itens continuam no lote amplo de `LOOK_INFO`, não nesta faixa de
+   fantasias.
 4. Skytalos, refinação e Ancient. Implementado e homologado: item `2551`,
    refinação +15, composição `MODULATE2X + ADDSMOOTH`, UV animado em 4 s e
    empunhadura pelo banco de arco da Huntress.
@@ -457,7 +464,9 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
     faz o primeiro render ainda atrás da tela opaca para compilar materiais e
     enviar as texturas visíveis à GPU. Caminhada e teleporte preservam o
     streaming assíncrono, portanto essa espera maior ocorre somente na entrada.
-12. Auditoria técnica final e cobertura do cliente clássico. Revisar o runtime
+12. Auditoria técnica final e cobertura do cliente clássico —
+    **implementação e documentação concluídas; homologação manual separada**.
+    Revisar o runtime
     contra as melhores práticas atuais do Three.js — ciclo de vida/dispose,
     cache e compartilhamento de GPU, draw calls/instancing, streaming, LOD,
     frustum/occlusion, materiais/shaders, animação, carregamento assíncrono e
@@ -479,14 +488,14 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
     a manter esse contrato. A matriz automatica por
     arquivo importado foi concluida: `bun run audit:coverage` cruza o manifesto,
     o corpus fisico e as definicoes TypeScript do runtime, gerando Markdown e
-    JSON em `docs/matriz-cobertura-classico.*`. O snapshot atual valida 3.885
+    JSON em `docs/matriz-cobertura-classico.*`. O snapshot atual valida 4.241
     caminhos declarados sem faltantes — incluindo agora o grafo interno de
     MSH/BON/ANI/texturas dos monstros —, 111 TRN, 108 DAT declarados, 103
     minimapas declarados, 377 templates, 3.937 geradores, 6.500 itens, 248
     skills binárias, 16 montarias e oito evocacoes; tambem explicita por classe
     quais skills ja foram promovidas ao runtime. O code splitting tambem foi
     aplicado: Three.js ocupa um chunk vendor cacheavel, a entrada da aplicacao
-    ficou em cerca de 553 KiB minificados e os renderers de Foema, TransKnight
+    ficou em cerca de 600 KiB minificados e os renderers de Foema, TransKnight
     e BeastMaster viraram chunks lazy na faixa de aproximadamente 37–124 KiB,
     carregados somente no primeiro switch para cada classe.
     O `ModelLibrary` também passou a compartilhar DDS por caminho entre tipos:
@@ -576,6 +585,14 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
     `101..108`, escala `2×3`, cor laranja e pulso de três segundos aparecem
     somente nos Fields `row > 25, 8 < column < 16`, equivalentes ao
     `RenderDevice::m_bDungeon == 2`.
+    O `TMEffectMeshRotate` exclusivo do `Guer_Caveira` também foi portado em
+    lote próprio. A condição exata (`class 36/37`, helm mesh `10`, arma
+    esquerda diferente de mesh `930`) resolve somente esse template no corpus.
+    Os sete filhos usam os common meshes reais `3,6,4,7,5,6,7`
+    (`bnsh01..05`), órbita de raio `1`, ciclo de `1 s`, defasagem de `150 ms`,
+    rotação própria em dobro e a chama vermelha animada `11..18` a cada
+    `80 ms`. Modelos/textura são compartilhados, o ator mantém apenas clones,
+    e streaming, distância, descarte e a tecla `V` abrangem o conjunto.
     Permanecem fora deste lote 16 templates que criam quatro `TMButterFly`
     auxiliares: o construtor recuperado atribui `m_fParticleH` duas vezes e
     nunca inicializa `m_fParticleV`, embora `FrameMove` leia esse valor em
@@ -583,9 +600,7 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
     amplitude vertical no achismo; a implementação exige outra versão do
     cliente ou captura que prove o valor. Os seis Krill condicionados a
     `ATTACK02` têm inconsistência semelhante: o rig `22` só escreve
-    `m_vecTempPos[0]`, mas o renderer emite também de `[1]`. Há ainda um
-    `TMEffectMeshRotate` exclusivo de `Guer_Caveira`, a ser portado em lote
-    próprio por usar malhas, não billboards.
+    `m_vecTempPos[0]`, mas o renderer emite também de `[1]`.
     Falta homologar visualmente uma amostra de cada skin humanoide armada.
     As verificações que exigem navegador/dispositivo estão isoladas em
     `docs/checklist-homologacao-manual.md`, com cenário, duração, coordenadas e
@@ -872,9 +887,8 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
     caminho/disciplina, equipe, calendário, pipeline, clean room e margem de
     incerteza.
 17. Guia final para criação do servidor multiplayer — **documentação
-    concluída; auditoria do servidor-base aguarda a fonte**. Localizar e inventariar o
-    servidor-base informado pelo projeto, confrontar seus packets, estados e
-    regras com o cliente clássico e produzir um guia reproduzível para ligar
+    concluída no escopo disponível; não existe servidor-base**. Inventariar o
+    protocolo exposto pelo cliente clássico e produzir um guia reproduzível para ligar
     este frontend a um backend autoritativo. O documento deve cobrir login e
     sessão, seleção/criação de personagem, gateway, mundos/channels, loop de
     simulação, movimento e colisão, spawn/IA, combate/skills/buffs, inventário,
@@ -882,8 +896,8 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
     e migrações. Incluir contratos de mensagens e versionamento, reconexão,
     idempotência, validação/anti-cheat, concorrência, segurança, observabilidade,
     backups, deploy, escalabilidade e um ambiente local passo a passo. Separar
-    claramente o que foi comprovado no servidor-base, o que pertence ao
-    protocolo do cliente e o que será uma decisão moderna; não copiar
+    claramente o que foi comprovado pelo cliente, o que pertence ao futuro
+    servidor e o que será uma decisão moderna; não copiar
     vulnerabilidades, credenciais ou regras desconhecidas por suposição. Como
     rede continua fora do escopo atual, esta tarefa gera arquitetura, roteiro e
     instruções, não ativa multiplayer silenciosamente no frontend. O guia está
@@ -891,7 +905,8 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
     de servidor; `Myth64.rar`, `serverlist.rar` e `Config.rar` contêm somente
     executável/configurações do cliente. O documento separa o que foi
     comprovado em `Basedef.h`/`CPSock.cpp`, o que é decisão moderna e tudo que
-    precisa ser confirmado quando o servidor-base for disponibilizado.
+    deverá ser definido e validado durante a implementação futura. Uma eventual
+    fonte legada poderá ser auditada depois, mas não é dependência desta fila.
 
 ## Convenções do projeto
 

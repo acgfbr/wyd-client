@@ -15,6 +15,10 @@ escopo atual.
   cruzar dois Fields e com C.C ativo durante 60 s.
 - Trocar sequencialmente Huntress, TransKnight, Foema e BeastMaster; voltar para
   Huntress e confirmar que GEO/TEX estabilizam, sem crescimento a cada ciclo.
+- Em cada classe, equipar ao menos um traje `ch01` e um `ch02` da faixa
+  `4150..4183`; confirmar corpo completo, animação e arma presa à mão correta.
+  Retirar o traje deve restaurar o corpo base da classe ativa, sem trocar para
+  Huntress.
 - Montar, caminhar por C.C e atacar em seguida; confirmar a animacao de
   locomocao da montaria e a ausencia de elevacao durante o ataque da Huntress.
 - Conferir Unicorno, Grifo e as demais montarias nivel 120 no seletor.
@@ -94,6 +98,12 @@ escopo atual.
   textura de efeito `406`, duas direções de UV e onda alta, sem herdar a água
   azul externa. Comparar também uma superfície externa e uma dungeon; trocar
   repetidamente entre elas não pode duplicar `TEX`.
+- Conferir um `Guer_Caveira` perto de `592,3770` (gerador `2065`) e outro
+  perto de `720,3740` (gerador `2128`). Sete escudos ósseos diferentes devem
+  orbitar o ator em um ciclo de `1 s`, defasados entre si, cada um girando
+  também no próprio eixo e carregando uma pequena chama vermelha animada. `V`
+  deve esconder e restaurar o conjunto inteiro; sair e voltar ao Field não
+  pode aumentar `GEO/TEX` a cada ciclo.
 
 ## Criterio de fechamento
 

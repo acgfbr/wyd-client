@@ -16,6 +16,7 @@ import {
 import { MonsterCatalog } from "../npcs/MonsterCatalog";
 import {
   classicPlayerClass,
+  classicPlayerWeaponForSkin,
   type ClassicPlayerClassDefinition,
   type ClassicPlayerClassKey,
   type ClassicPlayerLookDefinition,
@@ -104,10 +105,11 @@ export class ClassicPlayerAvatar {
     const look = playerClass.looks.find((candidate) => candidate.key === lookKey)
       ?? playerClass.looks.find((candidate) => candidate.key === playerClass.defaultLookKey)
       ?? playerClass.selection.look;
+    const skin = look.skinOverride ?? playerClass.skin;
     const catalog = await MonsterCatalog.load(assets);
     const library = new ClassicSkinnedAssetLibrary(assets, catalog);
     const lease = await library.createInstance({
-      skin: playerClass.skin,
+      skin,
       parts: look.parts.map((part, index) => ({
         name: `${playerClass.key}-part-${index + 1}`,
         mesh: `player/meshes/${part.meshStem}.msh`,
@@ -126,7 +128,11 @@ export class ClassicPlayerAvatar {
       actionVariant: playerClass.classIndex,
     });
     if (!lease) return null;
-    const weapon = await attachClassicWeapon(assets, lease, playerClass.defaultWeapon).catch(() => null);
+    const weapon = await attachClassicWeapon(
+      assets,
+      lease,
+      classicPlayerWeaponForSkin(playerClass.defaultWeapon, skin),
+    ).catch(() => null);
     return new ClassicPlayerAvatar(lease, weapon, playerClass, look);
   }
 

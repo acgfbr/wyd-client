@@ -48,6 +48,10 @@ import {
   classicMonsterEmissionPeriod,
   ClassicMonsterPersistentEffects,
 } from "./ClassicMonsterPersistentEffects";
+import {
+  ClassicMonsterRotateBoneEffects,
+  type ClassicMonsterRotateBoneActorEffect,
+} from "./ClassicMonsterRotateBoneEffects";
 
 export type {
   ClassicActorSoundEvent,
@@ -191,6 +195,7 @@ interface SpawnedActor {
   readonly mountLook: ClassicMountLookDefinition | null;
   readonly familiarLease: ClassicSkinnedInstanceLease | null;
   readonly familiarAnchor: THREE.Group | null;
+  readonly rotateBoneEffect: ClassicMonsterRotateBoneActorEffect | null;
   familiarPhase: number;
   familiarParticleAccumulator: number;
   familiarRandomState: number;
@@ -267,6 +272,7 @@ export class ClassicSpawnManager {
   readonly #assets: ClassicSkinnedAssetLibrary;
   readonly #nyerdesParticles: ClassicNyerdesParticles;
   readonly #persistentEffects: ClassicMonsterPersistentEffects;
+  readonly #rotateBoneEffects: ClassicMonsterRotateBoneEffects;
   readonly #availableFields = new Set<string>();
   #activeFieldKey = "";
   #activeColumn = -1;
@@ -295,6 +301,7 @@ export class ClassicSpawnManager {
     this.#assets = new ClassicSkinnedAssetLibrary(assets, catalog);
     this.#nyerdesParticles = new ClassicNyerdesParticles(assets);
     this.#persistentEffects = new ClassicMonsterPersistentEffects(assets, catalog);
+    this.#rotateBoneEffects = new ClassicMonsterRotateBoneEffects(assets, models, catalog);
     for (const field of assets.manifest.fields) {
       this.#availableFields.add(fieldKey(field.column, field.row));
     }
@@ -321,6 +328,7 @@ export class ClassicSpawnManager {
     this.#listeners.clear();
     this.#nyerdesParticles.dispose();
     this.#persistentEffects.dispose();
+    this.#rotateBoneEffects.dispose();
     this.#assets.dispose();
     this.object.removeFromParent();
     this.object.clear();
@@ -334,6 +342,7 @@ export class ClassicSpawnManager {
     this.#effectsEnabled = enabled;
     this.#nyerdesParticles.setEnabled(enabled);
     this.#persistentEffects.setEnabled(enabled);
+    for (const actor of this.#actors) actor.rotateBoneEffect?.setEnabled(enabled);
     if (!enabled) {
       for (const actor of this.#actors) actor.familiarParticleAccumulator = 0;
     }
@@ -643,6 +652,12 @@ export class ClassicSpawnManager {
       const distanceSquared = dx * dx + dy * dy;
       const fieldVisible = actor.object.parent?.visible !== false;
       const actorScale = classicMobScale(actor.template);
+      const rotateBoneVisible = this.#effectsEnabled
+        && fieldVisible
+        && actor.object.visible
+        && distanceSquared <= animateDistanceSquared;
+      actor.rotateBoneEffect?.setEnabled(rotateBoneVisible);
+      if (rotateBoneVisible) actor.rotateBoneEffect?.update(nowSeconds);
       if (
         this.#effectsEnabled
         && actor.familiarAnchor
@@ -1050,16 +1065,18 @@ export class ClassicSpawnManager {
     const template = this.catalog.template(spec.templateIndex);
     if (!template || template.missing || !template.visual) return null;
     const mountLook = classicNpcMountLook(template);
-    const [lease, mantuaLease, mountLease, familiarLease] = await Promise.all([
+    const [lease, mantuaLease, mountLease, familiarLease, rotateBoneEffect] = await Promise.all([
       this.#assets.createTemplateInstance(spec.templateIndex),
       this.#assets.createTemplateMantuaInstance(spec.templateIndex),
       this.createEquipmentMount(mountLook),
       this.createEquipmentFamiliar(template),
+      this.#rotateBoneEffects.create(template),
     ]);
     if (!lease) {
       mantuaLease?.release();
       mountLease?.release();
       familiarLease?.release();
+      rotateBoneEffect?.dispose();
       return null;
     }
     const weaponModelTypes: number[] = [];
@@ -1126,6 +1143,11 @@ export class ClassicSpawnManager {
         familiarLease.model.update(animationPhaseSeconds);
         setNyerdesMotion(familiarAnchor, familiarLease, initialYaw, scale, familiarPhase);
       }
+      if (rotateBoneEffect) {
+        rotateBoneEffect.setEnabled(this.#effectsEnabled);
+        rotateBoneEffect.update(nowSeconds);
+        actor.add(rotateBoneEffect.object);
+      }
       actor.updateMatrixWorld(true);
       const collisionRadius = Math.max(
         classicCollisionRadius(lease.model.object),
@@ -1155,6 +1177,7 @@ export class ClassicSpawnManager {
         mountLook,
         familiarLease,
         familiarAnchor,
+        rotateBoneEffect,
         familiarPhase,
         familiarParticleAccumulator: 0,
         familiarRandomState: spawnHash(spec.generator, spec.ordinal + 1_907) || 1,
@@ -1221,6 +1244,7 @@ export class ClassicSpawnManager {
       mantuaLease?.release();
       mountLease?.release();
       familiarLease?.release();
+      rotateBoneEffect?.dispose();
       lease.release();
       return null;
     }
@@ -2737,6 +2761,7 @@ function disposeActor(actor: SpawnedActor): void {
   disposeActorHostileOutline(actor);
   restoreActorAffectMaterials(actor);
   actor.familiarLease?.release();
+  actor.rotateBoneEffect?.dispose();
   actor.mantuaLease?.release();
   actor.lease.release();
   actor.mountLease?.release();

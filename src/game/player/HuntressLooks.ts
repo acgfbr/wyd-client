@@ -10,6 +10,8 @@ export interface HuntressLookDefinition {
   readonly key: string;
   readonly name: string;
   readonly itemIndex: number | null;
+  /** SetHumanCostume can replace m_nSkinMeshType independently of class. */
+  readonly skinOverride?: 0 | 1;
   readonly source: string;
   readonly parts: readonly HuntressLookPart[];
 }

@@ -159,6 +159,14 @@ for (const effectIndex of [
   const effect = manifest.effectTextures[String(effectIndex)];
   if (effect) await addFile(effect.file);
 }
+// Guer_Caveira materializes bnsh01..05 through TMEffectMeshRotate rather than
+// a DAT record or an equipment slot, so all five models must be offline-ready.
+for (const type of [3, 4, 5, 6, 7]) {
+  const model = manifest.objectModels[String(type)];
+  if (!model) continue;
+  await addFile(model.file);
+  for (const texture of model.textures) if (texture) await addFile(texture);
+}
 
 const files = [...relativeFiles].sort();
 const hash = createHash("sha256");

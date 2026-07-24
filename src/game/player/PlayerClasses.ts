@@ -5,6 +5,7 @@ import {
   type HuntressLookDefinition,
   type HuntressLookPart,
 } from "./HuntressLooks";
+import { CLASSIC_COSTUME_LOOKS } from "./ClassicCostumeLooks";
 
 export type ClassicPlayerClassKey = "transknight" | "foema" | "beastmaster" | "huntress";
 export type ClassicPlayerAnimationSet = "Knight" | "Mage";
@@ -268,7 +269,7 @@ export const CLASSIC_PLAYER_CLASSES = [
       TRANSKNIGHT_SELECTION_LOOK,
       TRANSKNIGHT_SELECTION_WEAPON,
     ),
-    looks: [TRANSKNIGHT_SELECTION_LOOK, TRANSKNIGHT_BASE_LOOK],
+    looks: withClassicCostumes([TRANSKNIGHT_SELECTION_LOOK, TRANSKNIGHT_BASE_LOOK]),
     defaultLookKey: TRANSKNIGHT_SELECTION_LOOK.key,
     defaultWeapon: TRANSKNIGHT_SELECTION_WEAPON,
     source: "BASE_DefineSkinMeshType(1)=0; BoneAni4 ch01; AniSound4 [Knight]",
@@ -287,7 +288,7 @@ export const CLASSIC_PLAYER_CLASSES = [
       FOEMA_SELECTION_LOOK,
       FOEMA_SELECTION_WEAPON,
     ),
-    looks: [FOEMA_SELECTION_LOOK, FOEMA_BASE_LOOK],
+    looks: withClassicCostumes([FOEMA_SELECTION_LOOK, FOEMA_BASE_LOOK]),
     defaultLookKey: FOEMA_SELECTION_LOOK.key,
     defaultWeapon: FOEMA_SELECTION_WEAPON,
     source: "BASE_DefineSkinMeshType(2)=1; BoneAni4 ch02; AniSound4 [Mage]",
@@ -306,7 +307,7 @@ export const CLASSIC_PLAYER_CLASSES = [
       BEASTMASTER_SELECTION_LOOK,
       BEASTMASTER_SELECTION_WEAPON,
     ),
-    looks: [BEASTMASTER_SELECTION_LOOK, BEASTMASTER_BASE_LOOK],
+    looks: withClassicCostumes([BEASTMASTER_SELECTION_LOOK, BEASTMASTER_BASE_LOOK]),
     defaultLookKey: BEASTMASTER_SELECTION_LOOK.key,
     defaultWeapon: BEASTMASTER_SELECTION_WEAPON,
     source: "BASE_DefineSkinMeshType(4)=0; bExpand=1; BoneAni4 ch01; AniSound4 [Knight]",
@@ -325,7 +326,7 @@ export const CLASSIC_PLAYER_CLASSES = [
       HUNTRESS_SELECTION_LOOK,
       HUNTRESS_SELECTION_WEAPON,
     ),
-    looks: [...HUNTRESS_LOOKS, HUNTRESS_SELECTION_LOOK, HUNTRESS_BASE_LOOK],
+    looks: withClassicCostumes([...HUNTRESS_LOOKS, HUNTRESS_SELECTION_LOOK, HUNTRESS_BASE_LOOK]),
     defaultLookKey: DEFAULT_HUNTRESS_LOOK_KEY,
     defaultWeapon: HUNTRESS_DEFAULT_WEAPON,
     source: "BASE_DefineSkinMeshType(8)=1; bExpand=1; playable default preserved as Mulher Kalintz",
@@ -335,6 +336,27 @@ export const CLASSIC_PLAYER_CLASSES = [
 export function classicPlayerClass(key: string): ClassicPlayerClassDefinition {
   return CLASSIC_PLAYER_CLASSES.find((definition) => definition.key === key)
     ?? CLASSIC_PLAYER_CLASSES[3];
+}
+
+/** Costumes can replace m_nSkinMeshType, so rigid hand placement follows it. */
+export function classicPlayerWeaponForSkin(
+  weaponDefinition: ClassicPlayerWeaponDefinition,
+  skin: 0 | 1,
+): ClassicPlayerWeaponDefinition {
+  const attachment = skin === 0 ? CH01_LEFT_HAND : CH02_LEFT_HAND;
+  return weaponDefinition.attachment === attachment
+    ? weaponDefinition
+    : { ...weaponDefinition, attachment };
+}
+
+function withClassicCostumes(
+  classLooks: readonly ClassicPlayerLookDefinition[],
+): readonly ClassicPlayerLookDefinition[] {
+  const itemIndices = new Set(classLooks.map((look) => look.itemIndex));
+  return [
+    ...classLooks,
+    ...CLASSIC_COSTUME_LOOKS.filter((look) => !itemIndices.has(look.itemIndex)),
+  ];
 }
 
 function baseParts(

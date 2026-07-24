@@ -16,6 +16,7 @@ const audioCatalog = await Bun.file(audioCatalogPath).exists()
   : null;
 
 const { CLASSIC_PLAYER_CLASSES } = await import("../src/game/player/PlayerClasses.ts");
+const { CLASSIC_COSTUME_LOOKS } = await import("../src/game/player/ClassicCostumeLooks.ts");
 const { HUNTRESS_LOOKS } = await import("../src/game/player/HuntressLooks.ts");
 const { MOUNT_LOOKS } = await import("../src/game/player/MountLooks.ts");
 const { CLASS_SKILL_LOADOUTS } = await import("../src/game/combat/ClassSkills.ts");
@@ -83,6 +84,16 @@ const referencedFiles = [
   )),
   monsterCatalog.mantua?.mesh,
   ...(monsterCatalog.mantua?.variants.map((variant) => variant.texture) ?? []),
+  ...CLASSIC_PLAYER_CLASSES.flatMap((playerClass) => [
+    ...playerClass.looks.flatMap((look) => look.parts.flatMap((part) => [
+      `player/meshes/${part.meshStem}.msh`,
+      `player/textures/${part.textureStem}.dds`,
+    ])),
+    ...[playerClass.selection.weapon, playerClass.defaultWeapon].flatMap((weapon) => [
+      `player/meshes/${weapon.meshStem}.msa`,
+      `player/textures/${weapon.textureStem}.dds`,
+    ]),
+  ]),
   ...MOUNT_LOOKS.flatMap((look) => {
     const root = `player/mounts/${look.family.base}`;
     return [
@@ -195,6 +206,7 @@ const coverage = {
       name: entry.name,
       looks: entry.looks.length,
     })),
+    classicCostumes: CLASSIC_COSTUME_LOOKS.length,
     huntressLooks: HUNTRESS_LOOKS.length,
     mounts: MOUNT_LOOKS.length,
     mountFamilies: [...new Set(MOUNT_LOOKS.map((mount) => mount.family.base))].sort(),
@@ -318,6 +330,7 @@ Templates comerciais nao resolvidos: ${report.items.unresolvedNpcTemplates}.
 | --- | ---: |
 ${classRows}
 
+- Trajes classicos compartilhados por todas as classes: ${report.player.classicCostumes}.
 - Looks especializados da Huntress: ${report.player.huntressLooks}.
 - Montarias selecionaveis: ${report.player.mounts}, em
   ${report.player.mountFamilies.length} familias (${report.player.mountFamilies.join(", ")}).

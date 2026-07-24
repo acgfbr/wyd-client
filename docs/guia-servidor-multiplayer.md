@@ -22,14 +22,14 @@ Portanto:
 
 - **Comprovado pelo cliente** significa que a estrutura ou o fluxo aparece em
   `tm-project2/Projects/TMProject`.
-- **A confirmar no servidor-base** significa que falta fornecer/localizar essa
-  fonte antes de afirmar a regra.
+- **A definir no servidor futuro** significa que o cliente não contém a regra
+  autoritativa e ela não deve ser inferida.
 - **Decisão moderna** significa uma escolha de arquitetura para o cliente web,
   não uma propriedade do WYD clássico.
 
-Quando o servidor-base for colocado no workspace, a primeira tarefa deve ser
-gerar uma segunda matriz que associe handler, opcode, persistência e regra de
-domínio a cada mensagem abaixo.
+Não existe servidor-base para este projeto. Quando a implementação do backend
+começar, a primeira tarefa deve ser gerar uma matriz que associe handler,
+schema moderno, persistência e regra de domínio a cada mensagem abaixo.
 
 ## O que o cliente clássico comprova
 
@@ -246,7 +246,7 @@ Drops de quest, itens que concedem EXP ao usar e a recompensa final também são
 eventos autoritativos. O catálogo do cliente prova a existência da
 `Vela_do_Coveiro #4038` e da `Varinha_do_Carbunkle #701`, mas não prova custo,
 chance, EXP nem regra de consumo. Essas tabelas devem ser confrontadas com o
-servidor-base antes de virar configuração de produção.
+servidor futuro antes de virar configuração de produção.
 
 ## Persistência mínima
 
@@ -368,7 +368,7 @@ O primeiro marco aceitável é: dois navegadores autenticados veem um ao outro,
 andam por Armia, reconectam sem duplicar personagem e recebem correção ao tentar
 atravessar uma colisão. Não começar por guild, refino ou dezenas de skills.
 
-## Critérios para auditar o servidor-base quando chegar
+## Critérios para validar o servidor futuro
 
 - caminho e commit/versão da fonte;
 - processo de login, DB e world/channel;
@@ -382,5 +382,5 @@ atravessar uma colisão. Não começar por guild, refino ou dezenas de skills.
 - partes reutilizáveis, partes somente de referência e partes que devem ser
   descartadas por segurança.
 
-Sem essa auditoria, o servidor-base é referência potencial, não fundamento de
-produção.
+Sem essa validação, o protocolo recuperado do cliente é apenas referência de
+compatibilidade, não fundamento para regras autoritativas de produção.

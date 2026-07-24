@@ -244,16 +244,15 @@ decodificar DDS para RGBA na CPU.
 
 O build separa Three.js em vendor cacheavel. Renderers de Foema, TransKnight e
 BeastMaster sao chunks lazy carregados no primeiro switch; Huntress permanece
-no boot por ser a classe inicial. Medicao de 23/07/2026: app ~544 KiB, Three.js
+no boot por ser a classe inicial. Medicao de 23/07/2026: app ~600 KiB, Three.js
 ~518 KiB e chunks de classe na faixa de ~37–124 KiB, todos minificados.
 
 O plano do servidor autoritativo está em
-`docs/guia-servidor-multiplayer.md`. A fonte de servidor informada pelo usuário
-não foi localizada no acervo disponível em 23/07/2026; o contrato clássico
-comprovável vem de `Basedef.h`, `CPSock.cpp`, `TMSelectServerScene.cpp` e
-`TMFieldScene.cpp`. O cliente antigo usa TCP 8281 e `INIT_CODE=521270033`; o
-frontend web deverá usar HTTPS/WSS e manter um eventual gateway TCP legado
-isolado do domínio.
+`docs/guia-servidor-multiplayer.md`. O projeto não possui servidor-base; o
+contrato clássico comprovável vem de `Basedef.h`, `CPSock.cpp`,
+`TMSelectServerScene.cpp` e `TMFieldScene.cpp`. O cliente antigo usa TCP 8281
+e `INIT_CODE=521270033`; o frontend web deverá usar HTTPS/WSS e manter um
+eventual gateway TCP legado isolado do domínio.
 
 A estimativa de abandono integral dos assets está em
 `docs/estimativa-substituicao-assets.md`: 80–135 pessoa-mês para substituição
@@ -268,6 +267,17 @@ montado, segunda textura `165` e UV U/V no ciclo classico de quatro segundos.
 O passe Ancient segue `MODULATE2X + ADDSMOOTH`. Os adicionais atuais do Carry
 de Utilidades sao `EF2=120`, `EF3=120`, `EF43=251`, grade 5; o tooltip calcula
 `Dano de Perfuracao: 480`.
+
+Os 34 trajes temporários `4150..4183` foram transcritos integralmente de
+`TMHuman::SetHumanCostume`, `TMSkinMesh::SetOldCostume` e `SetCostume`. A
+tabela compartilhada registra as seis partes, textura, alpha e
+`m_nSkinMeshType` e pode ser usada pelas quatro classes. Isso importa casos
+como Yin-Yang, Esqueleto, Valquíria, Romano, Kalintz, Feiticeira, Draco,
+Natal/Rudolph, Militar, Oculto e a faixa `4167..4183`. Como alguns trajes usam
+mesh `ch01` com skin efetiva `1`, não se deve inferir o rig pelo nome do
+arquivo: animação e attachment da arma devem obedecer `skinOverride`. O
+sincronizador de equipamento sempre recarrega a classe ativa; usar Huntress
+fixa nesse caminho é uma regressão.
 
 As skills Huntress promovidas ao runtime somam dezessete. Meditacao `#77` foi
 recuperada de `TMHuman.cpp` como cinco pares de billboards `101` em espiral;
@@ -393,14 +403,14 @@ curva `bFI=0` (`cos(progress·π/2)`). Gárgulas de classe `33` também respeita
 a condição original de dungeon tipo 2 (`row > 25` e `8 < column < 16`):
 sete pontos, ciclo `101..108`, escala `2×3` e pulso entre `0,7..1`.
 
-Três branches continuam deliberadamente bloqueados por evidência
+Dois branches continuam deliberadamente bloqueados por evidência
 insuficiente. `TMButterFly(6,3,owner)` é criado por 16 templates, mas seu
 construtor sobrescreve `m_fParticleH` e jamais inicializa
 `m_fParticleV`, lido em todos os movimentos. Os seis Krill em `ATTACK02`
 tentam usar `m_vecTempPos[1]`, embora o rig `22` escreva apenas o ponto zero.
-`Guer_Caveira` usa sete `TMEffectMeshRotate`, que exigem portar a família de
-malhas rotativas em vez de tratá-la como partícula. Não preencher esses casos
-com valores visuais arbitrários.
+Não preencher esses casos com valores visuais arbitrários. O terceiro caso
+anterior, `Guer_Caveira`, foi resolvido pelo port dedicado dos sete
+`TMEffectMeshRotate` e deixou de fazer parte deste bloqueio.
 
 O C.C possui modos desligado, fisico, magico e suporte. No continuo, procura um
 hostil alem do alcance imediato e entrega a aproximacao ao A*. Alvos sem rota
@@ -487,7 +497,7 @@ refinamento, Ancient e preco estatico quando aplicavel.
 
 - Homologacao visual ainda e necessaria em 1024x768, widescreen e iPhone.
 - O cache persistente inicial usa `precache-armia.json` e o service worker
-  `/wyd-cache-sw.js`. O pacote atual contém 812 arquivos/33,4 MiB necessários
+  `/wyd-cache-sw.js`. O pacote atual contém 815 arquivos/33,4 MiB necessários
   ao primeiro cenário de Armia, tem chave derivada do conteúdo, valida quota,
   pede persistência, retoma entradas ausentes e pode ser interrompido ou limpo
   sem bloquear o fallback de rede. Os demais mapas continuam lazy. A
@@ -572,6 +582,12 @@ atualizado para remover a divergencia.
   streaming.
 - Ambiente: agua, fontes, fogueiras, grama, partes animadas e colisao de ponte.
 - Entidades: criaturas, IA, separacao, NPCs, hover e interacoes.
+- O `Guer_Caveira` é o único template do corpus que satisfaz o branch de
+  `TMEffectMeshRotate` de `TMHuman`: class `36/37`, helm mesh `10` e arma
+  esquerda diferente de mesh `930`. Ele usa sete escudos ósseos common mesh
+  `3,6,4,7,5,6,7`, órbita de `1 s`/raio `1`, fases de `150 ms`, rotação
+  própria em dobro e fogo vermelho `11..18` em quadros de `80 ms`. O runtime
+  compartilha os cinco modelos e oito DDS, mantendo somente os clones por ator.
 - Player: Huntress, trajes, Skytalos Ancient, Griupan e montarias nivel 120.
 - Gameplay: combate, critico, C.C, skills iniciais, buffs, progressao e drops.
 - UI: HUD 7.54, chat, overhead, inventario/equipamento/cargo/lojas e tooltips.
@@ -636,9 +652,9 @@ atualizado para remover a divergencia.
   `InstanceType=11/Value=9`, mas o cliente não contém o mapa desse valor para
   LOOK/NPC: ele recebe a entidade já resolvida via `MSG_CreateMob`. Não criar
   uma invocação substituta sem a tabela do servidor.
-- Backend futuro: a ultima tarefa da fila deve inventariar o servidor-base e
-  produzir o guia de um multiplayer autoritativo, sem ativar rede durante o
-  escopo frontend atual.
+- Backend futuro: não existe servidor-base. O guia de multiplayer autoritativo
+  parte somente do protocolo comprovado no cliente e de decisões modernas
+  explicitamente rotuladas, sem ativar rede durante o escopo frontend atual.
 - Distribuicao: README, capturas dos 111 mapas, Vercel/iPhone, minificacao,
   telemetria, dispose e code splitting.
 - Auditoria: matriz automatica de arquivos/cobertura e memoria canonica.

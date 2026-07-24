@@ -1,9 +1,9 @@
 {
-  "generatedAt": "2026-07-24T02:29:44.952Z",
+  "generatedAt": "2026-07-24T03:02:24.599Z",
   "command": "bun run audit:coverage",
   "source": "WYD classic",
   "referencedFiles": {
-    "total": 3885,
+    "total": 4241,
     "missing": []
   },
   "maps": {
@@ -34,24 +34,25 @@
       {
         "key": "transknight",
         "name": "TransKnight",
-        "looks": 2
+        "looks": 36
       },
       {
         "key": "foema",
         "name": "Foema",
-        "looks": 2
+        "looks": 36
       },
       {
         "key": "beastmaster",
         "name": "BeastMaster",
-        "looks": 2
+        "looks": 36
       },
       {
         "key": "huntress",
         "name": "Huntress",
-        "looks": 14
+        "looks": 39
       }
     ],
+    "classicCostumes": 34,
     "huntressLooks": 12,
     "mounts": 16,
     "mountFamilies": [
@@ -456,14 +457,14 @@
     {
       "label": "Player",
       "directory": "player",
-      "files": 518,
-      "bytes": 31238417,
+      "files": 678,
+      "bytes": 41520665,
       "extensions": {
         ".ani": 171,
         ".bon": 23,
-        ".dds": 134,
+        ".dds": 170,
         ".msa": 5,
-        ".msh": 185
+        ".msh": 309
       }
     },
     {
