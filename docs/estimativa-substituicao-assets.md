@@ -13,7 +13,7 @@ Armia:
 - 238 texturas de terreno, 499 de efeitos e cinco de água;
 - 47 famílias visuais de monstros/NPCs, 400 MSH, 555 ANI e 337 texturas;
 - quatro classes, 166 MSH de player e 141 ANI;
-- 14 montarias de nove famílias e oito famílias de summon;
+- 16 montarias de nove famílias e oito famílias de summon;
 - 6.500 registros/ícones de item em 14 atlas;
 - 248 skills catalogadas;
 - 333 SFX, 13 músicas, fontes e 33 imagens de UI.

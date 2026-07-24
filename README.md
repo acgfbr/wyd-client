@@ -28,7 +28,12 @@ Documentação de arquitetura:
   rejeita corretamente o Skytalos `WTYPE 101` antes de consumir mana.
 - Oito evocações naturais do BeastMaster (10 por uso) e as cinco
   transformações clássicas com rig e animações próprios.
-- 14 montarias clássicas nível 120, incluindo Unicórnio e Grifo.
+- 16 montarias clássicas nível 120, incluindo Unicórnio, Grifo, Cavalo Leve N e Andaluz N.
+- Equipamentos visuais dos NPCs derivados do `npcdb`: armas, mantuas,
+  montarias e Nyerdes animado com rastro aditivo instanciado.
+- Efeitos próprios de dragões, minotauros, golems, demônios, elfos,
+  javalis/lobos, trolls e orcs, ancorados nos bones clássicos e agrupados por
+  textura.
 - NPCs e monstros com animação, autonomia, separação, combate, morte e respawn.
 - Cemitério e Cabuncle com contador sincronizado para o próximo reset de 10
   minutos; os monstros dessas quests só adquirem o player dentro da área.

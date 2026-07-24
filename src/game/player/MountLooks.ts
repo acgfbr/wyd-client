@@ -103,6 +103,24 @@ export const MOUNT_LOOKS: readonly ClassicMountLookDefinition[] = [
     parts: sharedTwoParts("dr01", "08", "dr010108", "N"),
   }),
   createMountLook({
+    key: "cavalo-leve-n", name: "Cavalo Leve N", itemIndex: 2368, visualItemIndex: 323,
+    meshIndex: 0, textureIndex: 0, skin: 31, family: HORSE,
+    parts: [
+      part("corpo", "hs010101", "hs010101", "A"),
+      part("pernas", "hs010201", "hs010101", "A"),
+      part("arreio", "hs010304", "hs010304", "N"),
+    ],
+  }),
+  createMountLook({
+    key: "andaluz-n", name: "Andaluz N", itemIndex: 2370, visualItemIndex: 325,
+    meshIndex: 0, textureIndex: 0, skin: 31, family: HORSE,
+    parts: [
+      part("corpo", "hs010101", "hs010101", "A"),
+      part("pernas", "hs010201", "hs010101", "A"),
+      part("arreio", "hs010306", "hs010306", "N"),
+    ],
+  }),
+  createMountLook({
     key: "urso", name: "Urso Doméstico", itemIndex: 2364, visualItemIndex: 319,
     meshIndex: 0, textureIndex: 0, skin: 29, family: BEAR,
     parts: sharedTwoParts("be01", "01", "be010101", "N"),
@@ -184,6 +202,10 @@ export const DEFAULT_MOUNT_LOOK_KEY = "unicornio";
 export function mountLook(key: string): ClassicMountLookDefinition {
   return MOUNT_LOOKS.find((look) => look.key === key)
     ?? MOUNT_LOOKS.find((look) => look.key === DEFAULT_MOUNT_LOOK_KEY)!;
+}
+
+export function mountLookForItemIndex(itemIndex: number): ClassicMountLookDefinition | null {
+  return MOUNT_LOOKS.find((look) => look.itemIndex === itemIndex) ?? null;
 }
 
 interface MountLookInput {

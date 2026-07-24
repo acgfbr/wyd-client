@@ -82,6 +82,20 @@ export interface CatalogSkinnedObject {
   readonly variants: readonly CatalogSkinnedObjectVariant[];
 }
 
+export interface CatalogMantuaVariant {
+  /** LOOK_INFO Skin0: the texture index stored by the equipped mantle item. */
+  readonly textureIndex: number;
+  readonly texture: string;
+  readonly alpha: string | null;
+}
+
+/** Shared mt01 geometry plus the texture variants referenced by NPC Equip[15]. */
+export interface CatalogMantua {
+  readonly skin: 85;
+  readonly mesh: string;
+  readonly variants: readonly CatalogMantuaVariant[];
+}
+
 export interface MonsterRoutePoint {
   readonly x: number | null;
   readonly y: number | null;
@@ -112,6 +126,7 @@ interface RawMonsterCatalog {
   readonly items: readonly MonsterCatalogItem[];
   readonly visualFamilies: Readonly<Record<string, MonsterVisualFamily>>;
   readonly skinnedObjects?: Readonly<Record<string, CatalogSkinnedObject>>;
+  readonly mantua?: CatalogMantua;
   readonly generators: readonly (readonly (number | null)[])[];
   readonly unresolvedTemplates: readonly string[];
 }
@@ -124,6 +139,7 @@ export class MonsterCatalog {
   readonly items: RawMonsterCatalog["items"];
   readonly generators: readonly MonsterGenerator[];
   readonly unresolvedTemplates: readonly string[];
+  readonly mantua: CatalogMantua | null;
   readonly #families = new Map<number, MonsterVisualFamily>();
   readonly #skinnedObjects = new Map<number, CatalogSkinnedObject>();
   readonly #generatorsByField = new Map<string, MonsterGenerator[]>();
@@ -133,6 +149,7 @@ export class MonsterCatalog {
     this.templates = raw.templates;
     this.items = raw.items;
     this.unresolvedTemplates = raw.unresolvedTemplates;
+    this.mantua = raw.mantua ?? null;
     for (const item of raw.items) this.#itemsByIndex.set(item.index, item);
     for (const [skin, family] of Object.entries(raw.visualFamilies)) this.#families.set(Number(skin), family);
     for (const [type, look] of Object.entries(raw.skinnedObjects ?? {})) this.#skinnedObjects.set(Number(type), look);

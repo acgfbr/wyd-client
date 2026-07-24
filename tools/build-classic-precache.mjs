@@ -6,6 +6,9 @@ const projectRoot = path.resolve(import.meta.dirname, "..");
 const classicRoot = path.join(projectRoot, "public/game-data/classic");
 const manifest = JSON.parse(await readFile(path.join(classicRoot, "manifest.json"), "utf8"));
 const monsters = JSON.parse(await readFile(path.join(classicRoot, manifest.monsters.catalog), "utf8"));
+const monsterItems = new Map(monsters.items.map((item) => [item.index, item]));
+const { MOUNT_LOOKS } = await import("../src/game/player/MountLooks.ts");
+const mountLooksByItem = new Map(MOUNT_LOOKS.map((look) => [look.itemIndex, look]));
 const defaultMap = manifest.maps[manifest.defaultMap];
 if (!defaultMap) throw new Error("Mapa padrao ausente do manifesto classico");
 
@@ -84,6 +87,38 @@ for (const templateIndex of templateIndices) {
     await addFile(part[4]);
     if (part[5]) await addFile(part[5]);
   }
+  if (
+    monsters.mantua
+    && [0, 1, 2, 3, 8].includes(template.visual.skin)
+    && (template.equipment?.[15 * 7] ?? 0) > 0
+  ) {
+    const item = monsterItems.get(template.equipment[15 * 7]);
+    const variant = monsters.mantua.variants.find((entry) => entry.textureIndex === item?.texture);
+    const family = monsters.visualFamilies[String(monsters.mantua.skin)];
+    await addFile(monsters.mantua.mesh);
+    if (variant) await addFile(variant.texture);
+    if (family?.skeleton) await addFile(family.skeleton);
+    for (const slot of [0, 1, 2]) {
+      if (family?.clips?.[slot]) await addFile(family.clips[slot]);
+    }
+  }
+  const mountItemIndex = template.equipment?.[14 * 7] ?? 0;
+  const mountHp = (template.equipment?.[14 * 7 + 1] ?? 0)
+    | ((template.equipment?.[14 * 7 + 2] ?? 0) << 8);
+  const mount = mountHp > 0 ? mountLooksByItem.get(mountItemIndex) : null;
+  if (mount) {
+    const root = `player/mounts/${mount.family.base}`;
+    await addFile(`${root}/${mount.family.base}.bon`);
+    for (const part of mount.parts) {
+      await addFile(`${root}/${part.meshStem}.msh`);
+      await addFile(`${root}/${part.textureStem}.dds`);
+    }
+    for (const action of spawnActions) {
+      const slot = mount.family.visual.actions?.[action]?.[0];
+      const clip = Number.isInteger(slot) ? mount.family.visual.clips[slot] : null;
+      if (clip) await addFile(clip);
+    }
+  }
   const family = monsters.visualFamilies[String(template.visual.skin)];
   if (!family) continue;
   if (family.skeleton) await addFile(family.skeleton);
@@ -114,7 +149,13 @@ await addDirectory("player/familiars/ag01");
 await addDirectory("player/mounts/hs01");
 await addMatchingFiles("monsters/animations", /^ch02.*\.ani$/i);
 await addFile("monsters/skeletons/ch02.bon");
-for (const effectIndex of [2, 165, 452]) {
+for (const effectIndex of [
+  0, 2,
+  ...Array.from({ length: 8 }, (_, index) => 11 + index),
+  56, 60, 71,
+  ...Array.from({ length: 8 }, (_, index) => 101 + index),
+  123, 165, 452,
+]) {
   const effect = manifest.effectTextures[String(effectIndex)];
   if (effect) await addFile(effect.file);
 }

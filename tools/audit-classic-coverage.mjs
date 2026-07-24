@@ -67,6 +67,33 @@ const referencedFiles = [
   ...Object.values(manifest.effectTextures).map((entry) => entry.file),
   ...Object.values(manifest.waterTextures).map((entry) => entry.file),
   ...Object.values(manifest.objectModels).flatMap((entry) => [entry.file, ...(entry.textures ?? [])]),
+  ...monsterCatalog.templates.flatMap((template) => (
+    template.visual?.parts.flatMap((part) => [part[4], part[5]]) ?? []
+  )),
+  ...Object.values(monsterCatalog.visualFamilies).flatMap((family) => [
+    family.skeleton,
+    ...(family.clips ?? []),
+  ]),
+  ...Object.values(monsterCatalog.skinnedObjects ?? {}).flatMap((definition) => (
+    definition.variants.flatMap((variant) => [
+      variant.mesh,
+      variant.texture,
+      variant.regionalTexture,
+    ])
+  )),
+  monsterCatalog.mantua?.mesh,
+  ...(monsterCatalog.mantua?.variants.map((variant) => variant.texture) ?? []),
+  ...MOUNT_LOOKS.flatMap((look) => {
+    const root = `player/mounts/${look.family.base}`;
+    return [
+      `${root}/${look.family.base}.bon`,
+      ...look.family.visual.clips,
+      ...look.parts.flatMap((part) => [
+        `${root}/${part.meshStem}.msh`,
+        `${root}/${part.textureStem}.dds`,
+      ]),
+    ];
+  }),
   manifest.navigation.attributeMap.file,
   manifest.navigation.objectMasks.file,
   manifest.monsters.catalog,

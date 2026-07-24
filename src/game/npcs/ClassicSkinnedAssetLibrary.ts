@@ -24,6 +24,8 @@ export interface ClassicSkinnedLookPart {
   readonly texture: string | null;
   /** MeshTextureList cAlpha. `C` is rendered opaque without alpha test. */
   readonly alpha?: string | null;
+  /** TMEffectSkinMesh EF_BRIGHT: source alpha plus additive destination. */
+  readonly bright?: boolean;
 }
 
 /** Generic request shared by NPCs, monsters and future TMTree instances. */
@@ -56,6 +58,7 @@ interface ParsedPart {
   readonly model: MshModel;
   readonly texture: string | null;
   readonly alpha: string | null;
+  readonly bright: boolean;
 }
 
 interface ParsedDefinition {
@@ -97,7 +100,8 @@ export class ClassicSkinnedAssetLibrary {
   createTemplateInstance(templateIndex: number): Promise<ClassicSkinnedInstanceLease | null> {
     const template = this.catalog.template(templateIndex);
     if (!template?.visual) return Promise.resolve(null);
-    const animationWeaponType = classicNpcAnimationWeaponType(template, this.catalog);
+    const mounted = classicNpcHasLiveMount(template);
+    const animationWeaponType = classicNpcAnimationWeaponType(template, this.catalog, mounted);
     return this.createInstance({
       skin: template.visual.skin,
       parts: template.visual.parts.map((part) => ({
@@ -106,10 +110,36 @@ export class ClassicSkinnedAssetLibrary {
         texture: part[5],
         alpha: part[6],
       })),
-      actions: ["STAND01", "WALK", "ATTACK1", "STRIKE", "DIE", "DEAD"],
-      initialAction: "STAND01",
+      actions: mounted
+        ? ["MSTND01", "MWALK", "MRUN", "MATT1", "MSTRIKE", "MDIE", "MDEAD"]
+        : ["STAND01", "WALK", "RUN", "ATTACK1", "STRIKE", "DIE", "DEAD"],
+      initialAction: mounted ? "MSTND01" : "STAND01",
       actionVariant: animationVariant(template),
       ...(animationWeaponType === undefined ? {} : { animationWeaponType }),
+    });
+  }
+
+  createTemplateMantuaInstance(templateIndex: number): Promise<ClassicSkinnedInstanceLease | null> {
+    const template = this.catalog.template(templateIndex);
+    const definition = this.catalog.mantua;
+    if (!template?.visual || !definition || !classicNpcSupportsMantua(template)) {
+      return Promise.resolve(null);
+    }
+    const equipment = template.equipment ?? [];
+    const item = this.catalog.item(equipment[15 * 7] ?? 0);
+    const variant = definition.variants.find((entry) => entry.textureIndex === item?.texture);
+    if (!item || !variant) return Promise.resolve(null);
+    return this.createInstance({
+      skin: definition.skin,
+      parts: [{
+        name: `mantua-${item.index}`,
+        mesh: definition.mesh,
+        texture: variant.texture,
+        alpha: variant.alpha,
+      }],
+      actions: ["STAND01", "WALK", "RUN"],
+      initialAction: "STAND01",
+      quarterStepMs: 40,
     });
   }
 
@@ -138,8 +168,8 @@ export class ClassicSkinnedAssetLibrary {
     try {
       const parts: ClassicSkinnedPart[] = [];
       for (const part of definition.parts) {
-        const key = `${part.texture ?? `fallback:${definition.skin}`}|alpha:${part.alpha ?? "?"}`;
-        const material = await this.retainMaterial(key, part.texture, definition.skin, part.alpha);
+        const key = `${part.texture ?? `fallback:${definition.skin}`}|alpha:${part.alpha ?? "?"}|bright:${part.bright ? 1 : 0}`;
+        const material = await this.retainMaterial(key, part.texture, definition.skin, part.alpha, part.bright);
         materialKeys.push(key);
         parts.push({ name: part.name, model: part.model, material });
       }
@@ -200,7 +230,7 @@ export class ClassicSkinnedAssetLibrary {
       look.animationWeaponType ?? "base",
       animationWeaponTypeOverrides,
       actionVariant,
-      ...look.parts.map((part) => `${part.mesh}>${part.texture ?? "-"}>${part.alpha ?? "?"}`),
+      ...look.parts.map((part) => `${part.mesh}>${part.texture ?? "-"}>${part.alpha ?? "?"}>${part.bright ? "bright" : "default"}`),
     ].join("|");
     return cachedPromise(
       this.#definitions,
@@ -227,7 +257,13 @@ export class ClassicSkinnedAssetLibrary {
     const parts = (await Promise.all(look.parts.map(async (part): Promise<ParsedPart | null> => {
       const model = await this.mesh(part.mesh);
       if (!model || model.influenceCount < 1) return null;
-      return { name: part.name, model, texture: part.texture, alpha: part.alpha ?? null };
+      return {
+        name: part.name,
+        model,
+        texture: part.texture,
+        alpha: part.alpha ?? null,
+        bright: part.bright ?? false,
+      };
     }))).filter((part): part is ParsedPart => part !== null);
     if (parts.length === 0) return null;
 
@@ -317,10 +353,11 @@ export class ClassicSkinnedAssetLibrary {
     textureFile: string | null,
     skin: number,
     alpha: string | null,
+    bright: boolean,
   ): Promise<THREE.MeshLambertMaterial> {
     let entry = this.#materials.get(key);
     if (!entry) {
-      entry = { references: 0, promise: this.loadMaterial(textureFile, skin, alpha) };
+      entry = { references: 0, promise: this.loadMaterial(textureFile, skin, alpha, bright) };
       this.#materials.set(key, entry);
     }
     entry.references++;
@@ -339,7 +376,12 @@ export class ClassicSkinnedAssetLibrary {
     }).catch(() => undefined);
   }
 
-  private async loadMaterial(textureFile: string | null, skin: number, alpha: string | null): Promise<{
+  private async loadMaterial(
+    textureFile: string | null,
+    skin: number,
+    alpha: string | null,
+    bright: boolean,
+  ): Promise<{
     readonly material: THREE.MeshLambertMaterial;
     readonly texture: THREE.Texture | null;
   }> {
@@ -357,11 +399,31 @@ export class ClassicSkinnedAssetLibrary {
         color: texture ? 0xffffff : fallbackColor(skin),
         // CMesh::Render disables D3DRS_ALPHATESTENABLE only for cAlpha 'C'.
         // Dragon alpha in this mode is lighting data, not cutout transparency.
-        alphaTest: alpha === "C" ? 0 : 0.35,
+        alphaTest: bright || alpha === "C" ? 0 : 0.35,
+        transparent: bright,
+        blending: bright ? THREE.AdditiveBlending : THREE.NormalBlending,
+        depthWrite: !bright,
+        emissive: bright ? 0x4d4d4d : 0x000000,
         side: THREE.DoubleSide,
       }),
     };
   }
+}
+
+function classicNpcSupportsMantua(template: MonsterTemplate): boolean {
+  const skin = template.visual?.skin;
+  if (skin !== 0 && skin !== 1 && skin !== 2 && skin !== 3 && skin !== 8) return false;
+  return (template.equipment?.[15 * 7] ?? 0) > 0;
+}
+
+function classicNpcHasLiveMount(template: MonsterTemplate): boolean {
+  const equipment = template.equipment ?? [];
+  const itemIndex = equipment[14 * 7] ?? 0;
+  if (itemIndex < 2_360 || itemIndex >= 2_390) return false;
+  // For legacy mount items BASE_GetItemAbility(EF_MOUNTHP) returns the
+  // little-endian sValue formed by effect0/value0, not an ItemList effect.
+  const mountHp = (equipment[14 * 7 + 1] ?? 0) | ((equipment[14 * 7 + 2] ?? 0) << 8);
+  return mountHp > 0;
 }
 
 function cachedPromise<T>(
@@ -455,6 +517,7 @@ function animationVariant(template: MonsterTemplate): number {
 function classicNpcAnimationWeaponType(
   template: MonsterTemplate,
   catalog: MonsterCatalog,
+  mounted = false,
 ): number | undefined {
   const skin = template.visual?.skin;
   if (skin === undefined || skin < 0 || skin > 4 || skin === 3) return undefined;
@@ -467,6 +530,15 @@ function classicNpcAnimationWeaponType(
   const rightPosition = right?.weaponPosition ?? 0;
 
   if (skin === 0) {
+    if (mounted) {
+      if (leftType === 0 && rightPosition === 128) return 3;
+      if (leftPosition === 192 && rightPosition === 192) return 2;
+      if ([1, 11, 61, 2, 12, 62, 31].includes(leftType)) return 1;
+      if ([21, 22, 23, 13, 3, 63, 32, 33].includes(leftType) && leftPosition === 64) return 4;
+      if (leftType === 101) return 5;
+      if ([102, 103].includes(leftType) && leftPosition === 64) return 1;
+      return 0;
+    }
     if (leftType === 0 && rightPosition === 128) return 2;
     if (leftPosition === 192 && rightPosition === 192) return 4;
     if ([1, 11, 61, 31].includes(leftType)) {
@@ -487,6 +559,15 @@ function classicNpcAnimationWeaponType(
   }
 
   if (skin === 1) {
+    if (mounted) {
+      if (leftType === 0 && rightPosition === 128) return 3;
+      if (leftPosition === 192 && rightPosition === 192) return 2;
+      if ([1, 11, 61, 2, 12, 62, 31].includes(leftType)) return 1;
+      if ([21, 22, 23, 13, 3, 63, 32, 33].includes(leftType) && leftPosition === 64) return 4;
+      if (leftType === 101) return 5;
+      if ([102, 103].includes(leftType) && leftPosition === 64) return 1;
+      return 0;
+    }
     if (leftType === 0 && rightPosition === 128) return 2;
     if (leftPosition === 192 && rightPosition === 192) return 4;
     if (leftType === 3 || leftType === 63) return 10;
@@ -503,6 +584,11 @@ function classicNpcAnimationWeaponType(
   }
 
   if (skin === 2) {
+    if (mounted) {
+      if (leftType === 101) return 1;
+      if ([1, 11, 12, 13, 31, 32, 33].includes(leftType)) return 5;
+      return 0;
+    }
     if (leftType === 101) return 1;
     if (leftType === 12) return 2;
     if (rightPosition === 128 || leftType === 1 || leftType === 11) return 5;

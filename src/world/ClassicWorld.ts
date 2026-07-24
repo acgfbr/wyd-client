@@ -82,6 +82,7 @@ export class ClassicWorld {
   #lastStreamingPosition: WydPosition;
   #desiredFields = new Set<string>();
   #activeFieldKey = "";
+  #effectsEnabled = true;
 
   /** Camada viva de NPCs/monstros; fica nula apenas durante o boot assíncrono. */
   get spawns(): ClassicSpawnManager | null {
@@ -116,7 +117,9 @@ export class ClassicWorld {
   }
 
   setEffectsEnabled(enabled: boolean): void {
+    this.#effectsEnabled = enabled;
     this.#mapObjects.setEffectsEnabled(enabled);
+    this.#spawns?.setEffectsEnabled(enabled);
   }
 
   ambientSoundSources(): readonly ClassicMapAmbientSoundSource[] {
@@ -336,6 +339,7 @@ export class ClassicWorld {
     })
       .then((spawns) => {
         this.#spawns = spawns;
+        spawns.setEffectsEnabled(this.#effectsEnabled);
         this.object.add(spawns.object);
         spawns.update(0, this.#lastStreamingPosition);
       })

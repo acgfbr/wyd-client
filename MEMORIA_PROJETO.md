@@ -29,7 +29,7 @@ anticheat nao devem ser inventadas no frontend.
   rotacao e zoom amplo; A* com colisao e alturas caminhaveis.
 - Modo `G` com velocidade 64, invencibilidade e bypass de colisao isolado do
   movimento normal.
-- Quatro classes jogaveis, 14 montarias nivel 120, Griupan e oito evocacoes do
+- Quatro classes jogaveis, 16 montarias nivel 120, Griupan e oito evocacoes do
   BeastMaster em grupos offline de dez.
 - NPCs e monstros com streaming antecipado, animacao, autonomia, separacao,
   selecao/outline, combate, morte, respawn e drops locais.
@@ -328,6 +328,63 @@ aleatória: usa o nibble alto de `SCORE.Reserved` e o sinal invertido passado
 por `TMHuman::SetAngle`; a rota assume a direção somente quando o ator começa
 a andar.
 
+`Equip[15]` representa uma malha auxiliar, não uma parte do corpo. Para as
+skins aceitas por `TMHuman` (`0/1/2/3/8`), 50 templates carregam a família
+`mt01`/skin `85`: `mt010101.msh`, `mt01.bon`, cinco ANI e seis variantes de
+textura. A `m_OutMatrix` usada como base vem dos bones `6` (skins 0/1), `7`
+(skin 2), `9` (skin 3) e `16` (skin 8). A mantua usa ANI `0/1/2` para
+parada/caminhada/corrida, período de `40 ms` e rotação
+`yaw=-90°/pitch=-180°`. Ela é criada e descartada pelo mesmo streaming do
+ator. O fonte recuperado contém duas leituras indefinidas: declara apenas
+`fMantuaList[4][20]`, mas seleciona linhas 5–8, e tenta reduzir coat mesh 90
+uma única vez. O port usa linha-base para a classe posterior sem tabela e
+normaliza esse mesh pelo slot módulo 40; não reproduzir leitura de memória
+fora do limite foi uma decisão deliberada.
+
+Há 14 templates montados no `npcdb`. Para itens legados `2330..2389`,
+`BASE_GetItemAbility(EF_MOUNTHP)` devolve o `short` little-endian formado por
+`stEffect[0].cEffect/cValue`; procurar um efeito 80 no `ItemList` daria o
+resultado errado. Todos os 14 têm HP positivo e resolvem seis looks:
+Javali, Dragão Menor, Cavalo Leve N, Andaluz N, Fenrir das Sombras e
+Svadilfari. O runtime instancia o animal no mesmo lease pool, aplica
+`m_fScale * m_fMountScale`, ancora o corpo no `m_OutMatrix`/seat bone e usa as
+ações montadas do cavaleiro (`MSTND`, `MWALK`, `MATT`, `MSTRIKE`, `MDIE`) em
+sincronia com as ANI do animal. O yaw pertence ao animal; capa e armas seguem
+o rider. Cavalo Leve N e Andaluz N acrescentaram os looks visuais 323/325 e
+seus arreios `hs010304/hs010306`, levando o seletor compartilhado a 16
+montarias sem criar outra família de rig.
+
+`Equip[13]` possui um branch visual específico que não deve ser confundido
+com o Griupan do jogador. Quatro templates (`Cav. Mortal`, `Gárgula Sábio`,
+`Redmiron` e `Verdes`) carregam o item `769`, que cria Nyerdes como
+`TMEffectSkinMesh` level 4: skin `32/ag01`, LOOK `1/0`, malha
+`ag010102`, escala `1,2`, ação `RUN` e motion type `5`. O familiar fica
+`0,3` unidade atrás, orbita em raio `0,1` a cada segundo e oscila
+verticalmente sobre `2 × escala do dono`. A cada frame clássico ele emite a
+textura de efeito `0`, cor `0xFFAAFFEE`, vida `1,5 s`, velocidade vertical
+`-0,5` e uma das cinco dimensões autoradas. O runtime preserva o resultado com
+um único batch instanciado de até 512 billboards. `g_bHideEffect` não oculta
+os levels 3–6: por isso `V` desliga somente o rastro de Nyerdes, nunca sua
+malha.
+
+Os efeitos intrínsecos das criaturas não estão no `npcdb`: são uma cadeia de
+condições em `TMHuman::RenderEffect`. Seus pontos não são centros genéricos do
+ator. `CFrame::UpdateFrames` escreve `m_vecTempPos[0..10]` a partir de bones e
+offsets distintos para cada `m_nBoneAniIndex`. A tabela exata dos rigs
+`0/1/2/4/6/7/8/20/25/26/28/29` foi portada para
+`ClassicMonsterPersistentEffects`. No corpus atual, 61 templates usam
+billboards persistentes (caveiras, olhos, golems, demônios e elfos com
+mantua), enquanto 47 satisfazem emissores aditivos de dragões, minotauros,
+javalis/lobos, elfos, trolls ou orcs. Texturas sequenciais são trocadas a cada
+`80 ms` como `m_nCycleIndex`, e todos os quads são agrupados por textura em
+instancing global. A pool transitória é limitada a 2.048 partículas.
+
+Há uma inconsistência real no branch do Dragão Esmeralda: a criação preenche
+`m_pEyeFire[8/9]`, mas `RenderEffect_EmeraldDragon` consulta
+`m_pEyeFire2[1/2]`, que não recebe valor em nenhum outro ponto do fonte
+recuperado. O port não inventa uma ligação entre esses arrays; conserva
+somente a partícula cinza executável desse branch.
+
 O C.C possui modos desligado, fisico, magico e suporte. No continuo, procura um
 hostil alem do alcance imediato e entrega a aproximacao ao A*. Alvos sem rota
 entram em cooldown local de 1,5 s. O macro web ordenavel e uma extensao do
@@ -413,7 +470,7 @@ refinamento, Ancient e preco estatico quando aplicavel.
 
 - Homologacao visual ainda e necessaria em 1024x768, widescreen e iPhone.
 - O cache persistente inicial usa `precache-armia.json` e o service worker
-  `/wyd-cache-sw.js`. O pacote atual contém 780 arquivos/32,9 MiB necessários
+  `/wyd-cache-sw.js`. O pacote atual contém 810 arquivos/33,4 MiB necessários
   ao primeiro cenário de Armia, tem chave derivada do conteúdo, valida quota,
   pede persistência, retoma entradas ausentes e pode ser interrompido ou limpo
   sem bloquear o fallback de rede. Os demais mapas continuam lazy. A

@@ -109,7 +109,7 @@ A matriz fisica e reproduzivel agora e gerada por
 `bun run audit:coverage` em `docs/matriz-cobertura-classico.md` e
 `docs/matriz-cobertura-classico.json`. O gerador cruza o manifesto com os
 arquivos existentes e importa as definicoes TypeScript do runtime para nao
-confundir asset presente com feature jogavel. No snapshot atual existem 2.449
+confundir asset presente com feature jogavel. No snapshot atual existem 3.885
 caminhos unicos declarados e nenhum ausente; os 111 Fields possuem 111 TRN,
 108 DAT declarados e 103 minimapas declarados. As ausencias de DAT/minimapa
 nos demais Fields fazem parte do proprio manifesto, nao sao links quebrados.
@@ -121,8 +121,8 @@ nos demais Fields fazem parte do proprio manifesto, nao sao links quebrados.
 | Objetos/props | DAT/WYS/MSH, água, folhas/árvores/fauna/navios com ANI instanciada, fogueiras, fontes, floats, TMDust 531, tetos/partículas TMHouse, reflexos de céu e composições 1846/1980/2035 | `MapObjects`, `MapWater`, `ClassicEnvironmentObjects`, `MapEffects`, `MapMeshEffects` | Homologar pontos de grama e famílias ambientais raras |
 | Personagem | Quatro classes jogáveis, rigs, traje base, arma, montaria/familiar | `PlayerClasses`, `ClassicPlayerAvatar` | Cobertura completa de equipamentos visuais por classe |
 | Huntress | Mulher Kalintz, Skytalos Ancient +15, Griupan, 17 skills promovidas | `HuntressLooks`, `ClassicHuntressSkillEffects`, `ClassicAlchemyCatalog`, `ClassicLevelUpEffects` | 17 passivas e 2 casts ainda fora do runtime |
-| Montarias | 14 montarias nível 120, Unicórnio padrão, sela/bones | `MountLooks`, `ClassicMount` | Homologação visual de todas as variações |
-| NPCs/monstros | Spawn por Field, animação, hover/seleção, IA offline, drops e armas Equip[6]/[7] nos bones de mão | `MonsterCatalog`, `ClassicSpawnManager` | Homologar skins/armas e ações especiais por amostragem |
+| Montarias | 16 montarias nível 120, Unicórnio padrão, sela/bones | `MountLooks`, `ClassicMount` | Homologação visual de todas as variações |
+| NPCs/monstros | Spawn por Field, animação, hover/seleção, IA offline, drops, armas Equip[6]/[7], 14 montarias Equip[14], 50 mantuas Equip[15], Nyerdes e efeitos intrínsecos instanciados em 61+47 templates | `MonsterCatalog`, `ClassicSpawnManager`, `ClassicNyerdesParticles`, `ClassicMonsterPersistentEffects` | Homologar skins/equipamentos e efeitos especiais por amostragem; completar branches default/shade/fauna restantes |
 | BeastMaster | 8 evocações (10 por cast), IA offline e 5 transformações de rig | `BeastMasterSummons`, `ClassicBeastMasterSummon`, `BeastMasterTransformations` | Invocação Final e fórmulas autoritativas ainda dependem do servidor |
 | Inventário/equipamento | UI 7.54, bolsas, equip/unequip, cargo, preview 3D, Extração e Alquimia somente leitura | `GameHud`, `ClassicInventoryPreview`, `ClassicAlchemyCatalog` | Compra/venda/economia e resultado das combinações somente com servidor |
 | Itens/comércio | 6.500 ItemList, ItemPrice, Carry de NPC, tooltips clássicos e footprint EF_GRID | `ClassicCommerceCatalog`, `PlayerState`, `ClassicItemTooltip` | Ownership/decadência de drops e economia autoritativa |
@@ -147,7 +147,11 @@ nos demais Fields fazem parte do proprio manifesto, nao sao links quebrados.
   `Equip[6]/Equip[7]`: 76 MSAs cobrem 224 templates e 269 attachments,
   incluindo o espelhamento/rotação das duas garras `EF_WTYPE 41`. Os rigs
   humanoides cruzam o tipo com `nPos/position@136` nos mesmos branches de
-  `CheckWeapon` para escolher seu banco ANI. A lacuna restante é validar
+  `CheckWeapon` para escolher seu banco ANI. `Equip[14]`, `Equip[15]` e o
+  Nyerdes `769` de `Equip[13]` também possuem os attachments, ações e
+  lifecycle de streaming derivados de `TMHuman`. `RenderEffect` cobre ainda
+  61 perfis persistentes e 47 perfis de emissão aditiva por meio dos pontos
+  exatos de `CFrame::UpdateFrames`. A lacuna restante é validar
   famílias visuais, armas e ações especiais por amostragem; casos com skin
   incorreta devem ser corrigidos no catálogo/importador para beneficiar todos
   os spawns.
@@ -212,7 +216,7 @@ nos demais Fields fazem parte do proprio manifesto, nao sao links quebrados.
 2. Testar o shutdown central em reload/pagehide real e bfcache Safari.
 3. Medir o boot e a troca das quatro classes em desktop/iPhone para homologar
    os novos chunks e registrar a baseline real.
-4. Homologar por amostragem as famílias de monstros/NPCs e as 14 montarias, em
+4. Homologar por amostragem as famílias de monstros/NPCs e as 16 montarias, em
    vez de manter todos residentes.
 5. Voltar ao épico de skills somente com uma lista curta por lote, mantendo a
    regra de não cair em efeito genérico silencioso e separando passivas/regras

@@ -213,6 +213,7 @@ for (const transformation of BEAST_MASTER_TRANSFORMATIONS) {
 
 // Equip[13] item #1726 (Griupan): TMHuman creates skin 32 with LOOK_INFO
 // Mesh0/Skin0 = 2/0. TMSkinMesh therefore resolves the familiar to ag010103.
+// Item #769 (Nyerdes) uses Mesh0/Skin0 = 1/0 and resolves to ag010102.
 // BM skills #50/#53 create the same skin with look 0/0, resolving their
 // motion-4 fairies/protector to ag010101. Both looks use the [angel]
 // ag010101.ani clip.
@@ -222,6 +223,11 @@ await copyFile(path.join(meshRoot, "ag010101.msh"), path.join(griupanRoot, "ag01
 await writeFile(
   path.join(griupanRoot, "ag010101.dds"),
   decodeWys(await readFile(path.join(meshRoot, "ag010101.wys"))),
+);
+await copyFile(path.join(meshRoot, "ag010102.msh"), path.join(griupanRoot, "ag010102.msh"));
+await writeFile(
+  path.join(griupanRoot, "ag010102.dds"),
+  decodeWys(await readFile(path.join(meshRoot, "ag010102.wys"))),
 );
 await copyFile(path.join(meshRoot, "ag010103.msh"), path.join(griupanRoot, "ag010103.msh"));
 await writeFile(

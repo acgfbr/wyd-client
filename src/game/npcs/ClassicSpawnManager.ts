@@ -27,13 +27,27 @@ import {
   classicNpcInteractionCode,
   classifyClassicNpcInteraction,
 } from "./ClassicNpcInteraction";
-import { MonsterCatalog, type MonsterGenerator, type MonsterTemplate } from "./MonsterCatalog";
+import {
+  MonsterCatalog,
+  type MonsterGenerator,
+  type MonsterTemplate,
+  type MonsterVisualFamily,
+} from "./MonsterCatalog";
 import {
   classicQuestResetSecondsRemaining,
   classicTimedQuestForGenerator,
   formatClassicQuestReset,
   isInsideClassicTimedQuest,
 } from "../quests/ClassicTimedQuests";
+import {
+  mountLookForItemIndex,
+  type ClassicMountLookDefinition,
+} from "../player/MountLooks";
+import { ClassicNyerdesParticles } from "./ClassicNyerdesParticles";
+import {
+  classicMonsterEmissionPeriod,
+  ClassicMonsterPersistentEffects,
+} from "./ClassicMonsterPersistentEffects";
 
 export type {
   ClassicActorSoundEvent,
@@ -87,6 +101,39 @@ const CLASSIC_HAND_BONES = [
   [34, 44],
   [34, 44],
 ] as const;
+const CLASSIC_MANTUA_ANCHOR_BONES = new Map([
+  [0, 6],
+  [1, 6],
+  [2, 7],
+  [3, 9],
+  [8, 16],
+]);
+const CLASSIC_MANTUA_LENGTHS = [
+  [0.09, 0.08, 0.06, 0.07, 0.08, 0.08, 0.08, 0.065, 0.065, 0.055, 0.055, 0.01, 0.08, 0, 0.02, 0.01, 0.01, 0.035, 0.1, 0.03],
+  [0.1, 0.1, 0.1, 0.1, 0.1, 0.08, 0.1, 0.1, 0.1, 0.11, 0.1, 0.08, 0.09, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.08],
+  [0.08, 0.06, 0.05, 0.07, 0.05, 0.08, 0.08, 0.05, 0, 0.11, 0.08, 0.06, 0.055, 0, 0, 0, 0, 0, 0.1, 0.01],
+  [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.08, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.08],
+] as const;
+const CLASSIC_NPC_MOUNT_ACTIONS = [
+  "STAND01",
+  "WALK",
+  "RUN",
+  "ATTACK1",
+  "STRIKE",
+  "DIE",
+  "DEAD",
+] as const;
+const NYERDES_ITEM_INDEX = 769;
+const NYERDES_ROOT = "player/familiars/ag01";
+const NYERDES_FAMILY: MonsterVisualFamily = {
+  base: "ag01",
+  declaredParts: 1,
+  meshParts: [1],
+  skeleton: `${NYERDES_ROOT}/ag01.bon`,
+  clips: [`${NYERDES_ROOT}/ag010101.ani`],
+  actionSet: "angel",
+  actions: { RUN: [0, 10, 0] },
+};
 const LOOPING_SOUND_ACTIONS = new Set([
   "STAND01",
   "STAND02",
@@ -139,6 +186,16 @@ interface SpawnedActor {
   readonly generator: MonsterGenerator;
   readonly object: THREE.Group;
   readonly lease: ClassicSkinnedInstanceLease;
+  readonly mantuaLease: ClassicSkinnedInstanceLease | null;
+  readonly mountLease: ClassicSkinnedInstanceLease | null;
+  readonly mountLook: ClassicMountLookDefinition | null;
+  readonly familiarLease: ClassicSkinnedInstanceLease | null;
+  readonly familiarAnchor: THREE.Group | null;
+  familiarPhase: number;
+  familiarParticleAccumulator: number;
+  familiarRandomState: number;
+  specialEffectAccumulator: number;
+  specialEffectRandomState: number;
   readonly weaponModelTypes: readonly number[];
   readonly position: { x: number; y: number };
   readonly spawnPosition: WydPosition;
@@ -208,6 +265,8 @@ interface StreamedSpawnField {
 export class ClassicSpawnManager {
   readonly object = new THREE.Group();
   readonly #assets: ClassicSkinnedAssetLibrary;
+  readonly #nyerdesParticles: ClassicNyerdesParticles;
+  readonly #persistentEffects: ClassicMonsterPersistentEffects;
   readonly #availableFields = new Set<string>();
   #activeFieldKey = "";
   #activeColumn = -1;
@@ -219,6 +278,7 @@ export class ClassicSpawnManager {
   #friendlyHoverId: string | null = null;
   #hostileHoverId: string | null = null;
   #selectedHostileId: string | null = null;
+  #effectsEnabled = true;
   readonly #lifeStates = new Map<string, PersistentLifeState>();
   readonly #listeners = new Map<
     ClassicMonsterEventName,
@@ -233,10 +293,14 @@ export class ClassicSpawnManager {
     private readonly environment: ClassicSpawnEnvironment,
   ) {
     this.#assets = new ClassicSkinnedAssetLibrary(assets, catalog);
+    this.#nyerdesParticles = new ClassicNyerdesParticles(assets);
+    this.#persistentEffects = new ClassicMonsterPersistentEffects(assets, catalog);
     for (const field of assets.manifest.fields) {
       this.#availableFields.add(fieldKey(field.column, field.row));
     }
     this.object.name = "classic-npcs-and-monsters";
+    this.object.add(this.#nyerdesParticles.object);
+    this.object.add(this.#persistentEffects.object);
   }
 
   static async create(
@@ -255,8 +319,23 @@ export class ClassicSpawnManager {
     this.#hostileHoverId = null;
     this.#selectedHostileId = null;
     this.#listeners.clear();
+    this.#nyerdesParticles.dispose();
+    this.#persistentEffects.dispose();
     this.object.removeFromParent();
     this.object.clear();
+  }
+
+  /**
+   * g_bHideEffect suppresses the Nyerdes trail, but deliberately keeps its
+   * skinned familiar visible just like TMEffectSkinMesh levels 3–6.
+   */
+  setEffectsEnabled(enabled: boolean): void {
+    this.#effectsEnabled = enabled;
+    this.#nyerdesParticles.setEnabled(enabled);
+    this.#persistentEffects.setEnabled(enabled);
+    if (!enabled) {
+      for (const actor of this.#actors) actor.familiarParticleAccumulator = 0;
+    }
   }
 
   snapshot(id: string): ClassicMonsterSnapshot | null {
@@ -519,6 +598,7 @@ export class ClassicSpawnManager {
     if (this.#selectedHostileId) this.refreshHostileOutline(this.#selectedHostileId);
     const animateDistanceSquared = FIELD_WORLD_SIZE * FIELD_WORLD_SIZE * 2.25;
     const nowSeconds = this.routeClockSeconds();
+    this.#persistentEffects.beginFrame(nowSeconds, deltaSeconds);
     const questResetSeconds = classicQuestResetSecondsRemaining();
     const previousPositions = this.#actors.map((actor) => ({ ...actor.position }));
     for (const actor of this.#actors) {
@@ -543,16 +623,50 @@ export class ClassicSpawnManager {
       if (isActorAlive(actor) && actor.moving && movedX * movedX + movedY * movedY > 1e-6) {
         const targetYaw = classicYawForVelocity(movedX, movedY);
         actor.yaw = smoothAngle(actor.yaw, targetYaw, Math.min(1, Math.max(0, deltaSeconds) * 10));
-        actor.lease.model.setClassicTransform({ yaw: actor.yaw });
+        setActorVisualYaw(actor);
+      }
+      if (actor.familiarLease && actor.familiarAnchor) {
+        actor.familiarPhase = (
+          actor.familiarPhase + Math.max(0, Math.min(deltaSeconds, 0.1)) * Math.PI * 2
+        ) % (Math.PI * 2);
+        setNyerdesMotion(
+          actor.familiarAnchor,
+          actor.familiarLease,
+          actor.yaw,
+          classicMobScale(actor.template),
+          actor.familiarPhase,
+        );
       }
       const dx = actor.position.x - playerPosition.x;
       const dy = actor.position.y - playerPosition.y;
       const distanceSquared = dx * dx + dy * dy;
       const fieldVisible = actor.object.parent?.visible !== false;
+      const actorScale = classicMobScale(actor.template);
+      if (
+        this.#effectsEnabled
+        && actor.familiarAnchor
+        && fieldVisible
+        && actor.object.visible
+        && distanceSquared <= animateDistanceSquared
+      ) {
+        actor.familiarParticleAccumulator += Math.max(0, Math.min(deltaSeconds, 0.1));
+        const emissionPeriod = 1 / 60;
+        if (actor.familiarParticleAccumulator >= emissionPeriod) {
+          actor.familiarParticleAccumulator %= emissionPeriod;
+          actor.familiarRandomState = xorshift32(actor.familiarRandomState);
+          this.#nyerdesParticles.spawn(actor.familiarAnchor, actor.familiarRandomState);
+        }
+      } else {
+        actor.familiarParticleAccumulator = 0;
+      }
       if (fieldVisible && actor.object.visible && distanceSquared <= animateDistanceSquared) {
         // m_cFreeze multiplies the classic frame period by 1.15, therefore the
         // equivalent elapsed animation time is divided by the same factor.
-        actor.lease.model.update(actor.freezeRemainingSeconds > 0 ? deltaSeconds / 1.15 : deltaSeconds);
+        const animationDelta = actor.freezeRemainingSeconds > 0 ? deltaSeconds / 1.15 : deltaSeconds;
+        actor.lease.model.update(animationDelta);
+        actor.mantuaLease?.model.update(animationDelta);
+        actor.mountLease?.model.update(animationDelta);
+        actor.familiarLease?.model.update(animationDelta);
       }
       this.updateActorSound(actor, nowSeconds, playerPosition, fieldVisible);
       actor.label.visible = fieldVisible && isActorAlive(actor) && distanceSquared <= 40 * 40;
@@ -572,7 +686,37 @@ export class ClassicSpawnManager {
       // vertical value while hidden and resolve the authoritative height on
       // the very frame its terrain becomes resident.
       if (fieldVisible) actor.object.position.y = this.environment.heightAt(actor.position);
+      if (
+        fieldVisible
+        && actor.object.visible
+        && distanceSquared <= animateDistanceSquared
+        && isActorAlive(actor)
+      ) {
+        const emissionPeriod = classicMonsterEmissionPeriod(actor.template, actorScale);
+        if (this.#effectsEnabled && emissionPeriod !== null) {
+          actor.specialEffectAccumulator += Math.max(0, Math.min(deltaSeconds, 0.1));
+          if (actor.specialEffectAccumulator >= emissionPeriod) {
+            actor.specialEffectAccumulator %= emissionPeriod;
+            actor.specialEffectRandomState = this.#persistentEffects.emitActor(
+              actor.template,
+              actor.lease,
+              actorScale,
+              actor.specialEffectRandomState,
+            );
+          }
+        } else {
+          actor.specialEffectAccumulator = 0;
+        }
+        this.#persistentEffects.addActor(
+          actor.template,
+          actor.lease,
+          actorScale,
+          actor.animationPhaseSeconds,
+        );
+      }
     }
+    this.#nyerdesParticles.update(deltaSeconds);
+    this.#persistentEffects.endFrame();
   }
 
   private updateActorSound(
@@ -752,6 +896,9 @@ export class ClassicSpawnManager {
     resetActorRoute(actor);
     playActorAction(actor, ["STAND01"], true);
     actor.lease.model.update(actor.animationPhaseSeconds);
+    actor.mantuaLease?.model.update(actor.animationPhaseSeconds);
+    actor.mountLease?.model.update(actor.animationPhaseSeconds);
+    actor.familiarLease?.model.update(actor.animationPhaseSeconds);
     actor.nextAttackAtSeconds = nowSeconds + 0.5 + stableUnit(actor.separationSeed >>> 7) * 0.8;
     updateStatusSprite(actor);
     if (this.#selectedHostileId === actor.id || this.#hostileHoverId === actor.id) {
@@ -899,8 +1046,19 @@ export class ClassicSpawnManager {
   private async createActor(spec: SpawnSpec): Promise<SpawnedActor | null> {
     const template = this.catalog.template(spec.templateIndex);
     if (!template || template.missing || !template.visual) return null;
-    const lease = await this.#assets.createTemplateInstance(spec.templateIndex);
-    if (!lease) return null;
+    const mountLook = classicNpcMountLook(template);
+    const [lease, mantuaLease, mountLease, familiarLease] = await Promise.all([
+      this.#assets.createTemplateInstance(spec.templateIndex),
+      this.#assets.createTemplateMantuaInstance(spec.templateIndex),
+      this.createEquipmentMount(mountLook),
+      this.createEquipmentFamiliar(template),
+    ]);
+    if (!lease) {
+      mantuaLease?.release();
+      mountLease?.release();
+      familiarLease?.release();
+      return null;
+    }
     const weaponModelTypes: number[] = [];
     try {
       const id = stableActorId(spec);
@@ -924,19 +1082,53 @@ export class ClassicSpawnManager {
       const routeMode = routeModeFor(spec.generator, route, enablesFriendlyIdle);
       const animationPhaseSeconds = classicAnimationPhase(spec);
       const initialYaw = spawnYaw(template);
-      lease.model.setClassicTransform({
-        yaw: initialYaw,
-        scale,
-        mirrorModelZ: true,
-      });
-      lease.model.update(animationPhaseSeconds);
-      lease.model.object.updateMatrixWorld(true);
-      const collisionRadius = classicCollisionRadius(lease.model.object);
-      const ai = classicAiProfile(spec, template, collisionRadius);
       const actor = new THREE.Group();
       actor.name = `spawn-${spec.generator.id}-${template.key}-${spec.ordinal}`;
       actor.userData[TARGET_ID_USER_DATA_KEY] = id;
-      actor.add(lease.model.object);
+      if (mountLease && mountLook) {
+        mountLease.model.setClassicTransform({
+          yaw: initialYaw,
+          scale: scale * mountLook.mountScale,
+          mirrorModelZ: true,
+        });
+        mountLease.model.update(animationPhaseSeconds);
+        actor.add(mountLease.model.object);
+        const seat = mountLease.model.bones[mountLook.seatBone] ?? mountLease.model.object;
+        seat.add(lease.model.object);
+        lease.model.setClassicBaseAttachment(mountLook.riderAttachment);
+      } else {
+        lease.model.setClassicTransform({
+          yaw: initialYaw,
+          scale,
+          mirrorModelZ: true,
+        });
+        actor.add(lease.model.object);
+      }
+      lease.model.update(animationPhaseSeconds);
+      if (mantuaLease) {
+        this.attachEquipmentMantua(template, lease, mantuaLease, mountLook);
+        mantuaLease.model.update(animationPhaseSeconds);
+      }
+      const familiarAnchor = familiarLease ? new THREE.Group() : null;
+      const familiarPhase = classicNyerdesPhase(spec.position.x);
+      if (familiarLease && familiarAnchor) {
+        familiarAnchor.name = `npc-nyerdes-${template.key}`;
+        familiarAnchor.add(familiarLease.model.object);
+        actor.add(familiarAnchor);
+        familiarLease.model.setClassicTransform({
+          yaw: initialYaw,
+          scale: 1.2,
+          mirrorModelZ: true,
+        });
+        familiarLease.model.update(animationPhaseSeconds);
+        setNyerdesMotion(familiarAnchor, familiarLease, initialYaw, scale, familiarPhase);
+      }
+      actor.updateMatrixWorld(true);
+      const collisionRadius = Math.max(
+        classicCollisionRadius(lease.model.object),
+        mountLease ? classicCollisionRadius(mountLease.model.object) : 0,
+      );
+      const ai = classicAiProfile(spec, template, collisionRadius);
       const label = createStatusSprite(template, lease.model.object, scale);
       actor.add(label.sprite);
       const questResetLabel = spec.generator.id === 3524 && template.key === "Coveiro"
@@ -945,6 +1137,8 @@ export class ClassicSpawnManager {
       if (questResetLabel) actor.add(questResetLabel.sprite);
       await this.attachEquipmentWeapons(template, lease, weaponModelTypes);
       for (const mesh of lease.model.meshes) mesh.userData[TARGET_ID_USER_DATA_KEY] = id;
+      for (const mesh of mantuaLease?.model.meshes ?? []) mesh.userData[TARGET_ID_USER_DATA_KEY] = id;
+      for (const mesh of mountLease?.model.meshes ?? []) mesh.userData[TARGET_ID_USER_DATA_KEY] = id;
       const spawned: SpawnedActor = {
         id,
         name,
@@ -953,6 +1147,16 @@ export class ClassicSpawnManager {
         generator: spec.generator,
         object: actor,
         lease,
+        mantuaLease,
+        mountLease,
+        mountLook,
+        familiarLease,
+        familiarAnchor,
+        familiarPhase,
+        familiarParticleAccumulator: 0,
+        familiarRandomState: spawnHash(spec.generator, spec.ordinal + 1_907) || 1,
+        specialEffectAccumulator: 0,
+        specialEffectRandomState: spawnHash(spec.generator, spec.ordinal + 2_111) || 1,
         weaponModelTypes,
         position: { ...spec.position },
         spawnPosition: { ...spec.position },
@@ -1011,9 +1215,64 @@ export class ClassicSpawnManager {
       return spawned;
     } catch {
       for (const type of weaponModelTypes) this.models.release(type);
+      mantuaLease?.release();
+      mountLease?.release();
+      familiarLease?.release();
       lease.release();
       return null;
     }
+  }
+
+  /** TMHuman renders skin 85 from Equip[15] against the body's m_OutMatrix. */
+  private attachEquipmentMantua(
+    template: MonsterTemplate,
+    body: ClassicSkinnedInstanceLease,
+    mantua: ClassicSkinnedInstanceLease,
+    mountLook: ClassicMountLookDefinition | null,
+  ): void {
+    const placement = classicNpcMantuaPlacement(template, this.catalog, mountLook);
+    if (!placement) return;
+    const anchor = body.model.bones[placement.boneIndex] ?? body.model.object;
+    anchor.add(mantua.model.object);
+    mantua.model.setClassicBaseAttachment(placement.transform);
+  }
+
+  private createEquipmentMount(
+    look: ClassicMountLookDefinition | null,
+  ): Promise<ClassicSkinnedInstanceLease | null> {
+    if (!look) return Promise.resolve(null);
+    return this.#assets.createInstance({
+      skin: look.skin,
+      family: look.family.visual,
+      parts: look.parts.map((part, index) => ({
+        name: `npc-mount-${look.key}-part-${index + 1}-${part.name}`,
+        mesh: `player/mounts/${look.family.base}/${part.meshStem}.msh`,
+        texture: `player/mounts/${look.family.base}/${part.textureStem}.dds`,
+        alpha: part.alpha,
+      })),
+      actions: CLASSIC_NPC_MOUNT_ACTIONS,
+      initialAction: "STAND01",
+    });
+  }
+
+  private createEquipmentFamiliar(
+    template: MonsterTemplate,
+  ): Promise<ClassicSkinnedInstanceLease | null> {
+    if ((template.equipment?.[13 * 7] ?? 0) !== NYERDES_ITEM_INDEX) return Promise.resolve(null);
+    return this.#assets.createInstance({
+      skin: 32,
+      family: NYERDES_FAMILY,
+      parts: [{
+        name: `npc-nyerdes-${template.key}`,
+        mesh: `${NYERDES_ROOT}/ag010102.msh`,
+        texture: `${NYERDES_ROOT}/ag010102.dds`,
+        alpha: "N",
+        bright: true,
+      }],
+      actions: ["RUN"],
+      initialAction: "RUN",
+      quarterStepMs: 10,
+    });
   }
 
   /**
@@ -1329,6 +1588,133 @@ function isActorAlive(actor: SpawnedActor): boolean {
   return actor.life.deadAtSeconds === null && actor.life.hp > 0;
 }
 
+function classicNpcMountLook(template: MonsterTemplate): ClassicMountLookDefinition | null {
+  const equipment = template.equipment ?? [];
+  const itemIndex = equipment[14 * 7] ?? 0;
+  if (itemIndex < 2_360 || itemIndex >= 2_390) return null;
+  const mountHp = (equipment[14 * 7 + 1] ?? 0) | ((equipment[14 * 7 + 2] ?? 0) << 8);
+  return mountHp > 0 ? mountLookForItemIndex(itemIndex) : null;
+}
+
+function classicNyerdesPhase(ownerStartX: number): number {
+  return ((((ownerStartX * 100) % 1_000) + 1_000) % 1_000) / 1_000 * Math.PI * 2;
+}
+
+function xorshift32(value: number): number {
+  let state = value >>> 0;
+  state ^= state << 13;
+  state ^= state >>> 17;
+  state ^= state << 5;
+  return state >>> 0 || 1;
+}
+
+function setNyerdesMotion(
+  anchor: THREE.Group,
+  familiar: ClassicSkinnedInstanceLease,
+  ownerYaw: number,
+  ownerScale: number,
+  phase: number,
+): void {
+  const behind = ownerYaw - Math.PI;
+  const offsetX = Math.cos(behind) * 0.3 + Math.cos(phase) * 0.1;
+  const offsetY = Math.sin(behind) * 0.3 + Math.sin(phase) * 0.1;
+  anchor.position.set(
+    offsetX,
+    2 * ownerScale + Math.sin(phase) * 0.05,
+    -offsetY,
+  );
+  familiar.model.setClassicTransform({ yaw: ownerYaw });
+}
+
+function classicNpcMantuaPlacement(
+  template: MonsterTemplate,
+  catalog: MonsterCatalog,
+  mountLook: ClassicMountLookDefinition | null,
+): {
+  readonly boneIndex: number;
+  readonly transform: {
+    readonly length: number;
+    readonly scale: number;
+    readonly length2: number;
+    readonly yaw: number;
+    readonly pitch: number;
+  };
+} | null {
+  const skin = template.visual?.skin;
+  const boneIndex = skin === undefined ? undefined : CLASSIC_MANTUA_ANCHOR_BONES.get(skin);
+  const equipment = template.equipment ?? [];
+  const mantleItemIndex = equipment[15 * 7] ?? 0;
+  if (boneIndex === undefined || mantleItemIndex <= 0) return null;
+  const mantuaPitch = -Math.PI + classicMantuaMountPitchOffset(mountLook?.skin);
+
+  const headItemIndex = equipment[0] ?? 0;
+  if (headItemIndex === 22 || headItemIndex === 23) {
+    return { boneIndex, transform: { length: 0.07, scale: 1.2, length2: -0.2, yaw: -Math.PI / 2, pitch: mantuaPitch } };
+  }
+  if (headItemIndex === 24) {
+    return { boneIndex, transform: { length: 0, scale: 1.2, length2: 0, yaw: -Math.PI / 2, pitch: mantuaPitch } };
+  }
+  if (headItemIndex === 25) {
+    return { boneIndex, transform: { length: 0.01, scale: 1, length2: 0.05, yaw: -Math.PI / 2, pitch: mantuaPitch } };
+  }
+  if (headItemIndex === 26) {
+    return { boneIndex, transform: { length: 0.07, scale: 1.2, length2: 0.05, yaw: -Math.PI / 2, pitch: mantuaPitch } };
+  }
+
+  const itemClass = template.visual?.itemClass ?? 0;
+  // The recovered source declares four rows but its later switch names rows
+  // 5..8. Accessing those is undefined C++ behaviour. All currently rendered
+  // templates except one resolve to the four preserved rows; the lone later
+  // class safely falls back to the retail base row instead of reading garbage.
+  const classRow = itemClass === 2 || itemClass === 38
+    ? 1
+    : itemClass === 4
+      ? 2
+      : itemClass === 8
+        ? 3
+        : 0;
+  const coatItem = catalog.item(equipment[2 * 7] ?? 0);
+  const rawCoatMesh = coatItem?.mesh
+    ?? template.visual?.parts.find((part) => part[0] === 3)?.[2]
+    ?? 0;
+  const onceReduced = rawCoatMesh < 40 ? rawCoatMesh : rawCoatMesh - 40;
+  // Mesh 90 also exists in the database although the recovered client only
+  // subtracts 40 once. Modulo 40 keeps its authored family slot (10) without
+  // reproducing an out-of-bounds table read.
+  const coatSlot = onceReduced >= 0 && onceReduced < 20
+    ? onceReduced
+    : ((rawCoatMesh % 40) + 40) % 40;
+  let length: number = CLASSIC_MANTUA_LENGTHS[classRow]?.[coatSlot] ?? 0;
+  let length2 = 0;
+  if (mantleItemIndex >= 3_197 && mantleItemIndex <= 3_199) {
+    length = 0.11;
+    length2 = 0.05;
+  } else if (mantleItemIndex === 573 || mantleItemIndex === 1_767 || mantleItemIndex === 1_770) {
+    length = 0.15;
+    length2 = 0.05;
+  }
+  return {
+    boneIndex,
+    transform: {
+      length,
+      scale: skin === 1 ? 0.9 : 1,
+      length2,
+      yaw: -Math.PI / 2,
+      pitch: mantuaPitch,
+    },
+  };
+}
+
+function classicMantuaMountPitchOffset(skin: number | undefined): number {
+  if (skin === 25) return 0.1;
+  if (skin === 28 || skin === 31) return 0.15;
+  if (skin === 29 || skin === 40) return 0.18;
+  if (skin === 39 || skin === 30) return 0.25;
+  if (skin === 38) return 0.26;
+  if (skin === 20) return 0.5;
+  return 0;
+}
+
 function classicMaximumHp(template: MonsterTemplate): number {
   const raw = template.currentScore?.[5] ?? template.baseScore?.[5] ?? 1;
   return Math.max(1, Math.min(50_000_000, Math.trunc(Number.isFinite(raw) ? raw : 1)));
@@ -1578,7 +1964,7 @@ function faceActor(actor: SpawnedActor, target: WydPosition, deltaSeconds: numbe
   if (dx * dx + dy * dy <= 1e-6) return;
   const targetYaw = classicYawForVelocity(dx, dy);
   actor.yaw = smoothAngle(actor.yaw, targetYaw, Math.min(1, Math.max(0, deltaSeconds) * 12));
-  actor.lease.model.setClassicTransform({ yaw: actor.yaw });
+  setActorVisualYaw(actor);
 }
 
 function distanceBetween(left: WydPosition, right: WydPosition): number {
@@ -1711,7 +2097,7 @@ function seekActorRoute(actor: SpawnedActor, worldAgeSeconds: number): void {
       const dy = target.y - actor.position.y;
       if (dx * dx + dy * dy > 1e-6) {
         actor.yaw = classicYawForVelocity(dx, dy);
-        actor.lease.model.setClassicTransform({ yaw: actor.yaw });
+        setActorVisualYaw(actor);
       }
     }
   }
@@ -1758,22 +2144,62 @@ function advanceWaypoint(actor: SpawnedActor): void {
 
 function setActorMoving(actor: SpawnedActor, moving: boolean): void {
   const action = moving ? "WALK" : "STAND01";
-  if (actor.moving === moving && actor.currentAction === action) return;
+  const bodyAction = actorBodyAction(actor, action);
+  if (actor.moving === moving && actor.currentAction === bodyAction) return;
   actor.moving = moving;
   if (playActorAction(actor, [action]) !== null) {
     // `play` restarts at zero. Give every actor a stable phase so equal mobs
     // do not march or idle in lockstep after changing action.
     actor.lease.model.update(actor.animationPhaseSeconds);
+    actor.mantuaLease?.model.update(actor.animationPhaseSeconds);
+    actor.mountLease?.model.update(actor.animationPhaseSeconds);
+    actor.familiarLease?.model.update(actor.animationPhaseSeconds);
   }
 }
 
 function playActorAction(actor: SpawnedActor, actions: readonly string[], restart = false): number | null {
   for (const action of actions) {
-    if (!actor.lease.model.play(action, restart)) continue;
-    actor.currentAction = action;
-    return actor.lease.actionDurationSeconds(action) ?? 0;
+    const bodyAction = actorBodyAction(actor, action);
+    if (!actor.lease.model.play(bodyAction, restart)) continue;
+    actor.currentAction = bodyAction;
+    // Retail maps every non-stand/non-run owner motion to mantle ANI 1. Its
+    // SetAnimation early-out means repeated attacks do not restart the cape.
+    actor.mantuaLease?.model.play(
+      action === "STAND01" || action === "STAND02"
+        ? "STAND01"
+        : action === "RUN"
+          ? "RUN"
+          : "WALK",
+    );
+    actor.mountLease?.model.play(action, restart);
+    return actor.lease.actionDurationSeconds(bodyAction) ?? 0;
   }
   return null;
+}
+
+function actorBodyAction(actor: SpawnedActor, action: string): string {
+  if (!actor.mountLease) return action;
+  switch (action) {
+    case "STAND01": return "MSTND01";
+    case "STAND02": return "MSTND02";
+    case "WALK": return "MWALK";
+    case "RUN": return "MRUN";
+    case "ATTACK1": return "MATT1";
+    case "ATTACK2": return "MATT2";
+    case "ATTACK3": return "MATT3";
+    case "STRIKE": return "MSTRIKE";
+    case "DIE": return "MDIE";
+    case "DEAD": return "MDEAD";
+    case "SKILL01": return "MSKIL01";
+    case "SKILL02": return "MSKIL02";
+    case "SKILL03": return "MSKIL03";
+    case "LEVELUP": return "MLVLUP";
+    default: return action;
+  }
+}
+
+function setActorVisualYaw(actor: SpawnedActor): void {
+  (actor.mountLease?.model ?? actor.lease.model).setClassicTransform({ yaw: actor.yaw });
 }
 
 function resetActorRoute(actor: SpawnedActor): void {
@@ -2302,7 +2728,10 @@ function disposeActor(actor: SpawnedActor): void {
   disposeActorFriendlyOutline(actor);
   disposeActorHostileOutline(actor);
   restoreActorAffectMaterials(actor);
+  actor.familiarLease?.release();
+  actor.mantuaLease?.release();
   actor.lease.release();
+  actor.mountLease?.release();
   actor.labelMaterial.dispose();
   actor.labelTexture.dispose();
   actor.questResetLabelMaterial?.dispose();

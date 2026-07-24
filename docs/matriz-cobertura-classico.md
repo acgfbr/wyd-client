@@ -1,12 +1,12 @@
 # Matriz automatica de cobertura do cliente classico
 
-Gerado por `bun run audit:coverage` em 2026-07-24T01:15:00.878Z. Este arquivo e
+Gerado por `bun run audit:coverage` em 2026-07-24T02:21:05.030Z. Este arquivo e
 derivado dos artefatos importados e do runtime; nao deve ser editado
 manualmente. A analise e as decisoes ficam em `auditoria-threejs-cobertura.md`.
 
 ## Integridade dos imports
 
-- 2449 caminhos unicos referenciados pelo manifesto.
+- 3885 caminhos unicos referenciados pelo manifesto.
 - 0 caminhos referenciados ausentes.
 - 111 Fields: 111 TRN,
   108 DAT declarados e 103
@@ -28,10 +28,10 @@ Nenhum arquivo referenciado pelo manifesto esta ausente.
 | Texturas de ambiente | `textures/env` | 238 | 2.5 MiB | .dds 238 |
 | Texturas de efeitos | `textures/effects` | 499 | 16.2 MiB | .dds 499 |
 | Texturas de agua | `textures/water` | 5 | 67.0 KiB | .dds 5 |
-| Monstros/NPCs | `monsters` | 1340 | 37.2 MiB | .ani 555, .bon 47, .dds 337, .json 1, .msh 400 |
-| Player | `player` | 509 | 29.6 MiB | .ani 171, .bon 23, .dds 130, .msa 5, .msh 180 |
-| Montarias | `player/mounts` | 144 | 5.5 MiB | .ani 77, .bon 10, .dds 21, .msh 36 |
-| Familiares | `player/familiars` | 6 | 128.7 KiB | .ani 1, .bon 1, .dds 2, .msh 2 |
+| Monstros/NPCs | `monsters` | 1353 | 37.3 MiB | .ani 560, .bon 48, .dds 343, .json 1, .msh 401 |
+| Player | `player` | 518 | 29.8 MiB | .ani 171, .bon 23, .dds 134, .msa 5, .msh 185 |
+| Montarias | `player/mounts` | 151 | 5.6 MiB | .ani 77, .bon 10, .dds 24, .msh 40 |
+| Familiares | `player/familiars` | 8 | 195.4 KiB | .ani 1, .bon 1, .dds 3, .msh 3 |
 | Evocacoes | `player/summons` | 94 | 3.2 MiB | .ani 63, .bon 7, .dds 9, .msh 15 |
 | UI | `ui` | 37 | 6.5 MiB | .json 2, .png 34, .ttf 1 |
 | Dados | `data` | 1 | 158.8 KiB | .json 1 |
@@ -49,7 +49,7 @@ Nenhum arquivo referenciado pelo manifesto esta ausente.
 | Modelos de objetos | 963 |
 | Templates de NPC/monstro | 377 |
 | Geradores de NPC/monstro | 3937 |
-| Familias visuais | 47 |
+| Familias visuais | 48 |
 | Objetos skinned catalogados | 49 |
 | Registros de item | 6500 |
 | Mapeamentos de icone | 6500 |
@@ -59,7 +59,7 @@ Nenhum arquivo referenciado pelo manifesto esta ausente.
 | Arquivos de audio importados | 336 |
 | Entradas SFX no catalogo de audio | 333 |
 | Musicas no catalogo de audio | 13 |
-| IDs distintos de ação do AniSound | 82 |
+| IDs distintos de ação do AniSound | 83 |
 | IDs de ação do AniSound ausentes | 0 |
 
 Templates de NPC/monstro nao resolvidos: 0.
@@ -75,7 +75,7 @@ Templates comerciais nao resolvidos: 0.
 | Huntress | 14 |
 
 - Looks especializados da Huntress: 12.
-- Montarias selecionaveis: 14, em
+- Montarias selecionaveis: 16, em
   9 familias (bd02, be01, bo01, dr01, dr02, hs01, tg01, tw01, wf01).
 - Evocacoes do BeastMaster: 8.
 
@@ -107,7 +107,7 @@ visual; a homologacao do renderer continua manual e rastreada em
 
 ## Lacunas objetivas
 
-- Audio: 333 entradas de SFX e 13 musicas; 82 IDs distintos do AniSound usados por atores, com 0 ausentes; 4 referencias do soundlist nao existem no corpus.
+- Audio: 333 entradas de SFX e 13 musicas; 83 IDs distintos do AniSound usados por atores, com 0 ausentes; 4 referencias do soundlist nao existem no corpus.
 - Skills importadas mas ainda nao promovidas aparecem na tabela acima.
 - Compra, venda, ownership, economia, drops e formulas autoritativas dependem
   do futuro servidor e nao podem ser inferidos desta matriz de assets.

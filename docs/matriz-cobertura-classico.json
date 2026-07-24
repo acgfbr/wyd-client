@@ -1,9 +1,9 @@
 {
-  "generatedAt": "2026-07-24T01:15:00.878Z",
+  "generatedAt": "2026-07-24T02:21:05.030Z",
   "command": "bun run audit:coverage",
   "source": "WYD classic",
   "referencedFiles": {
-    "total": 2449,
+    "total": 3885,
     "missing": []
   },
   "maps": {
@@ -25,7 +25,7 @@
     "templates": 377,
     "generators": 3937,
     "itemRecords": 369,
-    "visualFamilies": 47,
+    "visualFamilies": 48,
     "skinnedObjects": 49,
     "unresolvedTemplates": []
   },
@@ -53,7 +53,7 @@
       }
     ],
     "huntressLooks": 12,
-    "mounts": 14,
+    "mounts": 16,
     "mountFamilies": [
       "bd02",
       "be01",
@@ -368,7 +368,7 @@
         "source": "sound/weather/weath03.wav"
       }
     ],
-    "actorActionSounds": 82,
+    "actorActionSounds": 83,
     "missingActorActionSounds": []
   },
   "screenshots": {
@@ -443,51 +443,51 @@
     {
       "label": "Monstros/NPCs",
       "directory": "monsters",
-      "files": 1340,
-      "bytes": 38987616,
+      "files": 1353,
+      "bytes": 39092267,
       "extensions": {
-        ".ani": 555,
-        ".bon": 47,
-        ".dds": 337,
+        ".ani": 560,
+        ".bon": 48,
+        ".dds": 343,
         ".json": 1,
-        ".msh": 400
+        ".msh": 401
       }
     },
     {
       "label": "Player",
       "directory": "player",
-      "files": 509,
-      "bytes": 30993141,
+      "files": 518,
+      "bytes": 31238417,
       "extensions": {
         ".ani": 171,
         ".bon": 23,
-        ".dds": 130,
+        ".dds": 134,
         ".msa": 5,
-        ".msh": 180
+        ".msh": 185
       }
     },
     {
       "label": "Montarias",
       "directory": "player/mounts",
-      "files": 144,
-      "bytes": 5718852,
+      "files": 151,
+      "bytes": 5895796,
       "extensions": {
         ".ani": 77,
         ".bon": 10,
-        ".dds": 21,
-        ".msh": 36
+        ".dds": 24,
+        ".msh": 40
       }
     },
     {
       "label": "Familiares",
       "directory": "player/familiars",
-      "files": 6,
-      "bytes": 131780,
+      "files": 8,
+      "bytes": 200112,
       "extensions": {
         ".ani": 1,
         ".bon": 1,
-        ".dds": 2,
-        ".msh": 2
+        ".dds": 3,
+        ".msh": 3
       }
     },
     {

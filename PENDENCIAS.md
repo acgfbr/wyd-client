@@ -28,6 +28,10 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
 - O Griupan item `1726` está homologado como familiar padrão independente da
   montaria, usando `32/ag01`, malha `ag010103`, animação, seguimento flutuante
   tipo `5` e partículas clássicas.
+- O Nyerdes item `769` de quatro templates do `npcdb` usa a variante
+  `ag010102`, animação `RUN`, órbita tipo `5` e o rastro aditivo do efeito
+  `0`; a tecla global `V` suprime somente as partículas, preservando a malha
+  como nas exceções `3..6` de `g_bHideEffect`.
 - O recorte da Huntress formado por Ilusão `#73`, Imunidade `#76`, Ligação
   Espectral `#81`, Explosão Etérea `#86`, Troca de Espírito `#87`, Lâmina das
   Sombras `#88` e Força Espectral `#101`
@@ -475,10 +479,11 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
     a manter esse contrato. A matriz automatica por
     arquivo importado foi concluida: `bun run audit:coverage` cruza o manifesto,
     o corpus fisico e as definicoes TypeScript do runtime, gerando Markdown e
-    JSON em `docs/matriz-cobertura-classico.*`. O snapshot atual valida 2.449
-    caminhos declarados sem faltantes, 111 TRN, 108 DAT declarados, 103
+    JSON em `docs/matriz-cobertura-classico.*`. O snapshot atual valida 3.885
+    caminhos declarados sem faltantes — incluindo agora o grafo interno de
+    MSH/BON/ANI/texturas dos monstros —, 111 TRN, 108 DAT declarados, 103
     minimapas declarados, 377 templates, 3.937 geradores, 6.500 itens, 248
-    skills binárias, 14 montarias e oito evocacoes; tambem explicita por classe
+    skills binárias, 16 montarias e oito evocacoes; tambem explicita por classe
     quais skills ja foram promovidas ao runtime. O code splitting tambem foi
     aplicado: Three.js ocupa um chunk vendor cacheavel, a entrada da aplicacao
     ficou em cerca de 553 KiB minificados e os renderers de Foema, TransKnight
@@ -523,6 +528,46 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
     humanoides; cada lease é liberado no unload. Escala e direção inicial
     também seguem `SetCharHeight`, o `0,9` extra para `Equip[0] < 40` e o
     nibble alto de `SCORE.Reserved`, em vez de tamanho/direção aleatórios.
+    `Equip[15]` também deixou de ser ignorado: 50 templates suportados por
+    `TMHuman` agora instanciam a mantua auxiliar `mt01` (skin `85`), com seis
+    texturas realmente referenciadas, cinco ANI importadas e sincronização
+    parada/caminhada/corrida. A capa acompanha a `m_OutMatrix` recuperada do
+    bone `6`, `7`, `9` ou `16`, conforme a skin, e cada lease sai junto do
+    Field. A declaração recuperada de `fMantuaList[4][20]` contradiz branches
+    que tentam acessar linhas `5..8`, e o coat mesh `90` também excede a
+    redução única do fonte; o runtime evita leitura fora do limite usando a
+    linha-base e o slot de família módulo `40`, deixando essa correção
+    defensiva explicitamente rastreada.
+    Os 14 templates com montaria viva em `Equip[14]` também foram fechados:
+    o decoder respeita o `sValue` little-endian usado por `EF_MOUNTHP`, resolve
+    seis looks reais e prende o cavaleiro ao bone/transform de sela de cada
+    família. Corpo, armas e mantua usam `MSTND/MWALK/MATT/MSTRIKE/MDIE`, o
+    animal recebe suas ANI equivalentes e a direção passa a girar a montaria,
+    não a base anexada do cavaleiro. `Cavalo Leve N` e `Andaluz N`, antes
+    ausentes, elevaram o seletor para 16 montarias e compartilham corretamente
+    o rig `hs01` com arreios `04/06`.
+    `Equip[13]` também foi confrontado com o branch visual de `TMHuman`. Os
+    quatro templates que realmente carregam o item `769` agora instanciam
+    Nyerdes pela família `ag01`, malha/textura `ag010102` e ANI
+    `ag010101`. A órbita conserva o atraso de `0,3`, raio `0,1`, ciclo de
+    `1 s`, oscilação vertical e altura dependente da escala do dono. O emissor
+    clássico de partículas `0xFFAAFFEE` usa vida de `1,5 s`, queda de `0,5`
+    unidade e cinco dimensões sorteadas; no port ele é um batch instanciado
+    único de 512 billboards, em vez de criar uma malha por frame. `V` desliga
+    o rastro, mas não esconde Nyerdes, reproduzindo a exceção do cliente.
+    `TMHuman::RenderEffect` também deixou de ser uma lacuna totalmente
+    silenciosa. Os pontos `m_vecTempPos[0..10]` foram transcritos de
+    `CFrame::UpdateFrames` para os rigs `0/1/2/4/6/7/8/20/25/26/28/29`,
+    incluindo bones e offsets locais. Com isso, 61 templates recebem os
+    billboards persistentes de caveiras, olhos, golems, demônios e elfos com
+    mantua, inclusive os ciclos `11..18` e `101..108`; outros 47 templates
+    entram nos emissores aditivos comprovados de dragões, minotauros,
+    javalis/lobos, elfos, trolls e orcs. A implementação agrega por textura em
+    batches instanciados globais de até 512 quads e mantém no máximo 2.048
+    partículas transitórias, todos obedecendo `V`, distância e streaming. A
+    contradição do Dragão Esmeralda foi preservada: o construtor recuperado
+    preenche `m_pEyeFire[8/9]`, mas o renderer lê `m_pEyeFire2[1/2]`; somente
+    a emissão cinza comprovadamente alcançável foi portada.
     Falta homologar visualmente uma amostra de cada skin humanoide armada.
     As verificações que exigem navegador/dispositivo estão isoladas em
     `docs/checklist-homologacao-manual.md`, com cenário, duração, coordenadas e

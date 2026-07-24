@@ -632,6 +632,53 @@ async function importMonsterCatalog() {
     });
   }
 
+  // Equip[15] is not another body part. TMHuman creates a second TMSkinMesh
+  // (skin 85 / mt01), anchors it to the owner's m_OutMatrix and only changes
+  // LOOK_INFO Skin0 to select the cape texture. Import the shared geometry and
+  // exactly the variants used by renderable humanoid templates.
+  const mantuaTextureIndices = new Set();
+  for (const template of templates) {
+    const skin = template.visual?.skin;
+    if (skin !== 0 && skin !== 1 && skin !== 2 && skin !== 3 && skin !== 8) continue;
+    const mantleItemIndex = template.equipment?.[15 * 7] ?? 0;
+    const mantleItem = readItem(mantleItemIndex);
+    if (mantleItem) mantuaTextureIndices.add(mantleItem.texture);
+  }
+  let mantua;
+  if (mantuaTextureIndices.size > 0) {
+    const skin = 85;
+    const boneAnimation = boneAnimations.get(skin);
+    if (!boneAnimation) throw new Error("Mantua: skin 85 ausente de BoneAni4.txt");
+    usedSkins.add(skin);
+
+    let meshStem = `${boneAnimation.base}0101`.toLowerCase();
+    ({ meshStem } = applyClassicSkinFileExceptions(meshStem, meshStem));
+    const meshSource = meshFiles.get(`${meshStem}.msh`);
+    if (!meshSource) throw new Error(`Mantua: ${meshStem}.msh ausente`);
+    const meshOutput = `${path.basename(meshSource, path.extname(meshSource)).toLowerCase()}.msh`;
+    meshCopies.set(meshSource, meshOutput);
+
+    const variants = [];
+    for (const textureIndex of [...mantuaTextureIndices].sort((left, right) => left - right)) {
+      let textureStem = `${boneAnimation.base}01${String(textureIndex + 1).padStart(2, "0")}`.toLowerCase();
+      ({ textureStem } = applyClassicSkinFileExceptions(meshStem, textureStem));
+      const textureSource = meshFiles.get(`${textureStem}.wys`);
+      if (!textureSource) throw new Error(`Mantua: ${textureStem}.wys ausente`);
+      const textureOutput = `${path.basename(textureSource, path.extname(textureSource)).toLowerCase()}.dds`;
+      textureCopies.set(textureSource, textureOutput);
+      variants.push({
+        textureIndex,
+        texture: `monsters/textures/${textureOutput}`,
+        alpha: modelTextureAlphaByFile.get(textureSource.toLowerCase()) ?? null,
+      });
+    }
+    mantua = {
+      skin,
+      mesh: `monsters/meshes/${meshOutput}`,
+      variants,
+    };
+  }
+
   // TMTree/TMLeaf/TMShip e a pequena fauna não passam pelo MeshList/MSA. O
   // número no DAT escolhe uma família BON+ANI+MSH e preenche LOOK_INFO. É
   // importante importar essa tabela separadamente: os mesmos números no
@@ -729,7 +776,18 @@ async function importMonsterCatalog() {
       animationCopies.set(animationSource, animationOutput);
       clips.push(`monsters/animations/${animationOutput}`);
     }
-    const actionTable = animationActions.get(skin);
+    const actionTable = skin === 85
+      ? {
+          name: "Mantua",
+          // TMHuman::SetAnimation maps stand/run/walk to mt01 ANI 0/2/1.
+          // TMSkinMesh m_dwFPS is forced to 40 for this auxiliary rig.
+          actions: {
+            STAND01: [0, 40],
+            WALK: [1, 40],
+            RUN: [2, 40],
+          },
+        }
+      : animationActions.get(skin);
     visualFamilies[skin] = {
       base: boneAnimation.base.toLowerCase(),
       declaredParts: boneAnimation.partCount,
@@ -802,6 +860,7 @@ async function importMonsterCatalog() {
     items,
     visualFamilies,
     skinnedObjects,
+    ...(mantua ? { mantua } : {}),
     generators: generatorRows,
     unresolvedTemplates,
   };
