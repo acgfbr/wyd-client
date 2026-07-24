@@ -14,6 +14,11 @@ import {
   type ClassicSkinnedInstanceLease,
 } from "../npcs/ClassicSkinnedAssetLibrary";
 import { MonsterCatalog } from "../npcs/MonsterCatalog";
+import type {
+  ClassicEquippedWeaponVisual,
+  ClassicPlayerWeaponLoadout,
+  ClassicWeaponSide,
+} from "./ClassicPlayerWeaponCatalog";
 import {
   classicPlayerClass,
   classicPlayerWeaponForSkin,
@@ -45,6 +50,7 @@ interface ClassicRefinementState {
 }
 
 interface ClassicWeaponVisual {
+  readonly side: ClassicWeaponSide;
   readonly object: THREE.Group;
   readonly effectLength: number;
   readonly refinement: ClassicRefinementState | null;
@@ -53,7 +59,7 @@ interface ClassicWeaponVisual {
 
 /** World-space copy of the live weapon segment used by fixed-function trails. */
 export interface ClassicWeaponEffectSegmentSample {
-  readonly side: "left" | "right";
+  side: "left" | "right";
   readonly base: THREE.Vector3;
   readonly tip: THREE.Vector3;
 }
@@ -69,7 +75,7 @@ export class ClassicPlayerAvatar {
   readonly playerClass: ClassicPlayerClassDefinition;
   readonly look: ClassicPlayerLookDefinition;
   readonly #lease: ClassicSkinnedInstanceLease;
-  readonly #weapon: ClassicWeaponVisual | null;
+  readonly #weapons: readonly ClassicWeaponVisual[];
   readonly #boneSampleA = new THREE.Vector3();
   readonly #boneSampleB = new THREE.Vector3();
   #weaponVisible = true;
@@ -78,12 +84,12 @@ export class ClassicPlayerAvatar {
 
   private constructor(
     lease: ClassicSkinnedInstanceLease,
-    weapon: ClassicWeaponVisual | null,
+    weapons: readonly ClassicWeaponVisual[],
     playerClass: ClassicPlayerClassDefinition,
     look: ClassicPlayerLookDefinition,
   ) {
     this.#lease = lease;
-    this.#weapon = weapon;
+    this.#weapons = weapons;
     this.playerClass = playerClass;
     this.look = look;
     this.templateKey = `${playerClass.name}_${look.key}_${playerClass.defaultWeapon.key}`;
@@ -100,6 +106,7 @@ export class ClassicPlayerAvatar {
     assets: ClassicAssetSource,
     classKey: ClassicPlayerClassKey = "huntress",
     requestedLook?: string | ClassicPlayerLookDefinition,
+    weaponLoadout?: ClassicPlayerWeaponLoadout,
   ): Promise<ClassicPlayerAvatar | null> {
     const playerClass = classicPlayerClass(classKey);
     const look = typeof requestedLook === "object"
@@ -119,23 +126,36 @@ export class ClassicPlayerAvatar {
         alpha: part.alpha,
       })),
       actions: PLAYER_ACTIONS,
-      animationWeaponType: playerClass.defaultWeapon.animationWeaponType,
+      animationWeaponType: weaponLoadout?.animationWeaponType
+        ?? playerClass.defaultWeapon.animationWeaponType,
       animationWeaponTypeByAction: Object.fromEntries(
         MOUNTED_PLAYER_ACTIONS.map((action) => [
           action,
-          playerClass.defaultWeapon.mountedAnimationWeaponType,
+          weaponLoadout?.mountedAnimationWeaponType
+            ?? playerClass.defaultWeapon.mountedAnimationWeaponType,
         ]),
       ),
       initialAction: "STAND02",
       actionVariant: playerClass.classIndex,
     });
     if (!lease) return null;
-    const weapon = await attachClassicWeapon(
-      assets,
-      lease,
-      classicPlayerWeaponForSkin(playerClass.defaultWeapon, skin),
-    ).catch(() => null);
-    return new ClassicPlayerAvatar(lease, weapon, playerClass, look);
+    const weapons = weaponLoadout === undefined
+      ? [
+          await attachClassicWeapon(
+            assets,
+            lease,
+            classicPlayerWeaponForSkin(playerClass.defaultWeapon, skin),
+          ).catch(() => null),
+        ].filter((weapon): weapon is ClassicWeaponVisual => weapon !== null)
+      : (await Promise.all(
+          [weaponLoadout.left, weaponLoadout.right].flatMap((weapon) => (
+            weapon
+              ? [attachEquippedClassicWeapon(assets, lease, skin, weapon, weaponLoadout.left?.modelType)
+                  .catch(() => null)]
+              : []
+          )),
+        )).filter((weapon): weapon is ClassicWeaponVisual => weapon !== null);
+    return new ClassicPlayerAvatar(lease, weapons, playerClass, look);
   }
 
   setYaw(yaw: number): void {
@@ -167,36 +187,45 @@ export class ClassicPlayerAvatar {
   }
 
   setEffectsEnabled(enabled: boolean): void {
-    if (!this.#weapon) return;
-    if (this.#weapon.refinement) this.#weapon.refinement.enabled.value = enabled ? 1 : 0;
-    this.#weapon.spectralForce?.setEnabled(enabled);
+    for (const weapon of this.#weapons) {
+      if (weapon.refinement) weapon.refinement.enabled.value = enabled ? 1 : 0;
+      weapon.spectralForce?.setEnabled(enabled);
+    }
   }
 
   setWeaponVisible(visible: boolean): void {
     this.#weaponVisible = visible;
-    if (this.#weapon) this.#weapon.object.visible = visible;
+    for (const weapon of this.#weapons) weapon.object.visible = visible;
   }
 
   /** DoubleCritical bit 3 starts SForce type 2 for the equipped WTYPE 101. */
   triggerSpectralForce(): void {
-    if (!this.#released && this.#weaponVisible) this.#weapon?.spectralForce?.trigger();
+    if (!this.#released && this.#weaponVisible) {
+      for (const weapon of this.#weapons) weapon.spectralForce?.trigger();
+    }
   }
 
   sampleWeaponEffectSegments(out: ClassicWeaponEffectSegmentSample[]): number {
-    const weapon = this.#weapon;
-    if (this.#released || !this.#weaponVisible || !weapon || !weapon.object.visible) return 0;
-    let sample = out[0];
-    if (!sample) {
-      sample = { side: "left", base: new THREE.Vector3(), tip: new THREE.Vector3() };
-      out[0] = sample;
+    if (this.#released || !this.#weaponVisible) return 0;
+    let count = 0;
+    for (const weapon of this.#weapons) {
+      if (!weapon.object.visible) continue;
+      let sample = out[count];
+      if (!sample) {
+        sample = { side: weapon.side, base: new THREE.Vector3(), tip: new THREE.Vector3() };
+        out[count] = sample;
+      } else {
+        (sample as { side: ClassicWeaponSide }).side = weapon.side;
+      }
+      weapon.object.updateWorldMatrix(true, false);
+      sample.base.set(0, 0, 0).applyMatrix4(weapon.object.matrixWorld);
+      // TMEffectSWSwing shortens m_fMaxZ by 0.1 before choosing one of ten slots.
+      sample.tip
+        .set(0, 0, -Math.max(0, weapon.effectLength - 0.1))
+        .applyMatrix4(weapon.object.matrixWorld);
+      count++;
     }
-    weapon.object.updateWorldMatrix(true, false);
-    sample.base.set(0, 0, 0).applyMatrix4(weapon.object.matrixWorld);
-    // TMEffectSWSwing shortens m_fMaxZ by 0.1 before choosing one of ten slots.
-    sample.tip
-      .set(0, 0, -Math.max(0, weapon.effectLength - 0.1))
-      .applyMatrix4(weapon.object.matrixWorld);
-    return 1;
+    return count;
   }
 
   /**
@@ -247,20 +276,20 @@ export class ClassicPlayerAvatar {
   update(deltaSeconds: number): void {
     if (this.#released) return;
     this.#lease.model.update(deltaSeconds);
-    if (this.#weapon) {
+    for (const weapon of this.#weapons) {
       // TMMesh::Render(1): (serverTime % 4000) / 4000 is added to U and V.
-      const progress = this.#weapon.refinement?.uvProgress;
+      const progress = weapon.refinement?.uvProgress;
       if (progress) progress.value = (progress.value + deltaSeconds / 4) % 1;
-      this.#weapon.spectralForce?.update(deltaSeconds);
+      weapon.spectralForce?.update(deltaSeconds);
     }
   }
 
   release(): void {
     if (this.#released) return;
     this.#released = true;
-    if (this.#weapon) {
-      this.#weapon.spectralForce?.dispose();
-      disposeStaticGroup(this.#weapon.object);
+    for (const weapon of this.#weapons) {
+      weapon.spectralForce?.dispose();
+      disposeStaticGroup(weapon.object);
     }
     this.#lease.release();
   }
@@ -313,7 +342,164 @@ async function attachClassicWeapon(
   holder.add(mesh);
   (lease.model.bones[attachment.boneIndex] ?? lease.model.object).add(holder);
   const effectLength = Math.max(0, -(model.geometry.boundingBox?.min.z ?? 0));
-  return { object: holder, effectLength, refinement: null, spectralForce: null };
+  return { side: "left", object: holder, effectLength, refinement: null, spectralForce: null };
+}
+
+async function attachEquippedClassicWeapon(
+  assets: ClassicAssetSource,
+  lease: ClassicSkinnedInstanceLease,
+  skin: number,
+  weapon: ClassicEquippedWeaponVisual,
+  leftModelType?: number,
+): Promise<ClassicWeaponVisual> {
+  if (weapon.itemIndex === SKYTALOS_ANCIENT_ITEM_INDEX && weapon.side === "left") {
+    return attachSkytalos(assets, lease);
+  }
+  const source = await assets.loadModel(weapon.modelType);
+  if (!source) throw new Error(`Modelo de ${weapon.name} (#${weapon.modelType}) indisponível`);
+  const model = parseMsa(source.buffer);
+  const loader = new ClassicDdsTextureLoader();
+  const textureJobs = new Map<string, Promise<THREE.Texture | null>>();
+  const loadTexture = (file: string): Promise<THREE.Texture | null> => {
+    let job = textureJobs.get(file);
+    if (job) return job;
+    job = loader.loadAsync(assets.dataUrl(file)).then((texture) => {
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.anisotropy = 4;
+      return texture;
+    }).catch(() => null);
+    textureJobs.set(file, job);
+    return job;
+  };
+  const textures = await Promise.all(source.textures.map((file) => (
+    file || weapon.fallbackTexture
+      ? loadTexture(file ?? weapon.fallbackTexture!)
+      : Promise.resolve(null)
+  )));
+  const refinement = weapon.ancient && weapon.refinementTextureIndex !== null
+    ? await loadWeaponRefinementState(assets, loader, weapon.refinementTextureIndex)
+    : null;
+  const materialCount = Math.max(1, model.textureNames.length, textures.length);
+  const materials = Array.from({ length: materialCount }, (_, index) => {
+    const texture = textures[index] ?? textures[0] ?? null;
+    const alpha = source.textureAlphas[index]
+      ?? source.textureAlphas[0]
+      ?? weapon.fallbackAlpha
+      ?? "N";
+    const material = new THREE.MeshLambertMaterial({
+      name: `WYD ${weapon.name}`,
+      map: texture,
+      color: texture ? 0xffffff : 0x8d8d8d,
+      side: THREE.DoubleSide,
+      alphaTest: alpha === "N" ? 0 : 0.25,
+      transparent: alpha !== "N",
+      depthWrite: true,
+    });
+    if (refinement && texture) configureClassicWeaponRefinement(material, refinement);
+    return material;
+  });
+  const mesh = new THREE.Mesh(model.geometry, materials);
+  mesh.name = `weapon-${weapon.side}-${weapon.itemIndex}-${weapon.modelType}`;
+  mesh.userData.itemIndex = weapon.itemIndex;
+  mesh.userData.weaponType = weapon.weaponType;
+  mesh.userData.refinement = weapon.refinement;
+  mesh.userData.ancient = weapon.ancient;
+  mesh.userData.mirroredFromLeft = weapon.mirroredFromLeft === true;
+  mesh.castShadow = true;
+  mesh.frustumCulled = false;
+
+  const attachment = classicHandAttachment(
+    skin,
+    weapon.side,
+    weapon.weaponType === 41,
+    leftModelType,
+  );
+  const holder = new THREE.Group();
+  holder.name = `${weapon.side}-hand-${weapon.itemIndex}-anchor`;
+  holder.matrixAutoUpdate = false;
+  holder.matrix.copy(createClassicD3DLocalMatrix(attachment.transform));
+  holder.matrixWorldNeedsUpdate = true;
+  holder.add(mesh);
+  (lease.model.bones[attachment.boneIndex] ?? lease.model.object).add(holder);
+  const effectLength = Math.max(0, -(model.geometry.boundingBox?.min.z ?? 0));
+  return {
+    side: weapon.side,
+    object: holder,
+    effectLength,
+    refinement,
+    spectralForce: null,
+  };
+}
+
+function classicHandAttachment(
+  skin: number,
+  side: ClassicWeaponSide,
+  rotateClaw: boolean,
+  leftModelType?: number,
+): {
+  readonly boneIndex: number;
+  readonly transform: Parameters<typeof createClassicD3DLocalMatrix>[0];
+} {
+  const femaleRig = skin === 1;
+  const detail = femaleRig ? 0.07 : 0.1;
+  if (side === "right") {
+    // CFrame::Render g_dwHandIndex[skin][0]. The shield offset intentionally
+    // checks LOOK Mesh7 (the left common mesh) in the retail client.
+    const shieldOffset = leftModelType !== undefined
+      && leftModelType > 1700
+      && leftModelType <= 1800
+      ? -0.05
+      : 0;
+    return {
+      boneIndex: femaleRig ? 18 : 19,
+      transform: {
+        x: -detail,
+        y: shieldOffset + 0.01,
+        yaw: Math.PI,
+      },
+    };
+  }
+  if (rotateClaw) {
+    return {
+      boneIndex: femaleRig ? 24 : 25,
+      transform: {
+        x: -detail,
+        y: 0.01,
+        yaw: Math.PI,
+      },
+    };
+  }
+  return {
+    boneIndex: femaleRig ? 24 : 25,
+    transform: {
+      x: -detail,
+      y: -0.01,
+      yaw: femaleRig ? THREE.MathUtils.degToRad(-15) : 0,
+      pitch: femaleRig ? THREE.MathUtils.degToRad(-10) : 0,
+      roll: Math.PI,
+    },
+  };
+}
+
+async function loadWeaponRefinementState(
+  assets: ClassicAssetSource,
+  loader: ClassicDdsTextureLoader,
+  textureIndex: number,
+): Promise<ClassicRefinementState | null> {
+  const url = assets.effectTextureUrl(textureIndex);
+  if (!url) return null;
+  return loader.loadAsync(url).then((texture) => {
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.anisotropy = 4;
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.needsUpdate = true;
+    return {
+      texture,
+      enabled: { value: 1 },
+      uvProgress: { value: 0 },
+    };
+  }).catch(() => null);
 }
 
 function resetObjectTransform(object: THREE.Object3D): void {
@@ -388,7 +574,13 @@ async function attachSkytalos(
     });
   if (spectralForce) holder.add(spectralForce.object);
   (lease.model.bones[24] ?? lease.model.object).add(holder);
-  return { object: holder, effectLength: classicMaxZ, refinement, spectralForce };
+  return {
+    side: "left",
+    object: holder,
+    effectLength: classicMaxZ,
+    refinement,
+    spectralForce,
+  };
 }
 
 function createSkytalosMaterial(
@@ -401,6 +593,14 @@ function createSkytalosMaterial(
     side: THREE.DoubleSide,
     alphaTest: 0.25,
   });
+  configureClassicWeaponRefinement(material, refinement);
+  return material;
+}
+
+function configureClassicWeaponRefinement(
+  material: THREE.MeshLambertMaterial,
+  refinement: ClassicRefinementState,
+): void {
   material.userData.classicRefinement = refinement;
   material.onBeforeCompile = (shader) => {
     shader.uniforms.wydRefinementMap = { value: refinement.texture };
@@ -427,8 +627,7 @@ function createSkytalosMaterial(
         #include <opaque_fragment>`,
       );
   };
-  material.customProgramCacheKey = () => "wyd-skytalos-ancient-plus15-v2";
-  return material;
+  material.customProgramCacheKey = () => "wyd-classic-weapon-refinement-v3";
 }
 
 function disposeStaticGroup(group: THREE.Group): void {

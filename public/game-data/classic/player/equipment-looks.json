@@ -6,10 +6,10 @@
     "hiddenCythera": 4,
     "emptyMesh": 1,
     "withoutClass": 0,
-    "unsupportedPlayerClass": 46,
-    "missingVariantAssets": 25,
-    "importedItems": 945,
-    "importedVariants": 951
+    "unsupportedPlayerClass": 0,
+    "missingVariantAssets": 31,
+    "importedItems": 990,
+    "importedVariants": 1019
   },
   "slots": {
     "helmet": {
@@ -1435,6 +1435,1000 @@
           "meshStem": "ch020392",
           "textureStem": "ch020392",
           "alpha": "N"
+        }
+      ]
+    },
+    {
+      "index": 211,
+      "name": "Arqueiro_Orc_B",
+      "itemClass": 21,
+      "position": 2,
+      "mesh": 1,
+      "texture": 0,
+      "variants": [
+        {
+          "classKey": "transknight",
+          "slot": "helmet",
+          "part": 2,
+          "meshStem": "ch010202",
+          "textureStem": "ch010202",
+          "alpha": "A"
+        },
+        {
+          "classKey": "beastmaster",
+          "slot": "helmet",
+          "part": 2,
+          "meshStem": "ch010222",
+          "textureStem": "ch010222",
+          "alpha": "A"
+        }
+      ]
+    },
+    {
+      "index": 214,
+      "name": "Troll_Machado_B",
+      "itemClass": 25,
+      "position": 2,
+      "mesh": 2,
+      "texture": 0,
+      "variants": [
+        {
+          "classKey": "transknight",
+          "slot": "helmet",
+          "part": 2,
+          "meshStem": "ch010203",
+          "textureStem": "ch010203",
+          "alpha": "A"
+        },
+        {
+          "classKey": "huntress",
+          "slot": "helmet",
+          "part": 2,
+          "meshStem": "ch020223",
+          "textureStem": "ch020223",
+          "alpha": "A"
+        }
+      ]
+    },
+    {
+      "index": 215,
+      "name": "Troll_Martelo_B",
+      "itemClass": 25,
+      "position": 2,
+      "mesh": 3,
+      "texture": 0,
+      "variants": [
+        {
+          "classKey": "transknight",
+          "slot": "helmet",
+          "part": 2,
+          "meshStem": "ch010204",
+          "textureStem": "ch010204",
+          "alpha": "C"
+        },
+        {
+          "classKey": "huntress",
+          "slot": "helmet",
+          "part": 2,
+          "meshStem": "ch020224",
+          "textureStem": "ch020224",
+          "alpha": "A"
+        }
+      ]
+    },
+    {
+      "index": 248,
+      "name": "Roupa_de_Rã",
+      "itemClass": 34,
+      "position": 4,
+      "mesh": 12,
+      "texture": 0,
+      "variants": [
+        {
+          "classKey": "foema",
+          "slot": "armor",
+          "part": 3,
+          "meshStem": "ch020313",
+          "textureStem": "ch020313",
+          "alpha": "N"
+        }
+      ]
+    },
+    {
+      "index": 249,
+      "name": "Calça_de_Rã",
+      "itemClass": 34,
+      "position": 8,
+      "mesh": 12,
+      "texture": 0,
+      "variants": [
+        {
+          "classKey": "foema",
+          "slot": "pants",
+          "part": 4,
+          "meshStem": "ch020413",
+          "textureStem": "ch010430",
+          "alpha": "N"
+        }
+      ]
+    },
+    {
+      "index": 250,
+      "name": "Luva_de_Rã",
+      "itemClass": 34,
+      "position": 16,
+      "mesh": 12,
+      "texture": 0,
+      "variants": [
+        {
+          "classKey": "foema",
+          "slot": "gloves",
+          "part": 5,
+          "meshStem": "ch020513",
+          "textureStem": "ch010530",
+          "alpha": "N"
+        }
+      ]
+    },
+    {
+      "index": 251,
+      "name": "Bota_de_Rã",
+      "itemClass": 34,
+      "position": 32,
+      "mesh": 12,
+      "texture": 0,
+      "variants": [
+        {
+          "classKey": "foema",
+          "slot": "boots",
+          "part": 6,
+          "meshStem": "ch020613",
+          "textureStem": "ch020613",
+          "alpha": "N"
+        }
+      ]
+    },
+    {
+      "index": 253,
+      "name": "Roupa_de_Sapo",
+      "itemClass": 34,
+      "position": 4,
+      "mesh": 13,
+      "texture": 0,
+      "variants": [
+        {
+          "classKey": "foema",
+          "slot": "armor",
+          "part": 3,
+          "meshStem": "ch020314",
+          "textureStem": "ch020314",
+          "alpha": "N"
+        }
+      ]
+    },
+    {
+      "index": 254,
+      "name": "Calça_de_Sapo",
+      "itemClass": 34,
+      "position": 8,
+      "mesh": 13,
+      "texture": 0,
+      "variants": [
+        {
+          "classKey": "foema",
+          "slot": "pants",
+          "part": 4,
+          "meshStem": "ch020414",
+          "textureStem": "ch020414",
+          "alpha": "A"
+        }
+      ]
+    },
+    {
+      "index": 255,
+      "name": "Luva_de_Sapo",
+      "itemClass": 34,
+      "position": 16,
+      "mesh": 13,
+      "texture": 0,
+      "variants": [
+        {
+          "classKey": "foema",
+          "slot": "gloves",
+          "part": 5,
+          "meshStem": "ch020514",
+          "textureStem": "ch020514",
+          "alpha": "N"
+        }
+      ]
+    },
+    {
+      "index": 256,
+      "name": "Bota_de_Sapo",
+      "itemClass": 34,
+      "position": 32,
+      "mesh": 13,
+      "texture": 0,
+      "variants": [
+        {
+          "classKey": "foema",
+          "slot": "boots",
+          "part": 6,
+          "meshStem": "ch020614",
+          "textureStem": "ch020614",
+          "alpha": "N"
+        }
+      ]
+    },
+    {
+      "index": 262,
+      "name": "Corpo_de_Esqueleto",
+      "itemClass": 36,
+      "position": 4,
+      "mesh": 9,
+      "texture": 0,
+      "variants": [
+        {
+          "classKey": "beastmaster",
+          "slot": "armor",
+          "part": 3,
+          "meshStem": "ch010330",
+          "textureStem": "ch010330",
+          "alpha": "N"
+        }
+      ]
+    },
+    {
+      "index": 263,
+      "name": "Calça_de_Esqueleto",
+      "itemClass": 36,
+      "position": 8,
+      "mesh": 9,
+      "texture": 0,
+      "variants": [
+        {
+          "classKey": "beastmaster",
+          "slot": "pants",
+          "part": 4,
+          "meshStem": "ch010430",
+          "textureStem": "ch010430",
+          "alpha": "N"
+        }
+      ]
+    },
+    {
+      "index": 264,
+      "name": "Luva_de_Esqueleto",
+      "itemClass": 36,
+      "position": 16,
+      "mesh": 9,
+      "texture": 0,
+      "variants": [
+        {
+          "classKey": "beastmaster",
+          "slot": "gloves",
+          "part": 5,
+          "meshStem": "ch010530",
+          "textureStem": "ch010530",
+          "alpha": "N"
+        }
+      ]
+    },
+    {
+      "index": 265,
+      "name": "Bota_de_Esqueleto",
+      "itemClass": 36,
+      "position": 32,
+      "mesh": 9,
+      "texture": 0,
+      "variants": [
+        {
+          "classKey": "beastmaster",
+          "slot": "boots",
+          "part": 6,
+          "meshStem": "ch010630",
+          "textureStem": "ch010630",
+          "alpha": "N"
+        }
+      ]
+    },
+    {
+      "index": 266,
+      "name": "Elmo_de_Esqueleto_Chefe",
+      "itemClass": 36,
+      "position": 2,
+      "mesh": 10,
+      "texture": 0,
+      "variants": [
+        {
+          "classKey": "beastmaster",
+          "slot": "helmet",
+          "part": 2,
+          "meshStem": "ch010231",
+          "textureStem": "ch010231",
+          "alpha": "N"
+        }
+      ]
+    },
+    {
+      "index": 267,
+      "name": "Corpo_de_Esqueleto_Chefe",
+      "itemClass": 36,
+      "position": 4,
+      "mesh": 10,
+      "texture": 0,
+      "variants": [
+        {
+          "classKey": "beastmaster",
+          "slot": "armor",
+          "part": 3,
+          "meshStem": "ch010331",
+          "textureStem": "ch010331",
+          "alpha": "N"
+        }
+      ]
+    },
+    {
+      "index": 268,
+      "name": "Calça_de_Esqueleto_Chefe",
+      "itemClass": 36,
+      "position": 8,
+      "mesh": 10,
+      "texture": 0,
+      "variants": [
+        {
+          "classKey": "beastmaster",
+          "slot": "pants",
+          "part": 4,
+          "meshStem": "ch010431",
+          "textureStem": "ch010431",
+          "alpha": "A"
+        }
+      ]
+    },
+    {
+      "index": 269,
+      "name": "Luva_de_Esqueleto_Chefe",
+      "itemClass": 36,
+      "position": 16,
+      "mesh": 10,
+      "texture": 0,
+      "variants": [
+        {
+          "classKey": "beastmaster",
+          "slot": "gloves",
+          "part": 5,
+          "meshStem": "ch010531",
+          "textureStem": "ch010531",
+          "alpha": "N"
+        }
+      ]
+    },
+    {
+      "index": 270,
+      "name": "Bota_de_Esqueleto_Chefe",
+      "itemClass": 36,
+      "position": 32,
+      "mesh": 10,
+      "texture": 0,
+      "variants": [
+        {
+          "classKey": "beastmaster",
+          "slot": "boots",
+          "part": 6,
+          "meshStem": "ch010631",
+          "textureStem": "ch010631",
+          "alpha": "N"
+        }
+      ]
+    },
+    {
+      "index": 272,
+      "name": "Elmo_de_Esqueleto_Mago",
+      "itemClass": 36,
+      "position": 2,
+      "mesh": 11,
+      "texture": 0,
+      "variants": [
+        {
+          "classKey": "beastmaster",
+          "slot": "helmet",
+          "part": 2,
+          "meshStem": "ch010232",
+          "textureStem": "ch010232",
+          "alpha": "N"
+        }
+      ]
+    },
+    {
+      "index": 273,
+      "name": "Corpo_de_Esqueleto_Mago",
+      "itemClass": 36,
+      "position": 4,
+      "mesh": 11,
+      "texture": 0,
+      "variants": [
+        {
+          "classKey": "beastmaster",
+          "slot": "armor",
+          "part": 3,
+          "meshStem": "ch010332",
+          "textureStem": "ch010332",
+          "alpha": "N"
+        }
+      ]
+    },
+    {
+      "index": 274,
+      "name": "Calça_de_Esqueleto_Mago",
+      "itemClass": 36,
+      "position": 8,
+      "mesh": 11,
+      "texture": 0,
+      "variants": [
+        {
+          "classKey": "beastmaster",
+          "slot": "pants",
+          "part": 4,
+          "meshStem": "ch010432",
+          "textureStem": "ch010432",
+          "alpha": "N"
+        }
+      ]
+    },
+    {
+      "index": 275,
+      "name": "Luva_de_Esqueleto_Mago",
+      "itemClass": 36,
+      "position": 16,
+      "mesh": 11,
+      "texture": 0,
+      "variants": [
+        {
+          "classKey": "beastmaster",
+          "slot": "gloves",
+          "part": 5,
+          "meshStem": "ch010532",
+          "textureStem": "ch010532",
+          "alpha": "N"
+        }
+      ]
+    },
+    {
+      "index": 276,
+      "name": "Bota_de_Esqueleto_Mago",
+      "itemClass": 36,
+      "position": 32,
+      "mesh": 11,
+      "texture": 0,
+      "variants": [
+        {
+          "classKey": "beastmaster",
+          "slot": "boots",
+          "part": 6,
+          "meshStem": "ch010632",
+          "textureStem": "ch010632",
+          "alpha": "N"
+        }
+      ]
+    },
+    {
+      "index": 278,
+      "name": "Elmo_de_Esqueleto_Arq",
+      "itemClass": 37,
+      "position": 2,
+      "mesh": 12,
+      "texture": 0,
+      "variants": [
+        {
+          "classKey": "beastmaster",
+          "slot": "helmet",
+          "part": 2,
+          "meshStem": "ch010233",
+          "textureStem": "ch010233",
+          "alpha": "C"
+        }
+      ]
+    },
+    {
+      "index": 279,
+      "name": "Corpo_de_Esqueleto_Arq",
+      "itemClass": 37,
+      "position": 4,
+      "mesh": 12,
+      "texture": 0,
+      "variants": [
+        {
+          "classKey": "transknight",
+          "slot": "armor",
+          "part": 3,
+          "meshStem": "ch010313",
+          "textureStem": "ch010313",
+          "alpha": "N"
+        },
+        {
+          "classKey": "beastmaster",
+          "slot": "armor",
+          "part": 3,
+          "meshStem": "ch010333",
+          "textureStem": "ch010333",
+          "alpha": "C"
+        }
+      ]
+    },
+    {
+      "index": 280,
+      "name": "Calça_de_de_Esqueleto_Arq",
+      "itemClass": 37,
+      "position": 8,
+      "mesh": 12,
+      "texture": 0,
+      "variants": [
+        {
+          "classKey": "transknight",
+          "slot": "pants",
+          "part": 4,
+          "meshStem": "ch010413",
+          "textureStem": "ch010413",
+          "alpha": "N"
+        },
+        {
+          "classKey": "beastmaster",
+          "slot": "pants",
+          "part": 4,
+          "meshStem": "ch010433",
+          "textureStem": "ch010433",
+          "alpha": "C"
+        }
+      ]
+    },
+    {
+      "index": 281,
+      "name": "Luva_de_Esqueleto_Arq",
+      "itemClass": 37,
+      "position": 16,
+      "mesh": 12,
+      "texture": 0,
+      "variants": [
+        {
+          "classKey": "transknight",
+          "slot": "gloves",
+          "part": 5,
+          "meshStem": "ch010513",
+          "textureStem": "ch010513",
+          "alpha": "N"
+        },
+        {
+          "classKey": "beastmaster",
+          "slot": "gloves",
+          "part": 5,
+          "meshStem": "ch010533",
+          "textureStem": "ch010533",
+          "alpha": "C"
+        }
+      ]
+    },
+    {
+      "index": 282,
+      "name": "Bota_de_Esqueleto_Arq",
+      "itemClass": 37,
+      "position": 32,
+      "mesh": 12,
+      "texture": 0,
+      "variants": [
+        {
+          "classKey": "transknight",
+          "slot": "boots",
+          "part": 6,
+          "meshStem": "ch010613",
+          "textureStem": "ch010613",
+          "alpha": "N"
+        },
+        {
+          "classKey": "beastmaster",
+          "slot": "boots",
+          "part": 6,
+          "meshStem": "ch010633",
+          "textureStem": "ch010633",
+          "alpha": "C"
+        }
+      ]
+    },
+    {
+      "index": 285,
+      "name": "Corpo_de_Elfo_Negro_Arq",
+      "itemClass": 38,
+      "position": 2,
+      "mesh": 13,
+      "texture": 0,
+      "variants": [
+        {
+          "classKey": "foema",
+          "slot": "helmet",
+          "part": 2,
+          "meshStem": "ch020214",
+          "textureStem": "ch020214",
+          "alpha": "A"
+        }
+      ]
+    },
+    {
+      "index": 286,
+      "name": "Corpo_de_Elfo_Negro_Mago",
+      "itemClass": 38,
+      "position": 4,
+      "mesh": 14,
+      "texture": 0,
+      "variants": [
+        {
+          "classKey": "foema",
+          "slot": "armor",
+          "part": 3,
+          "meshStem": "ch020315",
+          "textureStem": "ch020314",
+          "alpha": "N"
+        },
+        {
+          "classKey": "beastmaster",
+          "slot": "armor",
+          "part": 3,
+          "meshStem": "ch010335",
+          "textureStem": "ch010335",
+          "alpha": "N"
+        }
+      ]
+    },
+    {
+      "index": 287,
+      "name": "Lendário_Elfo_Negro",
+      "itemClass": 38,
+      "position": 8,
+      "mesh": 13,
+      "texture": 0,
+      "variants": [
+        {
+          "classKey": "foema",
+          "slot": "pants",
+          "part": 4,
+          "meshStem": "ch020414",
+          "textureStem": "ch020414",
+          "alpha": "A"
+        },
+        {
+          "classKey": "beastmaster",
+          "slot": "pants",
+          "part": 4,
+          "meshStem": "ch010434",
+          "textureStem": "ch010434",
+          "alpha": "N"
+        }
+      ]
+    },
+    {
+      "index": 288,
+      "name": "Corpo_do_Lend_Elfo_Arq",
+      "itemClass": 38,
+      "position": 16,
+      "mesh": 13,
+      "texture": 0,
+      "variants": [
+        {
+          "classKey": "foema",
+          "slot": "gloves",
+          "part": 5,
+          "meshStem": "ch020514",
+          "textureStem": "ch020514",
+          "alpha": "N"
+        },
+        {
+          "classKey": "beastmaster",
+          "slot": "gloves",
+          "part": 5,
+          "meshStem": "ch010534",
+          "textureStem": "ch010534",
+          "alpha": "N"
+        }
+      ]
+    },
+    {
+      "index": 289,
+      "name": "Corpo_do_Lend_Elfo_Mago",
+      "itemClass": 38,
+      "position": 32,
+      "mesh": 14,
+      "texture": 0,
+      "variants": [
+        {
+          "classKey": "beastmaster",
+          "slot": "boots",
+          "part": 6,
+          "meshStem": "ch010635",
+          "textureStem": "ch010635",
+          "alpha": "N"
+        }
+      ]
+    },
+    {
+      "index": 377,
+      "name": "Elmo_Kalintz(H)",
+      "itemClass": 60,
+      "position": 2,
+      "mesh": 16,
+      "texture": 0,
+      "variants": [
+        {
+          "classKey": "beastmaster",
+          "slot": "helmet",
+          "part": 2,
+          "meshStem": "ch010237",
+          "textureStem": "ch010137",
+          "alpha": "N"
+        }
+      ]
+    },
+    {
+      "index": 378,
+      "name": "Corpo_Kalintz(H)",
+      "itemClass": 60,
+      "position": 4,
+      "mesh": 16,
+      "texture": 0,
+      "variants": [
+        {
+          "classKey": "beastmaster",
+          "slot": "armor",
+          "part": 3,
+          "meshStem": "ch010337",
+          "textureStem": "ch010337",
+          "alpha": "N"
+        },
+        {
+          "classKey": "huntress",
+          "slot": "armor",
+          "part": 3,
+          "meshStem": "ch020337",
+          "textureStem": "ch020337",
+          "alpha": "A"
+        }
+      ]
+    },
+    {
+      "index": 379,
+      "name": "Calça_Kalintz(H)",
+      "itemClass": 60,
+      "position": 8,
+      "mesh": 16,
+      "texture": 0,
+      "variants": [
+        {
+          "classKey": "beastmaster",
+          "slot": "pants",
+          "part": 4,
+          "meshStem": "ch010437",
+          "textureStem": "ch010437",
+          "alpha": "N"
+        },
+        {
+          "classKey": "huntress",
+          "slot": "pants",
+          "part": 4,
+          "meshStem": "ch020437",
+          "textureStem": "ch020437",
+          "alpha": "A"
+        }
+      ]
+    },
+    {
+      "index": 380,
+      "name": "Manoplas_Kalintz(H)",
+      "itemClass": 60,
+      "position": 16,
+      "mesh": 16,
+      "texture": 0,
+      "variants": [
+        {
+          "classKey": "beastmaster",
+          "slot": "gloves",
+          "part": 5,
+          "meshStem": "ch010537",
+          "textureStem": "ch010537",
+          "alpha": "N"
+        },
+        {
+          "classKey": "huntress",
+          "slot": "gloves",
+          "part": 5,
+          "meshStem": "ch020537",
+          "textureStem": "ch020537",
+          "alpha": "A"
+        }
+      ]
+    },
+    {
+      "index": 381,
+      "name": "Botas_Kalintz(H)",
+      "itemClass": 60,
+      "position": 32,
+      "mesh": 16,
+      "texture": 0,
+      "variants": [
+        {
+          "classKey": "beastmaster",
+          "slot": "boots",
+          "part": 6,
+          "meshStem": "ch010637",
+          "textureStem": "ch010637",
+          "alpha": "N"
+        },
+        {
+          "classKey": "huntress",
+          "slot": "boots",
+          "part": 6,
+          "meshStem": "ch020637",
+          "textureStem": "ch020637",
+          "alpha": "A"
+        }
+      ]
+    },
+    {
+      "index": 383,
+      "name": "Elmo_Kalintz(M)",
+      "itemClass": 61,
+      "position": 2,
+      "mesh": 16,
+      "texture": 0,
+      "variants": [
+        {
+          "classKey": "transknight",
+          "slot": "helmet",
+          "part": 2,
+          "meshStem": "ch010217",
+          "textureStem": "ch010217",
+          "alpha": "N"
+        },
+        {
+          "classKey": "beastmaster",
+          "slot": "helmet",
+          "part": 2,
+          "meshStem": "ch010237",
+          "textureStem": "ch010137",
+          "alpha": "N"
+        }
+      ]
+    },
+    {
+      "index": 384,
+      "name": "Corpo_Kalintz(M)",
+      "itemClass": 61,
+      "position": 4,
+      "mesh": 16,
+      "texture": 0,
+      "variants": [
+        {
+          "classKey": "transknight",
+          "slot": "armor",
+          "part": 3,
+          "meshStem": "ch010317",
+          "textureStem": "ch010317",
+          "alpha": "N"
+        },
+        {
+          "classKey": "beastmaster",
+          "slot": "armor",
+          "part": 3,
+          "meshStem": "ch010337",
+          "textureStem": "ch010337",
+          "alpha": "N"
+        },
+        {
+          "classKey": "huntress",
+          "slot": "armor",
+          "part": 3,
+          "meshStem": "ch020337",
+          "textureStem": "ch020337",
+          "alpha": "A"
+        }
+      ]
+    },
+    {
+      "index": 385,
+      "name": "Calça_Kalintz(M)",
+      "itemClass": 61,
+      "position": 8,
+      "mesh": 16,
+      "texture": 0,
+      "variants": [
+        {
+          "classKey": "transknight",
+          "slot": "pants",
+          "part": 4,
+          "meshStem": "ch010417",
+          "textureStem": "ch010417",
+          "alpha": "N"
+        },
+        {
+          "classKey": "beastmaster",
+          "slot": "pants",
+          "part": 4,
+          "meshStem": "ch010437",
+          "textureStem": "ch010437",
+          "alpha": "N"
+        },
+        {
+          "classKey": "huntress",
+          "slot": "pants",
+          "part": 4,
+          "meshStem": "ch020437",
+          "textureStem": "ch020437",
+          "alpha": "A"
+        }
+      ]
+    },
+    {
+      "index": 386,
+      "name": "Manoplas_Kalintz(M)",
+      "itemClass": 61,
+      "position": 16,
+      "mesh": 16,
+      "texture": 0,
+      "variants": [
+        {
+          "classKey": "transknight",
+          "slot": "gloves",
+          "part": 5,
+          "meshStem": "ch010517",
+          "textureStem": "ch010517",
+          "alpha": "C"
+        },
+        {
+          "classKey": "beastmaster",
+          "slot": "gloves",
+          "part": 5,
+          "meshStem": "ch010537",
+          "textureStem": "ch010537",
+          "alpha": "N"
+        },
+        {
+          "classKey": "huntress",
+          "slot": "gloves",
+          "part": 5,
+          "meshStem": "ch020537",
+          "textureStem": "ch020537",
+          "alpha": "A"
+        }
+      ]
+    },
+    {
+      "index": 387,
+      "name": "Botas_Kalintz(M)",
+      "itemClass": 61,
+      "position": 32,
+      "mesh": 16,
+      "texture": 0,
+      "variants": [
+        {
+          "classKey": "transknight",
+          "slot": "boots",
+          "part": 6,
+          "meshStem": "ch010617",
+          "textureStem": "ch010617",
+          "alpha": "N"
+        },
+        {
+          "classKey": "beastmaster",
+          "slot": "boots",
+          "part": 6,
+          "meshStem": "ch010637",
+          "textureStem": "ch010637",
+          "alpha": "N"
+        },
+        {
+          "classKey": "huntress",
+          "slot": "boots",
+          "part": 6,
+          "meshStem": "ch020637",
+          "textureStem": "ch020637",
+          "alpha": "A"
         }
       ]
     },

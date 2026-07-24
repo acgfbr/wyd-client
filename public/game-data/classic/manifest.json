@@ -3911,6 +3911,33 @@
         null
       ]
     },
+    "31": {
+      "file": "models/31.msa",
+      "textures": [
+        "models/textures/mesh-axe14.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "32": {
+      "file": "models/32.msa",
+      "textures": [
+        "models/textures/mesh-bow15.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "33": {
+      "file": "models/33.msa",
+      "textures": [
+        "models/textures/mesh-bwand09.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
     "34": {
       "file": "models/34.msa",
       "textures": [
@@ -3929,6 +3956,15 @@
         "N"
       ]
     },
+    "36": {
+      "file": "models/36.msa",
+      "textures": [
+        "models/textures/mesh-sword16.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
     "37": {
       "file": "models/37.msa",
       "textures": [
@@ -3942,6 +3978,15 @@
       "file": "models/38.msa",
       "textures": [
         "models/textures/mesh-bsword07.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "39": {
+      "file": "models/39.msa",
+      "textures": [
+        "models/textures/mesh-baxe07.dds"
       ],
       "textureAlphas": [
         "N"
@@ -8387,6 +8432,33 @@
         "A"
       ]
     },
+    "758": {
+      "file": "models/758.msa",
+      "textures": [
+        "models/textures/mesh-axe15.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "759": {
+      "file": "models/759.msa",
+      "textures": [
+        "models/textures/mesh-baxe08.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "760": {
+      "file": "models/760.msa",
+      "textures": [
+        "models/textures/mesh-bsword08.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
     "761": {
       "file": "models/761.msa",
       "textures": [
@@ -8400,6 +8472,24 @@
       "file": "models/762.msa",
       "textures": [
         "models/textures/mesh-bow16.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "763": {
+      "file": "models/763.msa",
+      "textures": [
+        "models/textures/mesh-claw13.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "764": {
+      "file": "models/764.msa",
+      "textures": [
+        "models/textures/mesh-shield13.dds"
       ],
       "textureAlphas": [
         "N"
@@ -8423,10 +8513,82 @@
         "C"
       ]
     },
+    "767": {
+      "file": "models/767.msa",
+      "textures": [
+        "models/textures/mesh-throw14.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "768": {
+      "file": "models/768.msa",
+      "textures": [
+        "models/textures/mesh-wand08.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "769": {
+      "file": "models/769.msa",
+      "textures": [
+        "models/textures/mesh-sword20.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "801": {
+      "file": "models/801.msa",
+      "textures": [
+        "models/textures/mesh-axe01.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "802": {
+      "file": "models/802.msa",
+      "textures": [
+        "models/textures/mesh-axe02.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "803": {
+      "file": "models/803.msa",
+      "textures": [
+        "models/textures/mesh-axe03.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "804": {
+      "file": "models/804.msa",
+      "textures": [
+        "models/textures/mesh-axe04.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
     "806": {
       "file": "models/806.msa",
       "textures": [
         "models/textures/mesh-axe06.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "807": {
+      "file": "models/807.msa",
+      "textures": [
+        "models/textures/mesh-axe07.dds"
       ],
       "textureAlphas": [
         "N"
@@ -8486,6 +8648,51 @@
         "N"
       ]
     },
+    "814": {
+      "file": "models/814.msa",
+      "textures": [
+        "models/textures/mesh-baxe06.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "815": {
+      "file": "models/815.msa",
+      "textures": [
+        "models/textures/mesh-bow01.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "816": {
+      "file": "models/816.msa",
+      "textures": [
+        "models/textures/mesh-bow02.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "817": {
+      "file": "models/817.msa",
+      "textures": [
+        "models/textures/mesh-bow03.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "820": {
+      "file": "models/820.msa",
+      "textures": [
+        "models/textures/mesh-bow06.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
     "821": {
       "file": "models/821.msa",
       "textures": [
@@ -8495,10 +8702,28 @@
         "N"
       ]
     },
+    "822": {
+      "file": "models/822.msa",
+      "textures": [
+        "models/textures/mesh-bow08.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
     "823": {
       "file": "models/823.msa",
       "textures": [
         "models/textures/mesh-bow09.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "824": {
+      "file": "models/824.msa",
+      "textures": [
+        "models/textures/mesh-bow10.dds"
       ],
       "textureAlphas": [
         "N"
@@ -8517,6 +8742,33 @@
       "file": "models/829.msa",
       "textures": [
         "models/textures/mesh-bsword04.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "830": {
+      "file": "models/830.msa",
+      "textures": [
+        "models/textures/mesh-bsword05.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "831": {
+      "file": "models/831.msa",
+      "textures": [
+        "models/textures/mesh-bwand01.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "832": {
+      "file": "models/832.msa",
+      "textures": [
+        "models/textures/mesh-bwand02.dds"
       ],
       "textureAlphas": [
         "N"
@@ -8547,6 +8799,105 @@
       ],
       "textureAlphas": [
         "A"
+      ]
+    },
+    "836": {
+      "file": "models/836.msa",
+      "textures": [
+        "models/textures/mesh-bwand06.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "837": {
+      "file": "models/837.msa",
+      "textures": [
+        "models/textures/mesh-claw01.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "838": {
+      "file": "models/838.msa",
+      "textures": [
+        "models/textures/mesh-claw02.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "839": {
+      "file": "models/839.msa",
+      "textures": [
+        "models/textures/mesh-claw03.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "840": {
+      "file": "models/840.msa",
+      "textures": [
+        "models/textures/mesh-claw04.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "842": {
+      "file": "models/842.msa",
+      "textures": [
+        "models/textures/mesh-claw06.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "843": {
+      "file": "models/843.msa",
+      "textures": [
+        "models/textures/mesh-claw07.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "844": {
+      "file": "models/844.msa",
+      "textures": [
+        "models/textures/mesh-claw08.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "845": {
+      "file": "models/845.msa",
+      "textures": [
+        "models/textures/mesh-shield01.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "846": {
+      "file": "models/846.msa",
+      "textures": [
+        "models/textures/mesh-shield02.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "847": {
+      "file": "models/847.msa",
+      "textures": [
+        "models/textures/mesh-shield03.dds"
+      ],
+      "textureAlphas": [
+        "N"
       ]
     },
     "848": {
@@ -8585,10 +8936,46 @@
         "N"
       ]
     },
+    "852": {
+      "file": "models/852.msa",
+      "textures": [
+        "models/textures/mesh-shield08.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
     "853": {
       "file": "models/853.msa",
       "textures": [
         "models/textures/mesh-shield09.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "854": {
+      "file": "models/854.msa",
+      "textures": [
+        "models/textures/mesh-spear01.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "855": {
+      "file": "models/855.msa",
+      "textures": [
+        "models/textures/mesh-spear02.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "856": {
+      "file": "models/856.msa",
+      "textures": [
+        "models/textures/mesh-spear03.dds"
       ],
       "textureAlphas": [
         "N"
@@ -8621,10 +9008,55 @@
         "N"
       ]
     },
+    "860": {
+      "file": "models/860.msa",
+      "textures": [
+        "models/textures/mesh-spear07.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "861": {
+      "file": "models/861.msa",
+      "textures": [
+        "models/textures/mesh-spear08.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "862": {
+      "file": "models/862.msa",
+      "textures": [
+        "models/textures/mesh-spear09.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
     "863": {
       "file": "models/863.msa",
       "textures": [
         "models/textures/mesh-sword01.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "864": {
+      "file": "models/864.msa",
+      "textures": [
+        "models/textures/mesh-sword02.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "865": {
+      "file": "models/865.msa",
+      "textures": [
+        "models/textures/mesh-sword03.dds"
       ],
       "textureAlphas": [
         "N"
@@ -8639,10 +9071,145 @@
         "N"
       ]
     },
+    "867": {
+      "file": "models/867.msa",
+      "textures": [
+        "models/textures/mesh-sword05.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "868": {
+      "file": "models/868.msa",
+      "textures": [
+        "models/textures/mesh-sword06.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
     "870": {
       "file": "models/870.msa",
       "textures": [
         "models/textures/mesh-sword08.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "871": {
+      "file": "models/871.msa",
+      "textures": [
+        "models/textures/mesh-throw01.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "872": {
+      "file": "models/872.msa",
+      "textures": [
+        "models/textures/mesh-throw02.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "873": {
+      "file": "models/873.msa",
+      "textures": [
+        "models/textures/mesh-throw03.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "874": {
+      "file": "models/874.msa",
+      "textures": [
+        "models/textures/mesh-throw04.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "875": {
+      "file": "models/875.msa",
+      "textures": [
+        "models/textures/mesh-throw05.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "876": {
+      "file": "models/876.msa",
+      "textures": [
+        "models/textures/mesh-throw06.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "877": {
+      "file": "models/877.msa",
+      "textures": [
+        "models/textures/mesh-throw07.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "878": {
+      "file": "models/878.msa",
+      "textures": [
+        "models/textures/mesh-throw08.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "879": {
+      "file": "models/879.msa",
+      "textures": [
+        "models/textures/mesh-throw09.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "881": {
+      "file": "models/881.msa",
+      "textures": [
+        "models/textures/mesh-wand02.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "882": {
+      "file": "models/882.msa",
+      "textures": [
+        "models/textures/mesh-wand03.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "884": {
+      "file": "models/884.msa",
+      "textures": [
+        "models/textures/mesh-wand05.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "886": {
+      "file": "models/886.msa",
+      "textures": [
+        "models/textures/mesh-bsword01.dds"
       ],
       "textureAlphas": [
         "N"
@@ -8684,10 +9251,28 @@
         "N"
       ]
     },
+    "892": {
+      "file": "models/892.msa",
+      "textures": [
+        "models/textures/mesh-arpan.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
     "893": {
       "file": "models/893.msa",
       "textures": [
         "models/textures/mesh-axe09.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "894": {
+      "file": "models/894.msa",
+      "textures": [
+        "models/textures/mesh-axe10.dds"
       ],
       "textureAlphas": [
         "N"
@@ -8702,6 +9287,15 @@
         "N"
       ]
     },
+    "896": {
+      "file": "models/896.msa",
+      "textures": [
+        "models/textures/mesh-axe12.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
     "897": {
       "file": "models/897.msa",
       "textures": [
@@ -8711,10 +9305,46 @@
         "N"
       ]
     },
+    "898": {
+      "file": "models/898.msa",
+      "textures": [
+        "models/textures/mesh-bwand07.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "899": {
+      "file": "models/899.msa",
+      "textures": [
+        "models/textures/mesh-claw09.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "900": {
+      "file": "models/900.msa",
+      "textures": [
+        "models/textures/mesh-claw10.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
     "901": {
       "file": "models/901.msa",
       "textures": [
         "models/textures/mesh-shield10.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "902": {
+      "file": "models/902.msa",
+      "textures": [
+        "models/textures/mesh-shield11.dds"
       ],
       "textureAlphas": [
         "N"
@@ -8738,6 +9368,15 @@
         "N"
       ]
     },
+    "905": {
+      "file": "models/905.msa",
+      "textures": [
+        "models/textures/mesh-sword11.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
     "906": {
       "file": "models/906.msa",
       "textures": [
@@ -8747,10 +9386,28 @@
         "N"
       ]
     },
+    "907": {
+      "file": "models/907.msa",
+      "textures": [
+        "models/textures/mesh-throw10.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
     "908": {
       "file": "models/908.msa",
       "textures": [
         "models/textures/mesh-throw11.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "909": {
+      "file": "models/909.msa",
+      "textures": [
+        "models/textures/mesh-throw12.dds"
       ],
       "textureAlphas": [
         "N"
@@ -8859,6 +9516,15 @@
       "file": "models/924.msa",
       "textures": [
         "models/textures/mesh-sword14.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "925": {
+      "file": "models/925.msa",
+      "textures": [
+        "models/textures/mesh-sword13.dds"
       ],
       "textureAlphas": [
         "N"
@@ -14623,6 +15289,123 @@
         "A"
       ]
     },
+    "2728": {
+      "file": "models/2728.msa",
+      "textures": [
+        "models/textures/mesh-hammer02.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "2748": {
+      "file": "models/2748.msa",
+      "textures": [
+        "models/textures/mesh-rcspear.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "2749": {
+      "file": "models/2749.msa",
+      "textures": [
+        "models/textures/mesh-rcaxe.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "2805": {
+      "file": "models/2805.msa",
+      "textures": [
+        "models/textures/mesh-axe16.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "2806": {
+      "file": "models/2806.msa",
+      "textures": [
+        "models/textures/mesh-baxe10.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "2807": {
+      "file": "models/2807.msa",
+      "textures": [
+        "models/textures/mesh-bsword10.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "2808": {
+      "file": "models/2808.msa",
+      "textures": [
+        "models/textures/mesh-bwand12.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "2809": {
+      "file": "models/2809.msa",
+      "textures": [
+        "models/textures/mesh-bow17.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "2810": {
+      "file": "models/2810.msa",
+      "textures": [
+        "models/textures/mesh-claw15.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "2811": {
+      "file": "models/2811.msa",
+      "textures": [
+        "models/textures/mesh-shield14.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "2812": {
+      "file": "models/2812.msa",
+      "textures": [
+        "models/textures/mesh-spear15.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "2813": {
+      "file": "models/2813.msa",
+      "textures": [
+        "models/textures/mesh-sword21.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "2814": {
+      "file": "models/2814.msa",
+      "textures": [
+        "models/textures/mesh-throw16.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
     "2815": {
       "file": "models/2815.msa",
       "textures": [
@@ -14645,6 +15428,15 @@
       "file": "models/2828.msa",
       "textures": [
         "models/textures/mesh-bshield1.dds"
+      ],
+      "textureAlphas": [
+        "N"
+      ]
+    },
+    "2829": {
+      "file": "models/2829.msa",
+      "textures": [
+        "models/textures/mesh-bsword11.dds"
       ],
       "textureAlphas": [
         "N"
@@ -14688,6 +15480,348 @@
     },
     "2890": {
       "file": "models/2890.msa",
+      "textures": [
+        null
+      ],
+      "textureAlphas": [
+        null
+      ]
+    },
+    "2891": {
+      "file": "models/2891.msa",
+      "textures": [
+        null
+      ],
+      "textureAlphas": [
+        null
+      ]
+    },
+    "2892": {
+      "file": "models/2892.msa",
+      "textures": [
+        "models/textures/mesh-aawbow.dds"
+      ],
+      "textureAlphas": [
+        "A"
+      ]
+    },
+    "2893": {
+      "file": "models/2893.msa",
+      "textures": [
+        null
+      ],
+      "textureAlphas": [
+        null
+      ]
+    },
+    "2894": {
+      "file": "models/2894.msa",
+      "textures": [
+        null
+      ],
+      "textureAlphas": [
+        null
+      ]
+    },
+    "2895": {
+      "file": "models/2895.msa",
+      "textures": [
+        null
+      ],
+      "textureAlphas": [
+        null
+      ]
+    },
+    "2896": {
+      "file": "models/2896.msa",
+      "textures": [
+        null
+      ],
+      "textureAlphas": [
+        null
+      ]
+    },
+    "2897": {
+      "file": "models/2897.msa",
+      "textures": [
+        null
+      ],
+      "textureAlphas": [
+        null
+      ]
+    },
+    "2898": {
+      "file": "models/2898.msa",
+      "textures": [
+        null
+      ],
+      "textureAlphas": [
+        null
+      ]
+    },
+    "2899": {
+      "file": "models/2899.msa",
+      "textures": [
+        null
+      ],
+      "textureAlphas": [
+        null
+      ]
+    },
+    "2900": {
+      "file": "models/2900.msa",
+      "textures": [
+        null
+      ],
+      "textureAlphas": [
+        null
+      ]
+    },
+    "2906": {
+      "file": "models/2906.msa",
+      "textures": [
+        null
+      ],
+      "textureAlphas": [
+        null
+      ]
+    },
+    "2907": {
+      "file": "models/2907.msa",
+      "textures": [
+        null
+      ],
+      "textureAlphas": [
+        null
+      ]
+    },
+    "2908": {
+      "file": "models/2908.msa",
+      "textures": [
+        null
+      ],
+      "textureAlphas": [
+        null
+      ]
+    },
+    "2909": {
+      "file": "models/2909.msa",
+      "textures": [
+        null
+      ],
+      "textureAlphas": [
+        null
+      ]
+    },
+    "2913": {
+      "file": "models/2913.msa",
+      "textures": [
+        null
+      ],
+      "textureAlphas": [
+        null
+      ]
+    },
+    "2914": {
+      "file": "models/2914.msa",
+      "textures": [
+        null
+      ],
+      "textureAlphas": [
+        null
+      ]
+    },
+    "2915": {
+      "file": "models/2915.msa",
+      "textures": [
+        null
+      ],
+      "textureAlphas": [
+        null
+      ]
+    },
+    "2916": {
+      "file": "models/2916.msa",
+      "textures": [
+        null
+      ],
+      "textureAlphas": [
+        null
+      ]
+    },
+    "2917": {
+      "file": "models/2917.msa",
+      "textures": [
+        null
+      ],
+      "textureAlphas": [
+        null
+      ]
+    },
+    "2918": {
+      "file": "models/2918.msa",
+      "textures": [
+        null
+      ],
+      "textureAlphas": [
+        null
+      ]
+    },
+    "2919": {
+      "file": "models/2919.msa",
+      "textures": [
+        null
+      ],
+      "textureAlphas": [
+        null
+      ]
+    },
+    "2920": {
+      "file": "models/2920.msa",
+      "textures": [
+        null
+      ],
+      "textureAlphas": [
+        null
+      ]
+    },
+    "2921": {
+      "file": "models/2921.msa",
+      "textures": [
+        null
+      ],
+      "textureAlphas": [
+        null
+      ]
+    },
+    "2922": {
+      "file": "models/2922.msa",
+      "textures": [
+        null
+      ],
+      "textureAlphas": [
+        null
+      ]
+    },
+    "2923": {
+      "file": "models/2923.msa",
+      "textures": [
+        null
+      ],
+      "textureAlphas": [
+        null
+      ]
+    },
+    "2924": {
+      "file": "models/2924.msa",
+      "textures": [
+        null
+      ],
+      "textureAlphas": [
+        null
+      ]
+    },
+    "2925": {
+      "file": "models/2925.msa",
+      "textures": [
+        null
+      ],
+      "textureAlphas": [
+        null
+      ]
+    },
+    "2926": {
+      "file": "models/2926.msa",
+      "textures": [
+        null
+      ],
+      "textureAlphas": [
+        null
+      ]
+    },
+    "2927": {
+      "file": "models/2927.msa",
+      "textures": [
+        null
+      ],
+      "textureAlphas": [
+        null
+      ]
+    },
+    "2928": {
+      "file": "models/2928.msa",
+      "textures": [
+        null
+      ],
+      "textureAlphas": [
+        null
+      ]
+    },
+    "2929": {
+      "file": "models/2929.msa",
+      "textures": [
+        null
+      ],
+      "textureAlphas": [
+        null
+      ]
+    },
+    "2930": {
+      "file": "models/2930.msa",
+      "textures": [
+        null
+      ],
+      "textureAlphas": [
+        null
+      ]
+    },
+    "2931": {
+      "file": "models/2931.msa",
+      "textures": [
+        null
+      ],
+      "textureAlphas": [
+        null
+      ]
+    },
+    "2932": {
+      "file": "models/2932.msa",
+      "textures": [
+        null
+      ],
+      "textureAlphas": [
+        null
+      ]
+    },
+    "2933": {
+      "file": "models/2933.msa",
+      "textures": [
+        null
+      ],
+      "textureAlphas": [
+        null
+      ]
+    },
+    "2934": {
+      "file": "models/2934.msa",
+      "textures": [
+        null
+      ],
+      "textureAlphas": [
+        null
+      ]
+    },
+    "2935": {
+      "file": "models/2935.msa",
+      "textures": [
+        null
+      ],
+      "textureAlphas": [
+        null
+      ]
+    },
+    "2936": {
+      "file": "models/2936.msa",
       "textures": [
         null
       ],

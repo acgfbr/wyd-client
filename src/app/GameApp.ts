@@ -74,6 +74,7 @@ import {
   hasClassicBodyEquipment,
   loadClassicPlayerEquipmentCatalog,
 } from "../game/player/ClassicPlayerEquipmentCatalog";
+import { loadClassicPlayerWeaponCatalog } from "../game/player/ClassicPlayerWeaponCatalog";
 import {
   DEFAULT_MOUNT_LOOK_KEY,
   MOUNT_LOOKS,
@@ -3582,8 +3583,12 @@ export class GameApp {
       snapshot.equipment.pants?.item.key ?? "-",
       snapshot.equipment.gloves?.item.key ?? "-",
       snapshot.equipment.boots?.item.key ?? "-",
-      leftHand?.key ?? "-",
-      rightHand?.key ?? "-",
+      leftHand
+        ? `${leftHand.key}:${leftHand.refinement ?? 0}:${leftHand.ancient ? 1 : 0}:${leftHand.refinementTextureIndex ?? 0}`
+        : "-",
+      rightHand
+        ? `${rightHand.key}:${rightHand.refinement ?? 0}:${rightHand.ancient ? 1 : 0}:${rightHand.refinementTextureIndex ?? 0}`
+        : "-",
       costume?.key ?? "-",
       mount?.key ?? "-",
       familiar?.key ?? "-",
@@ -3630,8 +3635,6 @@ export class GameApp {
         ? classicBodyEquipmentLookKey(definition.key, bodyEquipment)
       : definition.looks.find((look) => look.key === `${definition.key}-base`)?.key
         ?? definition.defaultLookKey;
-    if (this.#player.avatarLookKey === desiredLookKey) return;
-
     const requestId = ++this.#outfitLoadId;
     const select = document.querySelector<HTMLSelectElement>("#outfit-select");
     const status = document.querySelector<HTMLElement>("#outfit-status");
@@ -3647,9 +3650,17 @@ export class GameApp {
       ? loadClassicPlayerEquipmentCatalog(this.#assets)
         .then((catalog) => catalog.composeLook(definition, bodyEquipment))
       : Promise.resolve(desiredLookKey);
-    void lookRequest.then((look) => {
+    const weaponRequest = loadClassicPlayerWeaponCatalog(this.#assets).then((catalog) => (
+      catalog.composeLoadout(definition, { leftHand, rightHand })
+    ));
+    void Promise.all([lookRequest, weaponRequest]).then(([look, weapons]) => {
       if (requestId !== this.#outfitLoadId) return false;
-      return this.#player?.loadClassicAvatar(this.#assets!, definition.key, look) ?? false;
+      return this.#player?.loadClassicAvatar(
+        this.#assets!,
+        definition.key,
+        look,
+        weapons,
+      ) ?? false;
     }).then((loaded) => {
       if (requestId !== this.#outfitLoadId) return;
       const current = this.#playerState.snapshot;
@@ -3721,7 +3732,19 @@ export class GameApp {
     const requestId = ++this.#outfitLoadId;
     select.disabled = true;
     if (status) status.textContent = `Vestindo ${requestedLook.name}…`;
-    void this.#player.loadClassicAvatar(this.#assets, definition.key, requestedLook.key).then((loaded) => {
+    const equipment = this.#playerState.snapshot.equipment;
+    void loadClassicPlayerWeaponCatalog(this.#assets)
+      .then((catalog) => catalog.composeLoadout(definition, {
+        leftHand: equipment.leftHand?.item ?? null,
+        rightHand: equipment.rightHand?.item ?? null,
+      }))
+      .then((weapons) => this.#player?.loadClassicAvatar(
+        this.#assets!,
+        definition.key,
+        requestedLook.key,
+        weapons,
+      ) ?? false)
+      .then((loaded) => {
       if (requestId !== this.#outfitLoadId) return;
       select.value = this.#player?.avatarLookKey ?? definition.defaultLookKey;
       if (loaded) {
@@ -3731,7 +3754,7 @@ export class GameApp {
         if (status) status.textContent = "Falha ao carregar o traje";
         this.#hud.addLog(`${requestedLook.name} não pôde ser carregado.`, "system");
       }
-    }).finally(() => {
+      }).finally(() => {
       if (requestId === this.#outfitLoadId) select.disabled = false;
     });
   };

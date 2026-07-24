@@ -11,6 +11,7 @@ import {
   ClassicPlayerAvatar,
   type ClassicWeaponEffectSegmentSample,
 } from "./player/ClassicPlayerAvatar";
+import type { ClassicPlayerWeaponLoadout } from "./player/ClassicPlayerWeaponCatalog";
 import { ClassicBeastMasterTransformation } from "./player/ClassicBeastMasterTransformation";
 import type { BeastMasterTransformationDefinition } from "./combat/BeastMasterTransformations";
 import {
@@ -203,13 +204,19 @@ export class Player {
     assets: ClassicAssetSource,
     classKey: ClassicPlayerClassKey = this.#avatarClassKey,
     look?: string | ClassicPlayerLookDefinition,
+    weaponLoadout?: ClassicPlayerWeaponLoadout,
   ): Promise<boolean> {
     if (classKey !== "beastmaster") this.clearClassicBeastMasterTransformation();
     const generation = ++this.#avatarLoadGeneration;
     try {
       const requestedLook = look
         ?? (classKey === this.#avatarClassKey ? this.#avatarLookKey : undefined);
-      const avatar = await ClassicPlayerAvatar.load(assets, classKey, requestedLook);
+      const avatar = await ClassicPlayerAvatar.load(
+        assets,
+        classKey,
+        requestedLook,
+        weaponLoadout,
+      );
       if (!avatar) return false;
       if (this.#disposed || generation !== this.#avatarLoadGeneration) {
         avatar.release();

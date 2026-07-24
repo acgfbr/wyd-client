@@ -204,6 +204,24 @@ for (let index = 0; index < modelTextureList.length / envRecordBytes; index++) {
     String.fromCharCode(modelTextureList[start + 510] ?? 0),
   );
 }
+
+// Equip[6]/Equip[7] are common MeshList MSAs just like NPC hand items, but
+// most player weapons never occur in a Field DAT or NPCGener template. Import
+// every ItemList entry accepted by either hand so equipping an ordinary item
+// cannot depend on that same mesh happening to be used by the current map.
+const playerItemList = Buffer.from(await readFile(path.join(clientRoot, "ItemList.bin")));
+const playerItemRecordBytes = 152;
+if (playerItemList.length % playerItemRecordBytes !== 0) {
+  throw new Error("ItemList.bin possui tamanho inesperado");
+}
+for (let index = 0; index < playerItemList.length; index++) playerItemList[index] ^= 0x5a;
+for (let itemIndex = 1; itemIndex < playerItemList.length / playerItemRecordBytes; itemIndex++) {
+  const offset = itemIndex * playerItemRecordBytes;
+  const position = playerItemList.readUInt16LE(offset + 136);
+  if (position !== 64 && position !== 128 && position !== 192) continue;
+  const modelType = playerItemList.readInt16LE(offset + 64);
+  if (modelType > 0) usedObjectTypes.add(modelType);
+}
 const waterTextures = {};
 for (const index of [1, 2, 3, 8, 9]) {
   const start = index * envRecordBytes;

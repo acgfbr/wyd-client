@@ -1,9 +1,9 @@
 {
-  "generatedAt": "2026-07-24T03:25:40.289Z",
+  "generatedAt": "2026-07-24T03:42:07.934Z",
   "command": "bun run audit:coverage",
   "source": "WYD classic",
   "referencedFiles": {
-    "total": 4844,
+    "total": 5112,
     "missing": []
   },
   "maps": {
@@ -19,7 +19,7 @@
     "terrainTextures": 238,
     "effectTextures": 499,
     "waterTextures": 5,
-    "objectModels": 963
+    "objectModels": 1089
   },
   "monsters": {
     "templates": 377,
@@ -53,8 +53,9 @@
       }
     ],
     "classicCostumes": 34,
-    "ordinaryEquipmentItems": 945,
-    "ordinaryEquipmentVariants": 951,
+    "ordinaryEquipmentItems": 990,
+    "ordinaryEquipmentVariants": 1019,
+    "ordinaryWeapons": 788,
     "huntressLooks": 12,
     "mounts": 16,
     "mountFamilies": [
@@ -409,11 +410,11 @@
     {
       "label": "Modelos de mapa",
       "directory": "models",
-      "files": 1382,
-      "bytes": 38666248,
+      "files": 1590,
+      "bytes": 41105138,
       "extensions": {
-        ".dds": 419,
-        ".msa": 963
+        ".dds": 501,
+        ".msa": 1089
       }
     },
     {
@@ -459,15 +460,15 @@
     {
       "label": "Player",
       "directory": "player",
-      "files": 1279,
-      "bytes": 73333407,
+      "files": 1339,
+      "bytes": 74559794,
       "extensions": {
         ".ani": 171,
         ".bon": 23,
-        ".dds": 472,
-        ".json": 1,
+        ".dds": 500,
+        ".json": 2,
         ".msa": 5,
-        ".msh": 607
+        ".msh": 638
       }
     },
     {

@@ -180,13 +180,21 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
    O lote ordinário de corpo também foi fechado para os quatro players:
    `ItemList.bin` fornece `Equip[1..5]`, mesh, texture, posição e `EF_CLASS`;
    o importador aplica `bExpand`, exceções literais de filename e o alpha do
-   `MeshTextureList.bin`. São 945 itens válidos e 951 variantes de
-   classe/slot entre elmo, armadura, calça, luvas e botas, carregados
-   preguiçosamente por um catálogo de 352 KiB. Fantasia continua prevalecendo
+   `MeshTextureList.bin`. `EF_CLASS` é máscara de bits: a correção dessa regra
+   elevou o corpus para 990 itens válidos e 1.019 variantes de classe/slot
+   entre elmo, armadura, calça, luvas e botas, carregados preguiçosamente por
+   catálogo. Fantasia continua prevalecendo
    como override de corpo inteiro; sem fantasia, cada mudança nesses cinco
    slots recompõe apenas a parte correspondente e requisições antigas são
-   descartadas. Permanecem fora deste lote rosto/classe, armas rígidas
-   arbitrárias e mantuas de player.
+   descartadas.
+   `Equip[6]/Equip[7]` também foi fechado para o player: os 794 registros de
+   mão do `ItemList` resultam em 788 armas com MSA válida e zero modelos
+   referenciados ausentes. O runtime prende cada lado aos ossos/matrizes
+   diferentes de `CFrame::Render`, duplica `WTYPE 41`, cruza tipo/posição em
+   `CheckWeapon` e troca os bancos ANI a pé/montado. Ancient/refinação usam a
+   multitextura da instância quando ela existe; o Skytalos +15 conserva sua
+   Força Espectral. Permanecem fora deste lote rosto/classe e mantuas de
+   player.
 4. Skytalos, refinação e Ancient. Implementado e homologado: item `2551`,
    refinação +15, composição `MODULATE2X + ADDSMOOTH`, UV animado em 4 s e
    empunhadura pelo banco de arco da Huntress.
@@ -496,19 +504,20 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
     a manter esse contrato. A matriz automatica por
     arquivo importado foi concluida: `bun run audit:coverage` cruza o manifesto,
     o corpus fisico e as definicoes TypeScript do runtime, gerando Markdown e
-    JSON em `docs/matriz-cobertura-classico.*`. O snapshot atual valida 4.844
+    JSON em `docs/matriz-cobertura-classico.*`. O snapshot atual valida 5.112
     caminhos declarados sem faltantes — incluindo agora o grafo interno de
     MSH/BON/ANI/texturas dos monstros —, 111 TRN, 108 DAT declarados, 103
-    minimapas declarados, 377 templates, 3.937 geradores, 6.500 itens, 945
-    equipamentos ordinários de corpo, 248 skills binárias, 16 montarias e oito
+    minimapas declarados, 377 templates, 3.937 geradores, 6.500 itens, 990
+    equipamentos ordinários de corpo, 788 armas de player, 248 skills binárias,
+    16 montarias e oito
     evocacoes; tambem explicita por classe
     quais skills ja foram promovidas ao runtime. O code splitting tambem foi
     aplicado: Three.js ocupa um chunk vendor cacheavel, a entrada da aplicacao
-    ficou em cerca de 603 KiB minificados e os renderers de Foema, TransKnight
+    ficou em cerca de 607 KiB minificados e os renderers de Foema, TransKnight
     e BeastMaster viraram chunks lazy na faixa de aproximadamente 37–124 KiB,
     carregados somente no primeiro switch para cada classe.
     O `ModelLibrary` também passou a compartilhar DDS por caminho entre tipos:
-    os 2.098 slots das 963 MSA reutilizam o conjunto físico de 419 texturas,
+    os 2.224 slots das 1.089 MSA reutilizam o conjunto físico de 501 texturas,
     com lease por modelo e descarte somente quando o último consumidor sai.
     Geometria e material continuam pertencendo ao protótipo de cada tipo; isso
     remove uploads GPU duplicados sem permitir que estados mutáveis vazem entre

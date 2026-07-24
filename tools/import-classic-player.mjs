@@ -19,6 +19,8 @@ const summonsRoot = path.join(outputRoot, "summons");
 const transformationsRoot = path.join(outputRoot, "transformations");
 const griupanRoot = path.join(outputRoot, "familiars/ag01");
 const equipmentCatalogFile = path.join(outputRoot, "equipment-looks.json");
+const weaponCatalogFile = path.join(outputRoot, "weapons.json");
+const manifestFile = path.join(projectRoot, "public/game-data/classic/manifest.json");
 const itemRecordBytes = 152;
 const modelTextureRecordBytes = 528;
 const bodySlotByPosition = new Map([
@@ -134,7 +136,7 @@ for (let itemIndex = 1; itemIndex < itemList.length / itemRecordBytes; itemIndex
     continue;
   }
   const compatibleClasses = CLASSIC_PLAYER_CLASSES.filter((playerClass) => (
-    itemClass === 255 || itemClass === playerClass.itemClass
+    itemClass === 255 || (itemClass & playerClass.itemClass) !== 0
   ));
   if (compatibleClasses.length === 0) {
     equipmentStats.unsupportedPlayerClass++;
@@ -197,6 +199,60 @@ await writeFile(equipmentCatalogFile, `${JSON.stringify({
     part: slot.part,
   }])),
   items: equipmentItems,
+}, null, 2)}\n`);
+
+// Hand equipment uses the common MeshList model graph imported by
+// import-classic-assets.mjs. Keep only models present in that authoritative
+// manifest: the runtime can then resolve a weapon without probing filenames.
+const classicManifest = JSON.parse(await readFile(manifestFile, "utf8"));
+const weaponItems = [];
+const canonicalWeaponByModel = new Map(CLASSIC_PLAYER_CLASSES.flatMap((playerClass) => (
+  [playerClass.selection.weapon, playerClass.defaultWeapon].map((weapon) => [
+    weapon.meshIndex,
+    weapon,
+  ])
+)));
+const weaponStats = {
+  candidates: 0,
+  emptyMesh: 0,
+  missingModel: 0,
+  importedItems: 0,
+};
+for (let itemIndex = 1; itemIndex < itemList.length / itemRecordBytes; itemIndex++) {
+  const offset = itemIndex * itemRecordBytes;
+  const position = itemList.readUInt16LE(offset + 136);
+  if (position !== 64 && position !== 128 && position !== 192) continue;
+  weaponStats.candidates++;
+  const modelType = itemList.readInt16LE(offset + 64);
+  if (modelType <= 0) {
+    weaponStats.emptyMesh++;
+    continue;
+  }
+  if (!classicManifest.objectModels?.[String(modelType)]) {
+    weaponStats.missingModel++;
+    continue;
+  }
+  weaponItems.push({
+    index: itemIndex,
+    name: readCString(itemList, offset, 64),
+    itemClass: itemEffect(itemList, offset, 18) ?? 0,
+    position,
+    modelType,
+    texture: itemList.readInt16LE(offset + 66),
+    visualEffect: itemList.readInt16LE(offset + 68),
+    weaponType: itemEffect(itemList, offset, 21) ?? 0,
+    fallbackTexture: canonicalWeaponByModel.has(modelType)
+      ? `player/textures/${canonicalWeaponByModel.get(modelType).textureStem}.dds`
+      : null,
+    fallbackAlpha: canonicalWeaponByModel.get(modelType)?.alpha ?? null,
+  });
+}
+weaponStats.importedItems = weaponItems.length;
+await writeFile(weaponCatalogFile, `${JSON.stringify({
+  version: 1,
+  source: "ItemList.bin + MeshList.txt + TMHuman::CheckWeapon + CFrame::Render",
+  counts: weaponStats,
+  items: weaponItems,
 }, null, 2)}\n`);
 
 // Canonical selchar weapons plus the existing playable Skytalos. MSA and WYS
@@ -359,7 +415,7 @@ await writeFile(
 );
 
 console.log(
-  `${CLASSIC_PLAYER_CLASSES.length} classes, ${equipmentItems.length} equipamentos LOOK_INFO, ${CLASSIC_COSTUME_LOOKS.length} trajes 4150..4183, ${HUNTRESS_LOOKS.length} looks especializados da Huntress, ${importedWeapons.size} armas, ${MOUNT_LOOKS.length} montarias, ${BEAST_MASTER_SUMMONS.length} evocacoes, ${BEAST_MASTER_TRANSFORMATIONS.length} transformacoes e Griupan/fadas importados para ${outputRoot}`,
+  `${CLASSIC_PLAYER_CLASSES.length} classes, ${equipmentItems.length} equipamentos LOOK_INFO, ${weaponItems.length} armas comuns, ${CLASSIC_COSTUME_LOOKS.length} trajes 4150..4183, ${HUNTRESS_LOOKS.length} looks especializados da Huntress, ${importedWeapons.size} armas canônicas, ${MOUNT_LOOKS.length} montarias, ${BEAST_MASTER_SUMMONS.length} evocacoes, ${BEAST_MASTER_TRANSFORMATIONS.length} transformacoes e Griupan/fadas importados para ${outputRoot}`,
 );
 
 function decodeWys(encoded) {

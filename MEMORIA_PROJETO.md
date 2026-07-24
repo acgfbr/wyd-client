@@ -63,7 +63,7 @@ corpus para `public/game-data/classic`; o runtime consome apenas esse pacote.
 | `Field*.dat` | objetos por Field | 108 declarados; ausencia nos demais e do manifesto |
 | `m*.wyt` | minimapas | 103 declarados; nem todo Field possui um |
 | `.wys` | malhas/objetos compostos | transformacao difere de personagem |
-| `.msa/.msh` | objetos, efeitos e armas rígidas | 963 modelos no manifesto |
+| `.msa/.msh` | objetos, efeitos e armas rígidas | 1.089 modelos no manifesto |
 | `.bon/.ani` | skeleton e animacao | bancos nao podem ser cruzados entre rigs |
 | `AttributeMap.dat` | flags globais de navegacao | inclui portal `0x10` |
 | `object.bin` | mascaras de objeto | compoe colisao depois do AttributeMap |
@@ -181,9 +181,9 @@ foi homologada; nao reabrir sua colisao global sem regressao reproduzivel.
   entram no manifesto de forma determinística.
 - Cada MSA pode ter vários materiais, mas `TMObject::Render` decide o estado de
   alpha pelo `cAlpha` do primeiro índice de textura e aplica esse estado ao
-  `TMMesh` inteiro. O importador agora persiste os 2.098 slots encontrados em
-  `MeshTextureList.bin` (`1.875 N`, `148 A`, `10 C`, `65` sem entrada); entre
-  os primeiros slots dos 963 modelos são `827 N`, `87 A`, `2 C` e `47` sem
+  `TMMesh` inteiro. O importador agora persiste os 2.224 slots encontrados em
+  `MeshTextureList.bin` (`1.963 N`, `149 A`, `10 C`, `102` sem entrada); entre
+  os primeiros slots dos 1.089 modelos são `915 N`, `88 A`, `2 C` e `84` sem
   entrada. `ModelLibrary` replica essa decisão: `A/C` recebem alpha-test
   `0xAA/0xFF` e blend `SRCALPHA/INVSRCALPHA`; `N` permanece opaco. A faixa
   `156..185` continua no caminho alpha por exceção explícita do cliente,
@@ -229,8 +229,8 @@ cacheadas e liberacao explicita. `GameApp.dispose()` encerra animation loop,
 listeners, input, mundo, spawns, player, drops, preview, VFX, caches e renderer;
 `pagehide.persisted=true` preserva o bfcache do Safari/iOS.
 
-`ModelLibrary` separa ownership de protótipo e DDS. As 963 MSA possuem 2.098
-slots de material, mas só 419 arquivos de textura físicos; o cache usa o
+`ModelLibrary` separa ownership de protótipo e DDS. As 1.089 MSA possuem 2.224
+slots de material, mas só 501 arquivos de textura físicos; o cache usa o
 caminho do DDS como chave, mantém uma referência por modelo distinto que o
 consome e descarta a textura somente após o último `release`. Materiais e
 geometrias continuam por protótipo, pois alpha, shader e outros estados podem
@@ -244,7 +244,7 @@ decodificar DDS para RGBA na CPU.
 
 O build separa Three.js em vendor cacheavel. Renderers de Foema, TransKnight e
 BeastMaster sao chunks lazy carregados no primeiro switch; Huntress permanece
-no boot por ser a classe inicial. Medicao de 23/07/2026: app ~603 KiB, Three.js
+no boot por ser a classe inicial. Medicao de 24/07/2026: app ~607 KiB, Three.js
 ~518 KiB e chunks de classe na faixa de ~37–124 KiB, todos minificados.
 
 O plano do servidor autoritativo está em
@@ -284,12 +284,26 @@ O equipamento ordinário do player não usa uma lista de conjuntos. Para
 `ch01/ch02 + parte + (mesh + 20*bExpand + 1)` e a textura acrescenta ainda
 `nIndexTexture`. O importador reproduz essa regra, as correções literais de
 `RestoreDeviceObjects`, a ocultação de Cythera `3500..3502/3507` e o
-`cAlpha` de `MeshTextureList.bin`. O corpus resultou em 945 itens e 951
-variantes válidas para os quatro players; arquivos inexistentes não entram no
+`cAlpha` de `MeshTextureList.bin`. `EF_CLASS` deve ser testado como máscara de
+bits (`itemClass & classBit`), não por igualdade: itens compartilhados como o
+Skytalos usam combinações como `10`. O corpus corrigido resultou em 990 itens
+e 1.019 variantes válidas para os quatro players; arquivos inexistentes não entram no
 catálogo. `ClassicPlayerEquipmentCatalog` fica lazy e recompõe sobre
 `baseParts` somente elmo, armadura, calça, luvas e botas. Traje
 `SetHumanCostume` tem precedência. A assinatura visual precisa conter os cinco
 slots e a geração assíncrona deve ser invalidada em trocas rápidas.
+
+As armas do player não são partes MSH: `Equip[6]` preenche `LeftMesh` e
+`Equip[7]`, `RightMesh`, ambos apontando para MSA comum de `MeshList`. Existem
+794 registros com `position` 64/128/192; seis têm mesh vazia e os outros 788
+foram materializados em `player/weapons.json`, sem referência válida ausente.
+`CFrame::Render` usa `g_dwHandIndex[skin][1]` para a esquerda e `[0]` para a
+direita, com matrizes diferentes; no `ch01` são bones 25/19 e no `ch02`,
+24/18. `WTYPE 41` copia visualmente a arma esquerda para a direita mas mantém
+`itemR` vazio para `CheckWeapon`. A seleção do banco ANI deve cruzar WTYPE,
+`position@136`, skin e estado montado. A multitextura Ancient só é aplicada
+quando a instância fornece `refinementTextureIndex`; nunca inventar esse
+índice a partir do nome do item.
 
 As skills Huntress promovidas ao runtime somam dezessete. Meditacao `#77` foi
 recuperada de `TMHuman.cpp` como cinco pares de billboards `101` em espiral;
@@ -533,8 +547,8 @@ refinamento, Ancient e preco estatico quando aplicavel.
   ligados, com atenuacao e limite de canais. Cachoeira, chuva local e o objeto
   ambiental 607 mantem loops por proximidade. Clima global fica condicionado
   a implementacao futura do sistema de weather, nao ao audio.
-- Cobertura visual de todos os equipamentos, skins raros e acoes especiais de
-  criaturas continua incompleta.
+- Rosto/classe (`Equip[0]`), mantuas do player (`Equip[15]`), skins raros e
+  acoes especiais de criaturas ainda exigem cobertura/homologação.
 - WebGPU nao e substituto direto: shaders `onBeforeCompile` e materiais WebGL
   teriam de ser portados para TSL/nodes.
 - JavaScript distribuido no navegador pode ser dificultado, mas nunca mantido

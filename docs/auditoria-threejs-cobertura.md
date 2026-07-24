@@ -34,8 +34,8 @@ com vários drops, com NPC shop/cargo/inventário aberto e no iPhone.
   compartilha cache/model library e só usa renderer próprio pequeno quando
   necessário.
 - Texturas e geometrias de mundo entram por streaming de Field.
-- `ModelLibrary` deduplica os DDS por caminho: 2.098 slots de material das
-  963 MSA compartilham 419 arquivos físicos. Cada modelo retém
+- `ModelLibrary` deduplica os DDS por caminho: 2.224 slots de material das
+  1.089 MSA compartilham 501 arquivos físicos. Cada modelo retém
   uma lease por DDS distinto e o último `release` descarta a textura; materiais
   e geometrias continuam por protótipo para não compartilhar estado mutável.
 - Vários sistemas possuem `dispose()` explícito para pools, texturas,
@@ -50,7 +50,7 @@ com vários drops, com NPC shop/cargo/inventário aberto e no iPhone.
 - Materiais MSA de cenário preservam agora o `cAlpha` de
   `MeshTextureList.bin`. O primeiro slot governa o mesh inteiro, igual ao
   `TMObject`; somente `A/C` e a exceção `156..185` entram na fila transparente,
-  evitando tanto recortes opacos quanto ordenar todos os 963 modelos como
+  evitando tanto recortes opacos quanto ordenar todos os 1.089 modelos como
   transparentes.
 - Folhas, árvores, navios, borboletas e peixes continuam agrupados em
   `InstancedMesh`, mas não usam mais deformação procedural genérica. Quatro
@@ -90,7 +90,7 @@ com vários drops, com NPC shop/cargo/inventário aberto e no iPhone.
   TransKnight e BeastMaster possuem chunks de renderer próprios carregados
   apenas no primeiro switch para a classe; o build medido gerou chunks de
   aproximadamente 37–124 KiB minificados. A entrada da aplicação ficou em
-  aproximadamente 603 KiB e o vendor Three.js em 518 KiB. Huntress permanece
+  aproximadamente 607 KiB e o vendor Three.js em 518 KiB. Huntress permanece
   no boot porque é a classe inicial; catálogos grandes já usam fetch lazy.
 - `performance.memory` não existe no Safari/iPhone, então RAM JS aparece como
   `—`; para iOS, usar GEO/TEX/CALLS/TRIS e inspeção remota.
@@ -109,7 +109,7 @@ A matriz fisica e reproduzivel agora e gerada por
 `bun run audit:coverage` em `docs/matriz-cobertura-classico.md` e
 `docs/matriz-cobertura-classico.json`. O gerador cruza o manifesto com os
 arquivos existentes e importa as definicoes TypeScript do runtime para nao
-confundir asset presente com feature jogavel. No snapshot atual existem 4.844
+confundir asset presente com feature jogavel. No snapshot atual existem 5.112
 caminhos unicos declarados e nenhum ausente; os 111 Fields possuem 111 TRN,
 108 DAT declarados e 103 minimapas declarados. As ausencias de DAT/minimapa
 nos demais Fields fazem parte do proprio manifesto, nao sao links quebrados.
@@ -119,7 +119,7 @@ nos demais Fields fazem parte do proprio manifesto, nao sao links quebrados.
 | Mapas/Fields | 111 Fields, streaming, conexões, minimapas, seletor | `manifest.json`, `Field*.trn`, `regions.ts` | Revisão visual final dos 111 mapas |
 | Terreno/colisão | TRN, AttributeMap, object.bin, pontes/altura, pathfinding | `ClassicWorld`, `ClassicNavigation` | Casos isolados de máscara/altura que aparecerem em teste |
 | Objetos/props | DAT/WYS/MSH, água, folhas/árvores/fauna/navios com ANI instanciada, fogueiras, fontes, floats, TMDust 531, tetos/partículas TMHouse, reflexos de céu e composições 1846/1980/2035 | `MapObjects`, `MapWater`, `ClassicEnvironmentObjects`, `MapEffects`, `MapMeshEffects` | Homologar pontos de grama e famílias ambientais raras |
-| Personagem | Quatro classes jogáveis, rigs, 34 trajes `4150..4183` e 945 equipamentos ordinários de corpo/951 variantes `LOOK_INFO` | `ClassicCostumeLooks`, `ClassicPlayerEquipmentCatalog`, `PlayerClasses`, `ClassicPlayerAvatar` | Rosto/classe, armas rígidas arbitrárias e mantuas de player |
+| Personagem | Quatro classes jogáveis, rigs, 34 trajes `4150..4183`, 990 equipamentos ordinários de corpo/1.019 variantes `LOOK_INFO` e 788 armas comuns de player | `ClassicCostumeLooks`, `ClassicPlayerEquipmentCatalog`, `ClassicPlayerWeaponCatalog`, `PlayerClasses`, `ClassicPlayerAvatar` | Rosto/classe e mantuas de player |
 | Huntress | Mulher Kalintz, Skytalos Ancient +15, Griupan, 17 skills promovidas | `HuntressLooks`, `ClassicHuntressSkillEffects`, `ClassicAlchemyCatalog`, `ClassicLevelUpEffects` | 17 passivas e 2 casts ainda fora do runtime |
 | Montarias | 16 montarias nível 120, Unicórnio padrão, sela/bones | `MountLooks`, `ClassicMount` | Homologação visual de todas as variações |
 | NPCs/monstros | Spawn por Field, animação, hover/seleção, IA offline, drops, armas Equip[6]/[7], 14 montarias Equip[14], 50 mantuas Equip[15], Nyerdes, efeitos intrínsecos 61+56, crater TMShade, Gárgulas dungeon-2 e os sete `TMEffectMeshRotate` do Guer_Caveira | `MonsterCatalog`, `ClassicSpawnManager`, `ClassicNyerdesParticles`, `ClassicMonsterPersistentEffects`, `ClassicMonsterRotateBoneEffects` | Homologar por amostragem; TMButterFly de owner e o ponto `[1]` do Krill ATTACK02 aguardam evidência não contraditória |
@@ -141,11 +141,15 @@ nos demais Fields fazem parte do proprio manifesto, nao sao links quebrados.
 - Classes/equipamentos: as quatro classes, seus looks base e toda a faixa de
   fantasias `4150..4183` são jogáveis. Os trajes trocam também
   `m_nSkinMeshType`, banco ANI e attachment de mão como no cliente. O grafo
-  ordinário de `Equip[1..5]` agora deriva 945 itens/951 variantes diretamente
-  de `ItemList.bin`, incluindo `bExpand`, exceções de filename e alpha. O
+  ordinário de `Equip[1..5]` agora deriva 990 itens/1.019 variantes diretamente
+  de `ItemList.bin`, incluindo a máscara de bits `EF_CLASS`, `bExpand`,
+  exceções de filename e alpha. O
   catálogo é lazy e a fantasia continua prevalecendo como corpo inteiro.
-  Permanecem sem cobertura genérica o rosto de classe (`Equip[0]`), armas
-  arbitrárias (`Equip[6/7]`) e mantuas de player (`Equip[15]`).
+  As 788 armas válidas de `Equip[6/7]` também usam catálogo lazy, attachments
+  separados por mão, duplicação de garras, banco ANI derivado de
+  `CheckWeapon` e multitextura Ancient/refinação da instância. Permanecem sem
+  cobertura genérica o rosto de classe (`Equip[0]`) e mantuas de player
+  (`Equip[15]`).
 - Monstros/NPCs: os 377 templates e 3.937 geradores estão catalogados e entram
   no streaming. As armas rígidas também foram fechadas a partir de
   `Equip[6]/Equip[7]`: 76 MSAs cobrem 224 templates e 269 attachments,

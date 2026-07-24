@@ -524,11 +524,36 @@ function classicNpcAnimationWeaponType(
   const equipment = template.equipment ?? [];
   const left = catalog.item(equipment[6 * 7] ?? 0);
   const right = catalog.item(equipment[7 * 7] ?? 0);
-  const leftType = left?.weaponType ?? 0;
-  const rightType = right?.weaponType ?? 0;
-  const leftPosition = left?.weaponPosition ?? 0;
-  const rightPosition = right?.weaponPosition ?? 0;
+  return classicHumanoidWeaponAnimationType({
+    skin,
+    leftType: left?.weaponType ?? 0,
+    rightType: right?.weaponType ?? 0,
+    leftPosition: left?.weaponPosition ?? 0,
+    rightPosition: right?.weaponPosition ?? 0,
+    mounted,
+  });
+}
 
+/**
+ * Exact ordinary humanoid branches of TMHuman::CheckWeapon. Player equipment
+ * and NPC templates share this resolver so the visible hand models and the
+ * selected ANI bank cannot drift apart.
+ */
+export function classicHumanoidWeaponAnimationType({
+  skin,
+  leftType,
+  rightType,
+  leftPosition,
+  rightPosition,
+  mounted = false,
+}: {
+  readonly skin: number;
+  readonly leftType: number;
+  readonly rightType: number;
+  readonly leftPosition: number;
+  readonly rightPosition: number;
+  readonly mounted?: boolean;
+}): number {
   if (skin === 0) {
     if (mounted) {
       if (leftType === 0 && rightPosition === 128) return 3;

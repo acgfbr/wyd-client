@@ -21,6 +21,9 @@ Documentação de arquitetura:
 - 111 Fields importados, nomeados, conectados e carregados dinamicamente.
 - Terreno, objetos, colisão, pontes, água, efeitos ambientais e minimapa.
 - TransKnight, Foema, BeastMaster e Huntress com visuais, armas e skills por classe.
+- Equipamento modular do player com 990 peças de corpo/1.019 variantes e 788
+  armas `Equip[6]/Equip[7]`, incluindo duas mãos, garras espelhadas, ANI
+  a pé/montado e multitextura Ancient/refinação quando presente na instância.
 - Huntress com Mulher Kalintz, Skytalos Ancient +15 animado e Griupan.
 - Extração e Alquimia da Huntress com seleção de item, confirmação e painel
   `Mixlist.bin`; resultados econômicos continuam reservados ao servidor.

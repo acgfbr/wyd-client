@@ -1,12 +1,12 @@
 # Matriz automatica de cobertura do cliente classico
 
-Gerado por `bun run audit:coverage` em 2026-07-24T03:25:40.289Z. Este arquivo e
+Gerado por `bun run audit:coverage` em 2026-07-24T03:42:07.934Z. Este arquivo e
 derivado dos artefatos importados e do runtime; nao deve ser editado
 manualmente. A analise e as decisoes ficam em `auditoria-threejs-cobertura.md`.
 
 ## Integridade dos imports
 
-- 4844 caminhos unicos referenciados pelo manifesto.
+- 5112 caminhos unicos referenciados pelo manifesto.
 - 0 caminhos referenciados ausentes.
 - 111 Fields: 111 TRN,
   108 DAT declarados e 103
@@ -24,12 +24,12 @@ Nenhum arquivo referenciado pelo manifesto esta ausente.
 | Fields/TRN | `fields` | 111 | 5.2 MiB | .trn 111 |
 | Objetos/DAT | `objects` | 108 | 3.6 MiB | .dat 108 |
 | Minimapas/WYT | `minimaps` | 103 | 4.8 MiB | .wyt 103 |
-| Modelos de mapa | `models` | 1382 | 36.9 MiB | .dds 419, .msa 963 |
+| Modelos de mapa | `models` | 1590 | 39.2 MiB | .dds 501, .msa 1089 |
 | Texturas de ambiente | `textures/env` | 238 | 2.5 MiB | .dds 238 |
 | Texturas de efeitos | `textures/effects` | 499 | 16.2 MiB | .dds 499 |
 | Texturas de agua | `textures/water` | 5 | 67.0 KiB | .dds 5 |
 | Monstros/NPCs | `monsters` | 1353 | 37.3 MiB | .ani 560, .bon 48, .dds 343, .json 1, .msh 401 |
-| Player | `player` | 1279 | 69.9 MiB | .ani 171, .bon 23, .dds 472, .json 1, .msa 5, .msh 607 |
+| Player | `player` | 1339 | 71.1 MiB | .ani 171, .bon 23, .dds 500, .json 2, .msa 5, .msh 638 |
 | Montarias | `player/mounts` | 151 | 5.6 MiB | .ani 77, .bon 10, .dds 24, .msh 40 |
 | Familiares | `player/familiars` | 8 | 195.4 KiB | .ani 1, .bon 1, .dds 3, .msh 3 |
 | Evocacoes | `player/summons` | 94 | 3.2 MiB | .ani 63, .bon 7, .dds 9, .msh 15 |
@@ -46,7 +46,7 @@ Nenhum arquivo referenciado pelo manifesto esta ausente.
 | Texturas de terreno/ambiente | 238 |
 | Texturas de efeitos | 499 |
 | Texturas de agua | 5 |
-| Modelos de objetos | 963 |
+| Modelos de objetos | 1089 |
 | Templates de NPC/monstro | 377 |
 | Geradores de NPC/monstro | 3937 |
 | Familias visuais | 48 |
@@ -75,8 +75,9 @@ Templates comerciais nao resolvidos: 0.
 | Huntress | 39 |
 
 - Trajes classicos compartilhados por todas as classes: 34.
-- Equipamentos ordinarios LOOK_INFO: 945 itens,
-  951 variantes de classe/slot.
+- Equipamentos ordinarios LOOK_INFO: 990 itens,
+  1019 variantes de classe/slot.
+- Armas comuns Equip[6]/Equip[7]: 788 itens.
 - Looks especializados da Huntress: 12.
 - Montarias selecionaveis: 16, em
   9 familias (bd02, be01, bo01, dr01, dr02, hs01, tg01, tw01, wf01).
