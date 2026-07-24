@@ -1,9 +1,9 @@
 {
-  "generatedAt": "2026-07-24T03:02:24.599Z",
+  "generatedAt": "2026-07-24T03:25:40.289Z",
   "command": "bun run audit:coverage",
   "source": "WYD classic",
   "referencedFiles": {
-    "total": 4241,
+    "total": 4844,
     "missing": []
   },
   "maps": {
@@ -53,6 +53,8 @@
       }
     ],
     "classicCostumes": 34,
+    "ordinaryEquipmentItems": 945,
+    "ordinaryEquipmentVariants": 951,
     "huntressLooks": 12,
     "mounts": 16,
     "mountFamilies": [
@@ -457,14 +459,15 @@
     {
       "label": "Player",
       "directory": "player",
-      "files": 678,
-      "bytes": 41520665,
+      "files": 1279,
+      "bytes": 73333407,
       "extensions": {
         ".ani": 171,
         ".bon": 23,
-        ".dds": 170,
+        ".dds": 472,
+        ".json": 1,
         ".msa": 5,
-        ".msh": 309
+        ".msh": 607
       }
     },
     {

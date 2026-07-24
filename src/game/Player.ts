@@ -20,7 +20,10 @@ import {
 import { ClassicFamiliar } from "./player/ClassicFamiliar";
 import { DEFAULT_HUNTRESS_LOOK_KEY } from "./player/HuntressLooks";
 import { DEFAULT_MOUNT_LOOK_KEY } from "./player/MountLooks";
-import type { ClassicPlayerClassKey } from "./player/PlayerClasses";
+import type {
+  ClassicPlayerClassKey,
+  ClassicPlayerLookDefinition,
+} from "./player/PlayerClasses";
 
 const WAYPOINT_REACHED_DISTANCE = 0.18;
 const NAVIGATION_SUBSTEP = 0.45;
@@ -199,12 +202,13 @@ export class Player {
   async loadClassicAvatar(
     assets: ClassicAssetSource,
     classKey: ClassicPlayerClassKey = this.#avatarClassKey,
-    lookKey?: string,
+    look?: string | ClassicPlayerLookDefinition,
   ): Promise<boolean> {
     if (classKey !== "beastmaster") this.clearClassicBeastMasterTransformation();
     const generation = ++this.#avatarLoadGeneration;
     try {
-      const requestedLook = lookKey ?? (classKey === this.#avatarClassKey ? this.#avatarLookKey : undefined);
+      const requestedLook = look
+        ?? (classKey === this.#avatarClassKey ? this.#avatarLookKey : undefined);
       const avatar = await ClassicPlayerAvatar.load(assets, classKey, requestedLook);
       if (!avatar) return false;
       if (this.#disposed || generation !== this.#avatarLoadGeneration) {

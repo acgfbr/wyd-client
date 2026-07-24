@@ -176,9 +176,17 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
    ANI e o bone/transform da arma acompanham o rig efetivo. Equipar ou retirar
    o traje pelo inventário reconstrói a classe ativa, sem voltar
    silenciosamente para Huntress. Mulher Kalintz `4156` continua sendo o
-   padrão da Huntress. Combinações ordinárias de rosto/cabeça/armadura dos
-   demais itens continuam no lote amplo de `LOOK_INFO`, não nesta faixa de
-   fantasias.
+   padrão da Huntress.
+   O lote ordinário de corpo também foi fechado para os quatro players:
+   `ItemList.bin` fornece `Equip[1..5]`, mesh, texture, posição e `EF_CLASS`;
+   o importador aplica `bExpand`, exceções literais de filename e o alpha do
+   `MeshTextureList.bin`. São 945 itens válidos e 951 variantes de
+   classe/slot entre elmo, armadura, calça, luvas e botas, carregados
+   preguiçosamente por um catálogo de 352 KiB. Fantasia continua prevalecendo
+   como override de corpo inteiro; sem fantasia, cada mudança nesses cinco
+   slots recompõe apenas a parte correspondente e requisições antigas são
+   descartadas. Permanecem fora deste lote rosto/classe, armas rígidas
+   arbitrárias e mantuas de player.
 4. Skytalos, refinação e Ancient. Implementado e homologado: item `2551`,
    refinação +15, composição `MODULATE2X + ADDSMOOTH`, UV animado em 4 s e
    empunhadura pelo banco de arco da Huntress.
@@ -488,14 +496,15 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
     a manter esse contrato. A matriz automatica por
     arquivo importado foi concluida: `bun run audit:coverage` cruza o manifesto,
     o corpus fisico e as definicoes TypeScript do runtime, gerando Markdown e
-    JSON em `docs/matriz-cobertura-classico.*`. O snapshot atual valida 4.241
+    JSON em `docs/matriz-cobertura-classico.*`. O snapshot atual valida 4.844
     caminhos declarados sem faltantes — incluindo agora o grafo interno de
     MSH/BON/ANI/texturas dos monstros —, 111 TRN, 108 DAT declarados, 103
-    minimapas declarados, 377 templates, 3.937 geradores, 6.500 itens, 248
-    skills binárias, 16 montarias e oito evocacoes; tambem explicita por classe
+    minimapas declarados, 377 templates, 3.937 geradores, 6.500 itens, 945
+    equipamentos ordinários de corpo, 248 skills binárias, 16 montarias e oito
+    evocacoes; tambem explicita por classe
     quais skills ja foram promovidas ao runtime. O code splitting tambem foi
     aplicado: Three.js ocupa um chunk vendor cacheavel, a entrada da aplicacao
-    ficou em cerca de 600 KiB minificados e os renderers de Foema, TransKnight
+    ficou em cerca de 603 KiB minificados e os renderers de Foema, TransKnight
     e BeastMaster viraram chunks lazy na faixa de aproximadamente 37–124 KiB,
     carregados somente no primeiro switch para cada classe.
     O `ModelLibrary` também passou a compartilhar DDS por caminho entre tipos:

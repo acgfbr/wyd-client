@@ -19,6 +19,11 @@ escopo atual.
   `4150..4183`; confirmar corpo completo, animação e arma presa à mão correta.
   Retirar o traje deve restaurar o corpo base da classe ativa, sem trocar para
   Huntress.
+- Sem fantasia, equipar e retirar individualmente elmo, armadura, calça, luvas
+  e botas. Amostras básicas: TransKnight `100..104`, Foema `105..109`,
+  BeastMaster `1401/1404/1407/1410/1413` e Huntress
+  `1551/1554/1557/1560/1563`. Cada troca deve alterar somente sua parte,
+  conservar animação/arma e não piscar de volta para uma requisição anterior.
 - Montar, caminhar por C.C e atacar em seguida; confirmar a animacao de
   locomocao da montaria e a ausencia de elevacao durante o ataque da Huntress.
 - Conferir Unicorno, Grifo e as demais montarias nivel 120 no seletor.

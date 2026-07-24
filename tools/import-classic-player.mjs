@@ -1,4 +1,4 @@
-import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { HUNTRESS_LOOKS } from "../src/game/player/HuntressLooks.ts";
@@ -18,6 +18,16 @@ const mountsRoot = path.join(outputRoot, "mounts");
 const summonsRoot = path.join(outputRoot, "summons");
 const transformationsRoot = path.join(outputRoot, "transformations");
 const griupanRoot = path.join(outputRoot, "familiars/ag01");
+const equipmentCatalogFile = path.join(outputRoot, "equipment-looks.json");
+const itemRecordBytes = 152;
+const modelTextureRecordBytes = 528;
+const bodySlotByPosition = new Map([
+  [2, { slot: "helmet", part: 2 }],
+  [4, { slot: "armor", part: 3 }],
+  [8, { slot: "pants", part: 4 }],
+  [16, { slot: "gloves", part: 5 }],
+  [32, { slot: "boots", part: 6 }],
+]);
 
 await mkdir(meshesRoot, { recursive: true });
 await mkdir(texturesRoot, { recursive: true });
@@ -76,6 +86,118 @@ for (const playerClass of CLASSIC_PLAYER_CLASSES) {
     }
   }
 }
+
+// Ordinary Equip[1..5] records do not name files directly. TMSkinMesh builds
+// each ch01/ch02 filename from ItemList mesh/texture, the class expand bank and
+// the body part. Generate the exact reachable graph once so runtime never
+// guesses filenames or probes 404s while equipment changes.
+const meshFiles = await caseInsensitiveFiles(meshRoot);
+const itemList = Buffer.from(await readFile(path.join(clientRoot, "ItemList.bin")));
+if (itemList.length % itemRecordBytes !== 0) {
+  throw new Error("ItemList.bin possui tamanho inesperado");
+}
+for (let offset = 0; offset < itemList.length; offset++) itemList[offset] ^= 0x5a;
+const modelTextureList = await readFile(path.join(meshRoot, "MeshTextureList.bin"));
+if (modelTextureList.length % modelTextureRecordBytes !== 0) {
+  throw new Error("MeshTextureList.bin possui tamanho inesperado");
+}
+const alphaByTexture = readModelTextureAlphas(modelTextureList);
+const equipmentItems = [];
+const equipmentStats = {
+  candidates: 0,
+  hiddenCythera: 0,
+  emptyMesh: 0,
+  withoutClass: 0,
+  unsupportedPlayerClass: 0,
+  missingVariantAssets: 0,
+};
+for (let itemIndex = 1; itemIndex < itemList.length / itemRecordBytes; itemIndex++) {
+  const offset = itemIndex * itemRecordBytes;
+  const position = itemList.readInt16LE(offset + 136);
+  const slot = bodySlotByPosition.get(position);
+  if (!slot) continue;
+  equipmentStats.candidates++;
+  // The classic client intentionally hides these four Cythera helmets.
+  if (itemIndex >= 3500 && (itemIndex <= 3502 || itemIndex === 3507)) {
+    equipmentStats.hiddenCythera++;
+    continue;
+  }
+  const mesh = itemList.readInt16LE(offset + 64);
+  const texture = itemList.readInt16LE(offset + 66);
+  if (mesh <= 0) {
+    equipmentStats.emptyMesh++;
+    continue;
+  }
+  const itemClass = itemEffect(itemList, offset, 18);
+  if (itemClass === null) {
+    equipmentStats.withoutClass++;
+    continue;
+  }
+  const compatibleClasses = CLASSIC_PLAYER_CLASSES.filter((playerClass) => (
+    itemClass === 255 || itemClass === playerClass.itemClass
+  ));
+  if (compatibleClasses.length === 0) {
+    equipmentStats.unsupportedPlayerClass++;
+    continue;
+  }
+  const variants = [];
+  for (const playerClass of compatibleClasses) {
+    const base = playerClass.skin === 0 ? "ch01" : "ch02";
+    const variantOffset = 20 * playerClass.expand;
+    let meshStem = `${base}${String(slot.part).padStart(2, "0")}${String(mesh + variantOffset + 1).padStart(2, "0")}`.toLowerCase();
+    let textureStem = `${base}${String(slot.part).padStart(2, "0")}${String(texture + mesh + variantOffset + 1).padStart(2, "0")}`.toLowerCase();
+    ({ meshStem, textureStem } = applyClassicPlayerFileExceptions(meshStem, textureStem));
+    const meshSource = meshFiles.get(`${meshStem}.msh`);
+    const textureSource = meshFiles.get(`${textureStem}.wys`);
+    if (!meshSource || !textureSource) {
+      equipmentStats.missingVariantAssets++;
+      continue;
+    }
+    if (!importedMeshes.has(meshStem)) {
+      await copyFile(path.join(meshRoot, meshSource), path.join(meshesRoot, `${meshStem}.msh`));
+      importedMeshes.add(meshStem);
+    }
+    if (!importedTextures.has(textureStem)) {
+      await writeFile(
+        path.join(texturesRoot, `${textureStem}.dds`),
+        decodeWys(await readFile(path.join(meshRoot, textureSource))),
+      );
+      importedTextures.add(textureStem);
+    }
+    variants.push({
+      classKey: playerClass.key,
+      slot: slot.slot,
+      part: slot.part,
+      meshStem,
+      textureStem,
+      alpha: normalizeAlpha(alphaByTexture.get(textureSource.toLowerCase())),
+    });
+  }
+  if (variants.length === 0) continue;
+  equipmentItems.push({
+    index: itemIndex,
+    name: readCString(itemList, offset, 64),
+    itemClass,
+    position,
+    mesh,
+    texture,
+    variants,
+  });
+}
+await writeFile(equipmentCatalogFile, `${JSON.stringify({
+  version: 1,
+  source: "ItemList.bin + TMSkinMesh::RestoreDeviceObjects + MeshTextureList.bin",
+  counts: {
+    ...equipmentStats,
+    importedItems: equipmentItems.length,
+    importedVariants: equipmentItems.reduce((total, item) => total + item.variants.length, 0),
+  },
+  slots: Object.fromEntries([...bodySlotByPosition].map(([position, slot]) => [slot.slot, {
+    position,
+    part: slot.part,
+  }])),
+  items: equipmentItems,
+}, null, 2)}\n`);
 
 // Canonical selchar weapons plus the existing playable Skytalos. MSA and WYS
 // share the stems recorded in PlayerClasses; repeated assets are deduplicated.
@@ -237,7 +359,7 @@ await writeFile(
 );
 
 console.log(
-  `${CLASSIC_PLAYER_CLASSES.length} classes, ${CLASSIC_COSTUME_LOOKS.length} trajes 4150..4183, ${HUNTRESS_LOOKS.length} looks especializados da Huntress, ${importedWeapons.size} armas, ${MOUNT_LOOKS.length} montarias, ${BEAST_MASTER_SUMMONS.length} evocacoes, ${BEAST_MASTER_TRANSFORMATIONS.length} transformacoes e Griupan/fadas importados para ${outputRoot}`,
+  `${CLASSIC_PLAYER_CLASSES.length} classes, ${equipmentItems.length} equipamentos LOOK_INFO, ${CLASSIC_COSTUME_LOOKS.length} trajes 4150..4183, ${HUNTRESS_LOOKS.length} looks especializados da Huntress, ${importedWeapons.size} armas, ${MOUNT_LOOKS.length} montarias, ${BEAST_MASTER_SUMMONS.length} evocacoes, ${BEAST_MASTER_TRANSFORMATIONS.length} transformacoes e Griupan/fadas importados para ${outputRoot}`,
 );
 
 function decodeWys(encoded) {
@@ -246,4 +368,60 @@ function decodeWys(encoded) {
   dds.write("DDS", 0, "ascii");
   dds.write(dds[84] === "2".charCodeAt(0) ? "DXT1" : "DXT3", 84, "ascii");
   return dds;
+}
+
+async function caseInsensitiveFiles(directory) {
+  const names = await readdir(directory);
+  return new Map(names.map((name) => [name.toLowerCase(), name]));
+}
+
+function itemEffect(itemListData, itemOffset, expectedEffect) {
+  for (let effect = 0; effect < 12; effect++) {
+    const effectOffset = itemOffset + 80 + effect * 4;
+    if (itemListData.readInt16LE(effectOffset) === expectedEffect) {
+      return itemListData.readInt16LE(effectOffset + 2);
+    }
+  }
+  return null;
+}
+
+function readModelTextureAlphas(data) {
+  const result = new Map();
+  for (let index = 0; index < data.length / modelTextureRecordBytes; index++) {
+    const start = index * modelTextureRecordBytes;
+    const terminator = data.indexOf(0, start);
+    const end = terminator < start || terminator > start + 255 ? start + 255 : terminator;
+    const listedFile = data.subarray(start, end).toString("latin1").replaceAll("\\", path.sep);
+    if (!listedFile) continue;
+    result.set(
+      path.basename(listedFile).toLowerCase(),
+      String.fromCharCode(data[start + 510] ?? 0),
+    );
+  }
+  return result;
+}
+
+function normalizeAlpha(value) {
+  return value === "A" || value === "C" || value === "N" ? value : "N";
+}
+
+function applyClassicPlayerFileExceptions(meshStem, textureStem) {
+  if (meshStem === "ch010218" && textureStem === "ch010219") textureStem = "ch010214";
+  if (textureStem === "ch020315") textureStem = "ch020314";
+  else if (textureStem.startsWith("ch010237")) textureStem = "ch010137";
+  else if (textureStem.startsWith("ch010238")) textureStem = "ch010138";
+  else if (textureStem.startsWith("ch020217")) textureStem = "ch020117";
+
+  const femaleVariant13 = /^ch02(\d{2})13$/.exec(textureStem);
+  if (femaleVariant13 && ["01", "04", "05"].includes(femaleVariant13[1])) {
+    textureStem = `ch01${femaleVariant13[1]}30`;
+  }
+  return { meshStem, textureStem };
+}
+
+function readCString(data, offset, length) {
+  const end = data.indexOf(0, offset);
+  return new TextDecoder("windows-1252").decode(
+    data.subarray(offset, end < offset || end >= offset + length ? offset + length : end),
+  );
 }

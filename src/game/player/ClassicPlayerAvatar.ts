@@ -99,12 +99,14 @@ export class ClassicPlayerAvatar {
   static async load(
     assets: ClassicAssetSource,
     classKey: ClassicPlayerClassKey = "huntress",
-    lookKey?: string,
+    requestedLook?: string | ClassicPlayerLookDefinition,
   ): Promise<ClassicPlayerAvatar | null> {
     const playerClass = classicPlayerClass(classKey);
-    const look = playerClass.looks.find((candidate) => candidate.key === lookKey)
-      ?? playerClass.looks.find((candidate) => candidate.key === playerClass.defaultLookKey)
-      ?? playerClass.selection.look;
+    const look = typeof requestedLook === "object"
+      ? requestedLook
+      : playerClass.looks.find((candidate) => candidate.key === requestedLook)
+        ?? playerClass.looks.find((candidate) => candidate.key === playerClass.defaultLookKey)
+        ?? playerClass.selection.look;
     const skin = look.skinOverride ?? playerClass.skin;
     const catalog = await MonsterCatalog.load(assets);
     const library = new ClassicSkinnedAssetLibrary(assets, catalog);

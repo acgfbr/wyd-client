@@ -69,6 +69,12 @@ import {
   classicPlayerClass,
 } from "../game/player/PlayerClasses";
 import {
+  classicBodyEquipmentIndices,
+  classicBodyEquipmentLookKey,
+  hasClassicBodyEquipment,
+  loadClassicPlayerEquipmentCatalog,
+} from "../game/player/ClassicPlayerEquipmentCatalog";
+import {
   DEFAULT_MOUNT_LOOK_KEY,
   MOUNT_LOOKS,
   mountLook,
@@ -3571,6 +3577,11 @@ export class GameApp {
     const mount = snapshot.equipment.mount?.item ?? null;
     const familiar = snapshot.equipment.familiar?.item ?? null;
     const signature = [
+      snapshot.equipment.helmet?.item.key ?? "-",
+      snapshot.equipment.armor?.item.key ?? "-",
+      snapshot.equipment.pants?.item.key ?? "-",
+      snapshot.equipment.gloves?.item.key ?? "-",
+      snapshot.equipment.boots?.item.key ?? "-",
       leftHand?.key ?? "-",
       rightHand?.key ?? "-",
       costume?.key ?? "-",
@@ -3610,9 +3621,13 @@ export class GameApp {
       void this.#player.loadClassicFamiliar(this.#assets);
     }
     const definition = classicPlayerClass(this.#activeClassKey);
+    const bodyEquipment = classicBodyEquipmentIndices(snapshot.equipment);
+    const wantsBodyEquipment = !costume && hasClassicBodyEquipment(bodyEquipment);
     const desiredLookKey = costume
       ? definition.looks.find((look) => look.itemIndex === costume.classicIndex)?.key
         ?? definition.defaultLookKey
+      : wantsBodyEquipment
+        ? classicBodyEquipmentLookKey(definition.key, bodyEquipment)
       : definition.looks.find((look) => look.key === `${definition.key}-base`)?.key
         ?? definition.defaultLookKey;
     if (this.#player.avatarLookKey === desiredLookKey) return;
@@ -3621,8 +3636,21 @@ export class GameApp {
     const select = document.querySelector<HTMLSelectElement>("#outfit-select");
     const status = document.querySelector<HTMLElement>("#outfit-status");
     if (select) select.disabled = true;
-    if (status) status.textContent = costume ? `Vestindo ${costume.name}…` : "Retirando traje…";
-    void this.#player.loadClassicAvatar(this.#assets, definition.key, desiredLookKey).then((loaded) => {
+    if (status) {
+      status.textContent = costume
+        ? `Vestindo ${costume.name}…`
+        : wantsBodyEquipment
+          ? "Atualizando armadura…"
+          : "Retirando traje…";
+    }
+    const lookRequest = wantsBodyEquipment
+      ? loadClassicPlayerEquipmentCatalog(this.#assets)
+        .then((catalog) => catalog.composeLook(definition, bodyEquipment))
+      : Promise.resolve(desiredLookKey);
+    void lookRequest.then((look) => {
+      if (requestId !== this.#outfitLoadId) return false;
+      return this.#player?.loadClassicAvatar(this.#assets!, definition.key, look) ?? false;
+    }).then((loaded) => {
       if (requestId !== this.#outfitLoadId) return;
       const current = this.#playerState.snapshot;
       this.#player?.setWeaponVisible(
@@ -3632,8 +3660,19 @@ export class GameApp {
         if (status) status.textContent = "Falha ao atualizar equipamento";
         return;
       }
-      if (select) select.value = this.#player?.avatarLookKey ?? desiredLookKey;
+      if (select) {
+        const currentLook = this.#player?.avatarLookKey ?? desiredLookKey;
+        const selectable = definition.looks.some((look) => look.key === currentLook);
+        select.value = selectable
+          ? currentLook
+          : definition.looks.find((look) => look.key === `${definition.key}-base`)?.key
+            ?? definition.defaultLookKey;
+      }
       if (status) status.textContent = this.#player?.avatarLookName ?? "Visual equipado";
+    }).catch((error: unknown) => {
+      if (requestId !== this.#outfitLoadId) return;
+      console.warn("LOOK_INFO do equipamento indisponível", error);
+      if (status) status.textContent = "Falha ao carregar armadura";
     }).finally(() => {
       if (requestId === this.#outfitLoadId && select) select.disabled = false;
     });

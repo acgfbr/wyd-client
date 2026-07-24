@@ -244,7 +244,7 @@ decodificar DDS para RGBA na CPU.
 
 O build separa Three.js em vendor cacheavel. Renderers de Foema, TransKnight e
 BeastMaster sao chunks lazy carregados no primeiro switch; Huntress permanece
-no boot por ser a classe inicial. Medicao de 23/07/2026: app ~600 KiB, Three.js
+no boot por ser a classe inicial. Medicao de 23/07/2026: app ~603 KiB, Three.js
 ~518 KiB e chunks de classe na faixa de ~37–124 KiB, todos minificados.
 
 O plano do servidor autoritativo está em
@@ -278,6 +278,18 @@ mesh `ch01` com skin efetiva `1`, não se deve inferir o rig pelo nome do
 arquivo: animação e attachment da arma devem obedecer `skinOverride`. O
 sincronizador de equipamento sempre recarrega a classe ativa; usar Huntress
 fixa nesse caminho é uma regressão.
+
+O equipamento ordinário do player não usa uma lista de conjuntos. Para
+`Equip[1..5]`, o cliente monta cada filename como
+`ch01/ch02 + parte + (mesh + 20*bExpand + 1)` e a textura acrescenta ainda
+`nIndexTexture`. O importador reproduz essa regra, as correções literais de
+`RestoreDeviceObjects`, a ocultação de Cythera `3500..3502/3507` e o
+`cAlpha` de `MeshTextureList.bin`. O corpus resultou em 945 itens e 951
+variantes válidas para os quatro players; arquivos inexistentes não entram no
+catálogo. `ClassicPlayerEquipmentCatalog` fica lazy e recompõe sobre
+`baseParts` somente elmo, armadura, calça, luvas e botas. Traje
+`SetHumanCostume` tem precedência. A assinatura visual precisa conter os cinco
+slots e a geração assíncrona deve ser invalidada em trocas rápidas.
 
 As skills Huntress promovidas ao runtime somam dezessete. Meditacao `#77` foi
 recuperada de `TMHuman.cpp` como cinco pares de billboards `101` em espiral;

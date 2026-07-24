@@ -10,6 +10,7 @@ const monsterCatalog = await readJson(join(classicRoot, manifest.monsters.catalo
 const commerceCatalog = await readJson(join(classicRoot, "commerce/catalog.json"));
 const skillCatalog = await readJson(join(classicRoot, "data/skills.json"));
 const itemIcons = await readJson(join(classicRoot, "ui/item-icons.json"));
+const playerEquipmentLooks = await readJson(join(classicRoot, "player/equipment-looks.json"));
 const audioCatalogPath = join(classicRoot, "audio/catalog.json");
 const audioCatalog = await Bun.file(audioCatalogPath).exists()
   ? await readJson(audioCatalogPath)
@@ -94,6 +95,11 @@ const referencedFiles = [
       `player/textures/${weapon.textureStem}.dds`,
     ]),
   ]),
+  "player/equipment-looks.json",
+  ...playerEquipmentLooks.items.flatMap((item) => item.variants.flatMap((variant) => [
+    `player/meshes/${variant.meshStem}.msh`,
+    `player/textures/${variant.textureStem}.dds`,
+  ])),
   ...MOUNT_LOOKS.flatMap((look) => {
     const root = `player/mounts/${look.family.base}`;
     return [
@@ -207,6 +213,11 @@ const coverage = {
       looks: entry.looks.length,
     })),
     classicCostumes: CLASSIC_COSTUME_LOOKS.length,
+    ordinaryEquipmentItems: playerEquipmentLooks.items.length,
+    ordinaryEquipmentVariants: playerEquipmentLooks.items.reduce(
+      (total, item) => total + item.variants.length,
+      0,
+    ),
     huntressLooks: HUNTRESS_LOOKS.length,
     mounts: MOUNT_LOOKS.length,
     mountFamilies: [...new Set(MOUNT_LOOKS.map((mount) => mount.family.base))].sort(),
@@ -331,6 +342,8 @@ Templates comerciais nao resolvidos: ${report.items.unresolvedNpcTemplates}.
 ${classRows}
 
 - Trajes classicos compartilhados por todas as classes: ${report.player.classicCostumes}.
+- Equipamentos ordinarios LOOK_INFO: ${report.player.ordinaryEquipmentItems} itens,
+  ${report.player.ordinaryEquipmentVariants} variantes de classe/slot.
 - Looks especializados da Huntress: ${report.player.huntressLooks}.
 - Montarias selecionaveis: ${report.player.mounts}, em
   ${report.player.mountFamilies.length} familias (${report.player.mountFamilies.join(", ")}).

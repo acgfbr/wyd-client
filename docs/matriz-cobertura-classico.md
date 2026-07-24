@@ -1,12 +1,12 @@
 # Matriz automatica de cobertura do cliente classico
 
-Gerado por `bun run audit:coverage` em 2026-07-24T03:02:24.599Z. Este arquivo e
+Gerado por `bun run audit:coverage` em 2026-07-24T03:25:40.289Z. Este arquivo e
 derivado dos artefatos importados e do runtime; nao deve ser editado
 manualmente. A analise e as decisoes ficam em `auditoria-threejs-cobertura.md`.
 
 ## Integridade dos imports
 
-- 4241 caminhos unicos referenciados pelo manifesto.
+- 4844 caminhos unicos referenciados pelo manifesto.
 - 0 caminhos referenciados ausentes.
 - 111 Fields: 111 TRN,
   108 DAT declarados e 103
@@ -29,7 +29,7 @@ Nenhum arquivo referenciado pelo manifesto esta ausente.
 | Texturas de efeitos | `textures/effects` | 499 | 16.2 MiB | .dds 499 |
 | Texturas de agua | `textures/water` | 5 | 67.0 KiB | .dds 5 |
 | Monstros/NPCs | `monsters` | 1353 | 37.3 MiB | .ani 560, .bon 48, .dds 343, .json 1, .msh 401 |
-| Player | `player` | 678 | 39.6 MiB | .ani 171, .bon 23, .dds 170, .msa 5, .msh 309 |
+| Player | `player` | 1279 | 69.9 MiB | .ani 171, .bon 23, .dds 472, .json 1, .msa 5, .msh 607 |
 | Montarias | `player/mounts` | 151 | 5.6 MiB | .ani 77, .bon 10, .dds 24, .msh 40 |
 | Familiares | `player/familiars` | 8 | 195.4 KiB | .ani 1, .bon 1, .dds 3, .msh 3 |
 | Evocacoes | `player/summons` | 94 | 3.2 MiB | .ani 63, .bon 7, .dds 9, .msh 15 |
@@ -75,6 +75,8 @@ Templates comerciais nao resolvidos: 0.
 | Huntress | 39 |
 
 - Trajes classicos compartilhados por todas as classes: 34.
+- Equipamentos ordinarios LOOK_INFO: 945 itens,
+  951 variantes de classe/slot.
 - Looks especializados da Huntress: 12.
 - Montarias selecionaveis: 16, em
   9 familias (bd02, be01, bo01, dr01, dr02, hs01, tg01, tw01, wf01).
