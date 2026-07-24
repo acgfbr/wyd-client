@@ -1,0 +1,335 @@
+{
+  "version": 1,
+  "source": "ItemList.bin Equip[15] + TMHuman::SetMantua + skin 85 mt01",
+  "counts": {
+    "candidates": 36,
+    "missingVariant": 0,
+    "importedItems": 36
+  },
+  "items": [
+    {
+      "index": 290,
+      "name": "Manto_Negro_Lendário",
+      "mesh": 27,
+      "textureIndex": 4,
+      "grade": 4,
+      "texture": "monsters/textures/mt010105.dds",
+      "alpha": "A"
+    },
+    {
+      "index": 543,
+      "name": "Manto_do_Guerreiro",
+      "mesh": 27,
+      "textureIndex": 0,
+      "grade": 0,
+      "texture": "monsters/textures/mt010101.dds",
+      "alpha": "N"
+    },
+    {
+      "index": 544,
+      "name": "Manto_de_Shiner",
+      "mesh": 27,
+      "textureIndex": 1,
+      "grade": 0,
+      "texture": "monsters/textures/mt010102.dds",
+      "alpha": "N"
+    },
+    {
+      "index": 545,
+      "name": "Manto_Hekalotia",
+      "mesh": 27,
+      "textureIndex": 2,
+      "grade": 0,
+      "texture": "monsters/textures/mt010103.dds",
+      "alpha": "N"
+    },
+    {
+      "index": 546,
+      "name": "Manto_Akelonia",
+      "mesh": 27,
+      "textureIndex": 3,
+      "grade": 0,
+      "texture": "monsters/textures/mt010104.dds",
+      "alpha": "N"
+    },
+    {
+      "index": 548,
+      "name": "Manto_do_Andarilho",
+      "mesh": 27,
+      "textureIndex": 6,
+      "grade": 0,
+      "texture": "monsters/textures/mt010107.dds",
+      "alpha": "N"
+    },
+    {
+      "index": 549,
+      "name": "Manto_do_Aventureiro",
+      "mesh": 27,
+      "textureIndex": 7,
+      "grade": 0,
+      "texture": "monsters/textures/mt010108.dds",
+      "alpha": "N"
+    },
+    {
+      "index": 550,
+      "name": "Capa_Branca_do_Monstro",
+      "mesh": 27,
+      "textureIndex": 6,
+      "grade": 0,
+      "texture": "monsters/textures/mt010107.dds",
+      "alpha": "N"
+    },
+    {
+      "index": 572,
+      "name": "Manto_do_Campeão",
+      "mesh": 27,
+      "textureIndex": 15,
+      "grade": 0,
+      "texture": "monsters/textures/mt010116.dds",
+      "alpha": "N"
+    },
+    {
+      "index": 573,
+      "name": "Manto_do_Campeão",
+      "mesh": 2880,
+      "textureIndex": 36,
+      "grade": 0,
+      "texture": "monsters/textures/mt010137.dds",
+      "alpha": "A"
+    },
+    {
+      "index": 574,
+      "name": "Manto_do_Campeão",
+      "mesh": 27,
+      "textureIndex": 17,
+      "grade": 0,
+      "texture": "monsters/textures/mt010118.dds",
+      "alpha": "N"
+    },
+    {
+      "index": 734,
+      "name": "Manto_do_Guerreiro",
+      "mesh": 27,
+      "textureIndex": 0,
+      "grade": 0,
+      "texture": "monsters/textures/mt010101.dds",
+      "alpha": "N"
+    },
+    {
+      "index": 735,
+      "name": "Manto_de_Shiner",
+      "mesh": 27,
+      "textureIndex": 1,
+      "grade": 0,
+      "texture": "monsters/textures/mt010102.dds",
+      "alpha": "N"
+    },
+    {
+      "index": 736,
+      "name": "Capa_de_Hekalotia",
+      "mesh": 27,
+      "textureIndex": 2,
+      "grade": 0,
+      "texture": "monsters/textures/mt010103.dds",
+      "alpha": "N"
+    },
+    {
+      "index": 737,
+      "name": "Capa_de_Akelonia",
+      "mesh": 27,
+      "textureIndex": 3,
+      "grade": 0,
+      "texture": "monsters/textures/mt010104.dds",
+      "alpha": "N"
+    },
+    {
+      "index": 738,
+      "name": "Capa_Negra_do_Monstro",
+      "mesh": 27,
+      "textureIndex": 4,
+      "grade": 0,
+      "texture": "monsters/textures/mt010105.dds",
+      "alpha": "A"
+    },
+    {
+      "index": 1720,
+      "name": "Capa_da_Escuridão",
+      "mesh": 27,
+      "textureIndex": 4,
+      "grade": 0,
+      "texture": "monsters/textures/mt010105.dds",
+      "alpha": "A"
+    },
+    {
+      "index": 1766,
+      "name": "Capa_dos_Campeões",
+      "mesh": 27,
+      "textureIndex": 8,
+      "grade": 0,
+      "texture": "monsters/textures/mt010109.dds",
+      "alpha": "N"
+    },
+    {
+      "index": 1767,
+      "name": "Capa_dos_Campeões",
+      "mesh": 2880,
+      "textureIndex": 34,
+      "grade": 0,
+      "texture": "monsters/textures/mt010135.dds",
+      "alpha": "A"
+    },
+    {
+      "index": 1768,
+      "name": "Capa_dos_Campeões",
+      "mesh": 27,
+      "textureIndex": 11,
+      "grade": 0,
+      "texture": "monsters/textures/mt010112.dds",
+      "alpha": "N"
+    },
+    {
+      "index": 1769,
+      "name": "Capa_dos_Campeões",
+      "mesh": 27,
+      "textureIndex": 12,
+      "grade": 0,
+      "texture": "monsters/textures/mt010113.dds",
+      "alpha": "N"
+    },
+    {
+      "index": 1770,
+      "name": "Capa_dos_Campeões",
+      "mesh": 2880,
+      "textureIndex": 35,
+      "grade": 0,
+      "texture": "monsters/textures/mt010136.dds",
+      "alpha": "A"
+    },
+    {
+      "index": 1771,
+      "name": "Capa_dos_Campeões",
+      "mesh": 27,
+      "textureIndex": 14,
+      "grade": 0,
+      "texture": "monsters/textures/mt010115.dds",
+      "alpha": "N"
+    },
+    {
+      "index": 3191,
+      "name": "Elite_de_Hekalotia",
+      "mesh": 27,
+      "textureIndex": 24,
+      "grade": 0,
+      "texture": "monsters/textures/mt010125.dds",
+      "alpha": "N"
+    },
+    {
+      "index": 3192,
+      "name": "Elite_de_Akelonia",
+      "mesh": 27,
+      "textureIndex": 25,
+      "grade": 0,
+      "texture": "monsters/textures/mt010126.dds",
+      "alpha": "N"
+    },
+    {
+      "index": 3193,
+      "name": "Elite_dos_Aventureiros",
+      "mesh": 27,
+      "textureIndex": 26,
+      "grade": 0,
+      "texture": "monsters/textures/mt010127.dds",
+      "alpha": "N"
+    },
+    {
+      "index": 3194,
+      "name": "Herói_de_Hekalotia",
+      "mesh": 27,
+      "textureIndex": 27,
+      "grade": 0,
+      "texture": "monsters/textures/mt010128.dds",
+      "alpha": "N"
+    },
+    {
+      "index": 3195,
+      "name": "Herói_de_Akelonia",
+      "mesh": 27,
+      "textureIndex": 28,
+      "grade": 0,
+      "texture": "monsters/textures/mt010129.dds",
+      "alpha": "N"
+    },
+    {
+      "index": 3196,
+      "name": "Herói_dos_Aventureiros",
+      "mesh": 27,
+      "textureIndex": 29,
+      "grade": 0,
+      "texture": "monsters/textures/mt010130.dds",
+      "alpha": "N"
+    },
+    {
+      "index": 3197,
+      "name": "Mestre_de_Hekalotia",
+      "mesh": 2880,
+      "textureIndex": 31,
+      "grade": 0,
+      "texture": "monsters/textures/mt010132.dds",
+      "alpha": "A"
+    },
+    {
+      "index": 3198,
+      "name": "Mestre_de_Akelonia",
+      "mesh": 2880,
+      "textureIndex": 32,
+      "grade": 0,
+      "texture": "monsters/textures/mt010133.dds",
+      "alpha": "A"
+    },
+    {
+      "index": 3199,
+      "name": "Mestre_dos_Aventureiros",
+      "mesh": 2880,
+      "textureIndex": 33,
+      "grade": 0,
+      "texture": "monsters/textures/mt010134.dds",
+      "alpha": "A"
+    },
+    {
+      "index": 4006,
+      "name": "Manto_do_Aprendiz",
+      "mesh": 27,
+      "textureIndex": 19,
+      "grade": 0,
+      "texture": "monsters/textures/mt010120.dds",
+      "alpha": "A"
+    },
+    {
+      "index": 4008,
+      "name": "Mestre_do_Comandante",
+      "mesh": 27,
+      "textureIndex": 21,
+      "grade": 0,
+      "texture": "monsters/textures/mt010122.dds",
+      "alpha": "N"
+    },
+    {
+      "index": 4009,
+      "name": "Mestre_do_Comandante",
+      "mesh": 27,
+      "textureIndex": 22,
+      "grade": 0,
+      "texture": "monsters/textures/mt010123.dds",
+      "alpha": "N"
+    },
+    {
+      "index": 4015,
+      "name": "Capa_de_Berseker",
+      "mesh": 2840,
+      "textureIndex": 23,
+      "grade": 0,
+      "texture": "monsters/textures/mt010124.dds",
+      "alpha": "A"
+    }
+  ]
+}

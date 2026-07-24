@@ -48,9 +48,11 @@ const catalogJobs = new WeakMap<ClassicAssetSource, Promise<ClassicPlayerEquipme
  */
 export class ClassicPlayerEquipmentCatalog {
   readonly #parts = new Map<string, RawEquipmentPart>();
+  readonly #items = new Map<number, RawEquipmentItem>();
 
   private constructor(raw: RawEquipmentCatalog) {
     for (const item of raw.items) {
+      this.#items.set(item.index, item);
       for (const variant of item.variants) {
         this.#parts.set(partKey(item.index, variant.classKey, variant.slot), variant);
       }
@@ -114,6 +116,11 @@ export class ClassicPlayerEquipmentCatalog {
     slot: EquipmentSlot,
   ): boolean {
     return isBodySlot(slot) && this.#parts.has(partKey(itemIndex, classKey, slot));
+  }
+
+  /** Raw LOOK_INFO mesh used by fMantuaList placement, before bExpand. */
+  itemMesh(itemIndex: number): number | null {
+    return this.#items.get(itemIndex)?.mesh ?? null;
   }
 }
 

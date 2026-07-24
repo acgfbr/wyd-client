@@ -665,6 +665,13 @@ async function importMonsterCatalog() {
     const mantleItem = readItem(mantleItemIndex);
     if (mantleItem) mantuaTextureIndices.add(mantleItem.texture);
   }
+  // Player mantles may never occur in NPCGener. Equip[15] uses bit 0x8000 in
+  // the dedicated position field and selects mt01 Skin0 directly.
+  for (let itemIndex = 1; itemIndex < itemList.length / itemRecordBytes; itemIndex++) {
+    const offset = itemIndex * itemRecordBytes;
+    if (itemList.readUInt16LE(offset + 136) !== 0x8000) continue;
+    mantuaTextureIndices.add(itemList.readInt16LE(offset + 66));
+  }
   let mantua;
   if (mantuaTextureIndices.size > 0) {
     const skin = 85;
@@ -806,6 +813,7 @@ async function importMonsterCatalog() {
             STAND01: [0, 40],
             WALK: [1, 40],
             RUN: [2, 40],
+            MOUNT: [3, 40],
           },
         }
       : animationActions.get(skin);

@@ -12,6 +12,7 @@ const skillCatalog = await readJson(join(classicRoot, "data/skills.json"));
 const itemIcons = await readJson(join(classicRoot, "ui/item-icons.json"));
 const playerEquipmentLooks = await readJson(join(classicRoot, "player/equipment-looks.json"));
 const playerWeapons = await readJson(join(classicRoot, "player/weapons.json"));
+const playerMantuas = await readJson(join(classicRoot, "player/mantuas.json"));
 const audioCatalogPath = join(classicRoot, "audio/catalog.json");
 const audioCatalog = await Bun.file(audioCatalogPath).exists()
   ? await readJson(audioCatalogPath)
@@ -99,6 +100,7 @@ const referencedFiles = [
   "player/equipment-looks.json",
   "player/weapons.json",
   ...playerWeapons.items.map((item) => item.fallbackTexture),
+  "player/mantuas.json",
   ...playerEquipmentLooks.items.flatMap((item) => item.variants.flatMap((variant) => [
     `player/meshes/${variant.meshStem}.msh`,
     `player/textures/${variant.textureStem}.dds`,
@@ -222,6 +224,7 @@ const coverage = {
       0,
     ),
     ordinaryWeapons: playerWeapons.items.length,
+    mantuas: playerMantuas.items.length,
     huntressLooks: HUNTRESS_LOOKS.length,
     mounts: MOUNT_LOOKS.length,
     mountFamilies: [...new Set(MOUNT_LOOKS.map((mount) => mount.family.base))].sort(),
@@ -349,6 +352,7 @@ ${classRows}
 - Equipamentos ordinarios LOOK_INFO: ${report.player.ordinaryEquipmentItems} itens,
   ${report.player.ordinaryEquipmentVariants} variantes de classe/slot.
 - Armas comuns Equip[6]/Equip[7]: ${report.player.ordinaryWeapons} itens.
+- Mantuas Equip[15]: ${report.player.mantuas} itens.
 - Looks especializados da Huntress: ${report.player.huntressLooks}.
 - Montarias selecionaveis: ${report.player.mounts}, em
   ${report.player.mountFamilies.length} familias (${report.player.mountFamilies.join(", ")}).

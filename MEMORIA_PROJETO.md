@@ -305,6 +305,15 @@ direita, com matrizes diferentes; no `ch01` são bones 25/19 e no `ch02`,
 quando a instância fornece `refinementTextureIndex`; nunca inventar esse
 índice a partir do nome do item.
 
+`Equip[15]` usa a posição `0x8000` e nunca entra nas seis partes do corpo.
+Os 36 itens do corpus selecionam `Skin0` do rig auxiliar `mt01` (skin 85);
+todos possuem WYS válida. A mantua ancora no bone 6 de `ch01/ch02`, usa
+`fMantuaList[classRow][CoatMesh]`, escala `0,9` no rig feminino e offsets
+especiais para elmos `22..26` e capas `573/1767/1770/3197..3199`. Suas ANI
+são slots 0/1/2 para parada/caminhada/corrida e slot 3 montada. A sanção
+visual deriva de total de kills/citizen no servidor original, não do índice
+estático do item; portanto não deve ser mockada como refinação comum.
+
 As skills Huntress promovidas ao runtime somam dezessete. Meditacao `#77` foi
 recuperada de `TMHuman.cpp` como cinco pares de billboards `101` em espiral;
 Escudo Dourado `#85` usa o mesmo `TMEffectLevelUp` tipo `1` do cliente, com

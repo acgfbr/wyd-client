@@ -129,15 +129,27 @@ export class ClassicSkinnedAssetLibrary {
     const item = this.catalog.item(equipment[15 * 7] ?? 0);
     const variant = definition.variants.find((entry) => entry.textureIndex === item?.texture);
     if (!item || !variant) return Promise.resolve(null);
+    return this.createMantuaInstance(item.index, item.texture);
+  }
+
+  /** Shared skin-85 lease used by both NPC and player Equip[15]. */
+  createMantuaInstance(
+    itemIndex: number,
+    textureIndex: number,
+  ): Promise<ClassicSkinnedInstanceLease | null> {
+    const definition = this.catalog.mantua;
+    if (!definition) return Promise.resolve(null);
+    const variant = definition.variants.find((entry) => entry.textureIndex === textureIndex);
+    if (!variant) return Promise.resolve(null);
     return this.createInstance({
       skin: definition.skin,
       parts: [{
-        name: `mantua-${item.index}`,
+        name: `mantua-${itemIndex}`,
         mesh: definition.mesh,
         texture: variant.texture,
         alpha: variant.alpha,
       }],
-      actions: ["STAND01", "WALK", "RUN"],
+      actions: ["STAND01", "WALK", "RUN", "MOUNT"],
       initialAction: "STAND01",
       quarterStepMs: 40,
     });

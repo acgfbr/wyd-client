@@ -119,7 +119,7 @@ nos demais Fields fazem parte do proprio manifesto, nao sao links quebrados.
 | Mapas/Fields | 111 Fields, streaming, conexões, minimapas, seletor | `manifest.json`, `Field*.trn`, `regions.ts` | Revisão visual final dos 111 mapas |
 | Terreno/colisão | TRN, AttributeMap, object.bin, pontes/altura, pathfinding | `ClassicWorld`, `ClassicNavigation` | Casos isolados de máscara/altura que aparecerem em teste |
 | Objetos/props | DAT/WYS/MSH, água, folhas/árvores/fauna/navios com ANI instanciada, fogueiras, fontes, floats, TMDust 531, tetos/partículas TMHouse, reflexos de céu e composições 1846/1980/2035 | `MapObjects`, `MapWater`, `ClassicEnvironmentObjects`, `MapEffects`, `MapMeshEffects` | Homologar pontos de grama e famílias ambientais raras |
-| Personagem | Quatro classes jogáveis, rigs, 34 trajes `4150..4183`, 990 equipamentos ordinários de corpo/1.019 variantes `LOOK_INFO` e 788 armas comuns de player | `ClassicCostumeLooks`, `ClassicPlayerEquipmentCatalog`, `ClassicPlayerWeaponCatalog`, `PlayerClasses`, `ClassicPlayerAvatar` | Rosto/classe e mantuas de player |
+| Personagem | Quatro classes jogáveis, rigs, 34 trajes `4150..4183`, 990 equipamentos ordinários de corpo/1.019 variantes `LOOK_INFO`, 788 armas e 36 mantuas de player | `ClassicCostumeLooks`, `ClassicPlayerEquipmentCatalog`, `ClassicPlayerWeaponCatalog`, `ClassicPlayerMantuaCatalog`, `PlayerClasses`, `ClassicPlayerAvatar` | Rosto/classe; sanção/citizen da mantua depende do servidor |
 | Huntress | Mulher Kalintz, Skytalos Ancient +15, Griupan, 17 skills promovidas | `HuntressLooks`, `ClassicHuntressSkillEffects`, `ClassicAlchemyCatalog`, `ClassicLevelUpEffects` | 17 passivas e 2 casts ainda fora do runtime |
 | Montarias | 16 montarias nível 120, Unicórnio padrão, sela/bones | `MountLooks`, `ClassicMount` | Homologação visual de todas as variações |
 | NPCs/monstros | Spawn por Field, animação, hover/seleção, IA offline, drops, armas Equip[6]/[7], 14 montarias Equip[14], 50 mantuas Equip[15], Nyerdes, efeitos intrínsecos 61+56, crater TMShade, Gárgulas dungeon-2 e os sete `TMEffectMeshRotate` do Guer_Caveira | `MonsterCatalog`, `ClassicSpawnManager`, `ClassicNyerdesParticles`, `ClassicMonsterPersistentEffects`, `ClassicMonsterRotateBoneEffects` | Homologar por amostragem; TMButterFly de owner e o ponto `[1]` do Krill ATTACK02 aguardam evidência não contraditória |
@@ -147,9 +147,10 @@ nos demais Fields fazem parte do proprio manifesto, nao sao links quebrados.
   catálogo é lazy e a fantasia continua prevalecendo como corpo inteiro.
   As 788 armas válidas de `Equip[6/7]` também usam catálogo lazy, attachments
   separados por mão, duplicação de garras, banco ANI derivado de
-  `CheckWeapon` e multitextura Ancient/refinação da instância. Permanecem sem
-  cobertura genérica o rosto de classe (`Equip[0]`) e mantuas de player
-  (`Equip[15]`).
+  `CheckWeapon` e multitextura Ancient/refinação da instância. As 36 mantuas
+  `Equip[15]` usam o rig auxiliar `mt01`, `fMantuaList`, offsets especiais e
+  ANI montada; sanção/citizen não é inventada sem estado de servidor.
+  Permanece sem cobertura genérica o rosto de classe (`Equip[0]`).
 - Monstros/NPCs: os 377 templates e 3.937 geradores estão catalogados e entram
   no streaming. As armas rígidas também foram fechadas a partir de
   `Equip[6]/Equip[7]`: 76 MSAs cobrem 224 templates e 269 attachments,

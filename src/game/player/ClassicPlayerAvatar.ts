@@ -19,6 +19,7 @@ import type {
   ClassicPlayerWeaponLoadout,
   ClassicWeaponSide,
 } from "./ClassicPlayerWeaponCatalog";
+import type { ClassicEquippedMantuaVisual } from "./ClassicPlayerMantuaCatalog";
 import {
   classicPlayerClass,
   classicPlayerWeaponForSkin,
@@ -76,6 +77,9 @@ export class ClassicPlayerAvatar {
   readonly look: ClassicPlayerLookDefinition;
   readonly #lease: ClassicSkinnedInstanceLease;
   readonly #weapons: readonly ClassicWeaponVisual[];
+  readonly #mantua: ClassicSkinnedInstanceLease | null;
+  readonly #mantuaDefinition: ClassicEquippedMantuaVisual | null;
+  readonly #effectiveSkin: number;
   readonly #boneSampleA = new THREE.Vector3();
   readonly #boneSampleB = new THREE.Vector3();
   #weaponVisible = true;
@@ -85,11 +89,17 @@ export class ClassicPlayerAvatar {
   private constructor(
     lease: ClassicSkinnedInstanceLease,
     weapons: readonly ClassicWeaponVisual[],
+    mantua: ClassicSkinnedInstanceLease | null,
+    mantuaDefinition: ClassicEquippedMantuaVisual | null,
+    effectiveSkin: number,
     playerClass: ClassicPlayerClassDefinition,
     look: ClassicPlayerLookDefinition,
   ) {
     this.#lease = lease;
     this.#weapons = weapons;
+    this.#mantua = mantua;
+    this.#mantuaDefinition = mantuaDefinition;
+    this.#effectiveSkin = effectiveSkin;
     this.playerClass = playerClass;
     this.look = look;
     this.templateKey = `${playerClass.name}_${look.key}_${playerClass.defaultWeapon.key}`;
@@ -107,6 +117,7 @@ export class ClassicPlayerAvatar {
     classKey: ClassicPlayerClassKey = "huntress",
     requestedLook?: string | ClassicPlayerLookDefinition,
     weaponLoadout?: ClassicPlayerWeaponLoadout,
+    mantuaDefinition?: ClassicEquippedMantuaVisual | null,
   ): Promise<ClassicPlayerAvatar | null> {
     const playerClass = classicPlayerClass(classKey);
     const look = typeof requestedLook === "object"
@@ -139,6 +150,15 @@ export class ClassicPlayerAvatar {
       actionVariant: playerClass.classIndex,
     });
     if (!lease) return null;
+    const mantua = mantuaDefinition
+      ? await library.createMantuaInstance(
+          mantuaDefinition.itemIndex,
+          mantuaDefinition.textureIndex,
+        ).catch(() => null)
+      : null;
+    if (mantua && mantuaDefinition) {
+      attachClassicPlayerMantua(lease, mantua, skin, mantuaDefinition);
+    }
     const weapons = weaponLoadout === undefined
       ? [
           await attachClassicWeapon(
@@ -155,7 +175,15 @@ export class ClassicPlayerAvatar {
               : []
           )),
         )).filter((weapon): weapon is ClassicWeaponVisual => weapon !== null);
-    return new ClassicPlayerAvatar(lease, weapons, playerClass, look);
+    return new ClassicPlayerAvatar(
+      lease,
+      weapons,
+      mantua,
+      mantuaDefinition ?? null,
+      skin,
+      playerClass,
+      look,
+    );
   }
 
   setYaw(yaw: number): void {
@@ -166,12 +194,14 @@ export class ClassicPlayerAvatar {
   attachToMount(
     anchor: THREE.Object3D,
     transform: ClassicBaseAttachmentTransform,
+    mountSkin?: number,
   ): void {
     if (this.#released) return;
     anchor.add(this.object);
     resetObjectTransform(this.object);
     this.#mounted = true;
     this.#lease.model.setClassicBaseAttachment(transform);
+    this.syncMantuaPlacement(mountSkin);
   }
 
   attachOnFoot(parent: THREE.Object3D, yaw: number): void {
@@ -184,6 +214,7 @@ export class ClassicPlayerAvatar {
       scale: 0.9,
       mirrorModelZ: true,
     });
+    this.syncMantuaPlacement();
   }
 
   setEffectsEnabled(enabled: boolean): void {
@@ -265,6 +296,7 @@ export class ClassicPlayerAvatar {
     if (this.#released) return null;
     for (const name of actions) {
       if (!this.#lease.model.play(name, restart)) continue;
+      this.#mantua?.model.play(classicMantuaAction(name, this.#mounted), restart);
       return {
         name,
         durationSeconds: this.#lease.actionDurationSeconds(name) ?? 0,
@@ -276,6 +308,7 @@ export class ClassicPlayerAvatar {
   update(deltaSeconds: number): void {
     if (this.#released) return;
     this.#lease.model.update(deltaSeconds);
+    this.#mantua?.model.update(deltaSeconds);
     for (const weapon of this.#weapons) {
       // TMMesh::Render(1): (serverTime % 4000) / 4000 is added to U and V.
       const progress = weapon.refinement?.uvProgress;
@@ -291,8 +324,111 @@ export class ClassicPlayerAvatar {
       weapon.spectralForce?.dispose();
       disposeStaticGroup(weapon.object);
     }
+    this.#mantua?.release();
     this.#lease.release();
   }
+
+  private syncMantuaPlacement(mountSkin?: number): void {
+    if (!this.#mantua || !this.#mantuaDefinition) return;
+    this.#mantua.model.setClassicBaseAttachment(classicPlayerMantuaTransform(
+      this.#effectiveSkin,
+      this.#mantuaDefinition,
+      mountSkin,
+    ));
+  }
+}
+
+const CLASSIC_PLAYER_MANTUA_LENGTHS = [
+  [0.09, 0.08, 0.06, 0.07, 0.08, 0.08, 0.08, 0.065, 0.065, 0.055, 0.055, 0.01, 0.08, 0, 0.02, 0.01, 0.01, 0.035, 0.1, 0.03],
+  [0.1, 0.1, 0.1, 0.1, 0.1, 0.08, 0.1, 0.1, 0.1, 0.11, 0.1, 0.08, 0.09, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.08],
+  [0.08, 0.06, 0.05, 0.07, 0.05, 0.08, 0.08, 0.05, 0, 0.11, 0.08, 0.06, 0.055, 0, 0, 0, 0, 0, 0.1, 0.01],
+  [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.08, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.08],
+] as const;
+
+function attachClassicPlayerMantua(
+  body: ClassicSkinnedInstanceLease,
+  mantua: ClassicSkinnedInstanceLease,
+  effectiveSkin: number,
+  definition: ClassicEquippedMantuaVisual,
+): void {
+  const boneIndex = effectiveSkin === 1 ? 6 : 6;
+  const anchor = body.model.bones[boneIndex] ?? body.model.object;
+  anchor.add(mantua.model.object);
+  mantua.model.setClassicBaseAttachment(
+    classicPlayerMantuaTransform(effectiveSkin, definition),
+  );
+}
+
+function classicPlayerMantuaTransform(
+  effectiveSkin: number,
+  definition: ClassicEquippedMantuaVisual,
+  mountSkin?: number,
+): ClassicBaseAttachmentTransform {
+  let length: number;
+  let scale: number;
+  let length2: number;
+  if (definition.headItemIndex === 22 || definition.headItemIndex === 23) {
+    length = 0.07;
+    scale = 1.2;
+    length2 = -0.2;
+  } else if (definition.headItemIndex === 24) {
+    length = 0;
+    scale = 1.2;
+    length2 = 0;
+  } else if (definition.headItemIndex === 25) {
+    length = 0.01;
+    scale = 1;
+    length2 = 0.05;
+  } else if (definition.headItemIndex === 26) {
+    length = 0.07;
+    scale = 1.2;
+    length2 = 0.05;
+  } else {
+    const onceReduced = definition.coatMesh < 40
+      ? definition.coatMesh
+      : definition.coatMesh - 40;
+    const coatSlot = onceReduced >= 0 && onceReduced < 20
+      ? onceReduced
+      : ((definition.coatMesh % 40) + 40) % 40;
+    length = CLASSIC_PLAYER_MANTUA_LENGTHS[definition.classRow]?.[coatSlot] ?? 0;
+    scale = effectiveSkin === 1 ? 0.9 : 1;
+    length2 = 0;
+    if (definition.itemIndex >= 3_197 && definition.itemIndex <= 3_199) {
+      length = 0.11;
+      length2 = 0.05;
+    } else if (
+      definition.itemIndex === 573
+      || definition.itemIndex === 1_767
+      || definition.itemIndex === 1_770
+    ) {
+      length = 0.15;
+      length2 = 0.05;
+    }
+  }
+  return {
+    length,
+    scale,
+    length2,
+    yaw: -Math.PI / 2,
+    pitch: -Math.PI + classicMantuaMountPitchOffset(mountSkin),
+  };
+}
+
+function classicMantuaMountPitchOffset(skin: number | undefined): number {
+  if (skin === 25) return 0.1;
+  if (skin === 28 || skin === 31) return 0.15;
+  if (skin === 29 || skin === 40) return 0.18;
+  if (skin === 39 || skin === 30) return 0.25;
+  if (skin === 38) return 0.26;
+  if (skin === 20) return 0.5;
+  return 0;
+}
+
+function classicMantuaAction(bodyAction: string, mounted: boolean): string {
+  if (mounted) return "MOUNT";
+  if (bodyAction.includes("RUN")) return "RUN";
+  if (bodyAction.includes("STAND")) return "STAND01";
+  return "WALK";
 }
 
 async function attachClassicWeapon(

@@ -12,6 +12,7 @@ import {
   type ClassicWeaponEffectSegmentSample,
 } from "./player/ClassicPlayerAvatar";
 import type { ClassicPlayerWeaponLoadout } from "./player/ClassicPlayerWeaponCatalog";
+import type { ClassicEquippedMantuaVisual } from "./player/ClassicPlayerMantuaCatalog";
 import { ClassicBeastMasterTransformation } from "./player/ClassicBeastMasterTransformation";
 import type { BeastMasterTransformationDefinition } from "./combat/BeastMasterTransformations";
 import {
@@ -205,6 +206,7 @@ export class Player {
     classKey: ClassicPlayerClassKey = this.#avatarClassKey,
     look?: string | ClassicPlayerLookDefinition,
     weaponLoadout?: ClassicPlayerWeaponLoadout,
+    mantua?: ClassicEquippedMantuaVisual | null,
   ): Promise<boolean> {
     if (classKey !== "beastmaster") this.clearClassicBeastMasterTransformation();
     const generation = ++this.#avatarLoadGeneration;
@@ -216,6 +218,7 @@ export class Player {
         classKey,
         requestedLook,
         weaponLoadout,
+        mantua,
       );
       if (!avatar) return false;
       if (this.#disposed || generation !== this.#avatarLoadGeneration) {
@@ -1169,6 +1172,7 @@ export class Player {
         this.#avatar.attachToMount(
           this.#mount.riderAnchor,
           this.#mount.look.riderAttachment,
+          this.#mount.look.skin,
         );
       }
       else this.#avatar.attachOnFoot(this.#visualRoot, this.currentClassicYaw());

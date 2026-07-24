@@ -75,6 +75,7 @@ import {
   loadClassicPlayerEquipmentCatalog,
 } from "../game/player/ClassicPlayerEquipmentCatalog";
 import { loadClassicPlayerWeaponCatalog } from "../game/player/ClassicPlayerWeaponCatalog";
+import { loadClassicPlayerMantuaCatalog } from "../game/player/ClassicPlayerMantuaCatalog";
 import {
   DEFAULT_MOUNT_LOOK_KEY,
   MOUNT_LOOKS,
@@ -3577,6 +3578,7 @@ export class GameApp {
     const costume = snapshot.equipment.costume?.item ?? null;
     const mount = snapshot.equipment.mount?.item ?? null;
     const familiar = snapshot.equipment.familiar?.item ?? null;
+    const cape = snapshot.equipment.cape?.item ?? null;
     const signature = [
       snapshot.equipment.helmet?.item.key ?? "-",
       snapshot.equipment.armor?.item.key ?? "-",
@@ -3592,6 +3594,7 @@ export class GameApp {
       costume?.key ?? "-",
       mount?.key ?? "-",
       familiar?.key ?? "-",
+      cape?.key ?? "-",
     ].join("|");
     if (signature === this.#equipmentVisualSignature) return;
     this.#equipmentVisualSignature = signature;
@@ -3646,20 +3649,38 @@ export class GameApp {
           ? "Atualizando armadura…"
           : "Retirando traje…";
     }
-    const lookRequest = wantsBodyEquipment
+    const equipmentCatalogRequest = wantsBodyEquipment || cape
       ? loadClassicPlayerEquipmentCatalog(this.#assets)
-        .then((catalog) => catalog.composeLook(definition, bodyEquipment))
+      : Promise.resolve(null);
+    const lookRequest = wantsBodyEquipment
+      ? equipmentCatalogRequest.then((catalog) => (
+          catalog?.composeLook(definition, bodyEquipment) ?? desiredLookKey
+        ))
       : Promise.resolve(desiredLookKey);
     const weaponRequest = loadClassicPlayerWeaponCatalog(this.#assets).then((catalog) => (
       catalog.composeLoadout(definition, { leftHand, rightHand })
     ));
-    void Promise.all([lookRequest, weaponRequest]).then(([look, weapons]) => {
+    const mantuaRequest = cape
+      ? Promise.all([
+          loadClassicPlayerMantuaCatalog(this.#assets),
+          equipmentCatalogRequest,
+        ]).then(([catalog, equipmentCatalog]) => catalog.resolve(
+          definition,
+          cape,
+          snapshot.equipment.helmet?.item.classicIndex ?? 0,
+          equipmentCatalog?.itemMesh(
+            snapshot.equipment.armor?.item.classicIndex ?? 0,
+          ) ?? 0,
+        ))
+      : Promise.resolve(null);
+    void Promise.all([lookRequest, weaponRequest, mantuaRequest]).then(([look, weapons, mantua]) => {
       if (requestId !== this.#outfitLoadId) return false;
       return this.#player?.loadClassicAvatar(
         this.#assets!,
         definition.key,
         look,
         weapons,
+        mantua,
       ) ?? false;
     }).then((loaded) => {
       if (requestId !== this.#outfitLoadId) return;
@@ -3733,16 +3754,31 @@ export class GameApp {
     select.disabled = true;
     if (status) status.textContent = `Vestindo ${requestedLook.name}…`;
     const equipment = this.#playerState.snapshot.equipment;
-    void loadClassicPlayerWeaponCatalog(this.#assets)
-      .then((catalog) => catalog.composeLoadout(definition, {
-        leftHand: equipment.leftHand?.item ?? null,
-        rightHand: equipment.rightHand?.item ?? null,
+    void Promise.all([
+      loadClassicPlayerWeaponCatalog(this.#assets).then((catalog) => (
+        catalog.composeLoadout(definition, {
+          leftHand: equipment.leftHand?.item ?? null,
+          rightHand: equipment.rightHand?.item ?? null,
+        })
+      )),
+      loadClassicPlayerMantuaCatalog(this.#assets),
+      loadClassicPlayerEquipmentCatalog(this.#assets),
+    ])
+      .then(([weapons, mantuaCatalog, equipmentCatalog]) => ({
+        weapons,
+        mantua: mantuaCatalog.resolve(
+          definition,
+          equipment.cape?.item ?? null,
+          equipment.helmet?.item.classicIndex ?? 0,
+          equipmentCatalog.itemMesh(equipment.armor?.item.classicIndex ?? 0) ?? 0,
+        ),
       }))
-      .then((weapons) => this.#player?.loadClassicAvatar(
+      .then(({ weapons, mantua }) => this.#player?.loadClassicAvatar(
         this.#assets!,
         definition.key,
         requestedLook.key,
         weapons,
+        mantua,
       ) ?? false)
       .then((loaded) => {
       if (requestId !== this.#outfitLoadId) return;

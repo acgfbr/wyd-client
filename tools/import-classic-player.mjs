@@ -20,7 +20,9 @@ const transformationsRoot = path.join(outputRoot, "transformations");
 const griupanRoot = path.join(outputRoot, "familiars/ag01");
 const equipmentCatalogFile = path.join(outputRoot, "equipment-looks.json");
 const weaponCatalogFile = path.join(outputRoot, "weapons.json");
+const mantuaCatalogFile = path.join(outputRoot, "mantuas.json");
 const manifestFile = path.join(projectRoot, "public/game-data/classic/manifest.json");
+const monsterCatalogFile = path.join(projectRoot, "public/game-data/classic/monsters/catalog.json");
 const itemRecordBytes = 152;
 const modelTextureRecordBytes = 528;
 const bodySlotByPosition = new Map([
@@ -255,6 +257,40 @@ await writeFile(weaponCatalogFile, `${JSON.stringify({
   items: weaponItems,
 }, null, 2)}\n`);
 
+const monsterCatalog = JSON.parse(await readFile(monsterCatalogFile, "utf8"));
+const mantuaVariants = new Map(
+  (monsterCatalog.mantua?.variants ?? []).map((variant) => [variant.textureIndex, variant]),
+);
+const mantuaItems = [];
+const mantuaStats = { candidates: 0, missingVariant: 0, importedItems: 0 };
+for (let itemIndex = 1; itemIndex < itemList.length / itemRecordBytes; itemIndex++) {
+  const offset = itemIndex * itemRecordBytes;
+  if (itemList.readUInt16LE(offset + 136) !== 0x8000) continue;
+  mantuaStats.candidates++;
+  const textureIndex = itemList.readInt16LE(offset + 66);
+  const variant = mantuaVariants.get(textureIndex);
+  if (!variant) {
+    mantuaStats.missingVariant++;
+    continue;
+  }
+  mantuaItems.push({
+    index: itemIndex,
+    name: readCString(itemList, offset, 64),
+    mesh: itemList.readInt16LE(offset + 64),
+    textureIndex,
+    grade: itemList.readInt16LE(offset + 142),
+    texture: variant.texture,
+    alpha: normalizeAlpha(variant.alpha),
+  });
+}
+mantuaStats.importedItems = mantuaItems.length;
+await writeFile(mantuaCatalogFile, `${JSON.stringify({
+  version: 1,
+  source: "ItemList.bin Equip[15] + TMHuman::SetMantua + skin 85 mt01",
+  counts: mantuaStats,
+  items: mantuaItems,
+}, null, 2)}\n`);
+
 // Canonical selchar weapons plus the existing playable Skytalos. MSA and WYS
 // share the stems recorded in PlayerClasses; repeated assets are deduplicated.
 const importedWeapons = new Set();
@@ -415,7 +451,7 @@ await writeFile(
 );
 
 console.log(
-  `${CLASSIC_PLAYER_CLASSES.length} classes, ${equipmentItems.length} equipamentos LOOK_INFO, ${weaponItems.length} armas comuns, ${CLASSIC_COSTUME_LOOKS.length} trajes 4150..4183, ${HUNTRESS_LOOKS.length} looks especializados da Huntress, ${importedWeapons.size} armas canônicas, ${MOUNT_LOOKS.length} montarias, ${BEAST_MASTER_SUMMONS.length} evocacoes, ${BEAST_MASTER_TRANSFORMATIONS.length} transformacoes e Griupan/fadas importados para ${outputRoot}`,
+  `${CLASSIC_PLAYER_CLASSES.length} classes, ${equipmentItems.length} equipamentos LOOK_INFO, ${weaponItems.length} armas comuns, ${mantuaItems.length} mantuas, ${CLASSIC_COSTUME_LOOKS.length} trajes 4150..4183, ${HUNTRESS_LOOKS.length} looks especializados da Huntress, ${importedWeapons.size} armas canônicas, ${MOUNT_LOOKS.length} montarias, ${BEAST_MASTER_SUMMONS.length} evocacoes, ${BEAST_MASTER_TRANSFORMATIONS.length} transformacoes e Griupan/fadas importados para ${outputRoot}`,
 );
 
 function decodeWys(encoded) {

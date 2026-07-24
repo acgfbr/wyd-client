@@ -193,8 +193,13 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
    diferentes de `CFrame::Render`, duplica `WTYPE 41`, cruza tipo/posição em
    `CheckWeapon` e troca os bancos ANI a pé/montado. Ancient/refinação usam a
    multitextura da instância quando ela existe; o Skytalos +15 conserva sua
-   Força Espectral. Permanecem fora deste lote rosto/classe e mantuas de
-   player.
+   Força Espectral. `Equip[15]` também está coberto: os 36 itens de mantua
+   resolvem textura `mt01`, alpha, bone 6, `fMantuaList` por classe/armadura e
+   offsets especiais de elmo/capa. A malha auxiliar acompanha
+   `STAND/WALK/RUN` e usa a ANI 3 quando montada, incluindo o pitch específico
+   da montaria. Sanção/citizen continua dependente do total de kills e estado
+   vindos do servidor clássico; o frontend não fabrica esse dado. Permanece
+   fora deste lote somente rosto/classe.
 4. Skytalos, refinação e Ancient. Implementado e homologado: item `2551`,
    refinação +15, composição `MODULATE2X + ADDSMOOTH`, UV animado em 4 s e
    empunhadura pelo banco de arco da Huntress.
