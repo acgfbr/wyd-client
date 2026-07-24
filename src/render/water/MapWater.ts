@@ -16,19 +16,51 @@ const HOUSE_WATER_COMPANIONS = new Map<number, number>([
 const DUNGEON_WATER_ONE_OWNERS = new Set([292, 490, 1526, 1665, 2005]);
 const OWNED_GEOMETRY = "classicOwnedWaterGeometry";
 
-// Water records (type 2) are horizontal planes. Their local Y really is the
-// vertical axis, so a small height ripple is safe here.
-const surfaceVertexShader = /* glsl */ `
+// TMSea has three distinct FrameMove branches. Keep their authored UV scales
+// separate instead of applying one generic two-direction scroll.
+const outdoorSurfaceVertexShader = /* glsl */ `
   uniform float time;
   attribute vec2 uv2;
   varying vec2 vUv1;
   varying vec2 vUv2;
 
   void main() {
-    vUv1 = uv + vec2(0.0, time / 12.0);
-    vUv2 = uv2 + vec2(time / 18.0, time / 12.0);
+    vUv1 = uv;
+    vUv2 = vec2(uv2.x, uv2.y * 4.0 + time / 12.0);
     vec3 animated = position;
     animated.y += sin(uv.x * 3.14159265 + time * 1.04719755) * 0.05 - 0.1;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(animated, 1.0);
+  }
+`;
+
+const dungeonSurfaceVertexShader = /* glsl */ `
+  uniform float time;
+  uniform float waveBase;
+  attribute vec2 uv2;
+  varying vec2 vUv1;
+  varying vec2 vUv2;
+
+  void main() {
+    vUv1 = vec2(uv.x * 1.11111111, uv.y * 1.66666667 + time / 12.0);
+    vUv2 = uv2;
+    vec3 animated = position;
+    animated.y += sin(uv.x * 3.14159265 + time * 1.04719755) * 0.05 + waveBase;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(animated, 1.0);
+  }
+`;
+
+const specialSurfaceVertexShader = /* glsl */ `
+  uniform float time;
+  attribute vec2 uv2;
+  varying vec2 vUv1;
+  varying vec2 vUv2;
+
+  void main() {
+    vUv1 = uv * 0.21052632 + vec2(0.0, time / 18.0);
+    vUv2 = uv2 * 3.15789474 + vec2(time / 18.0, 0.0);
+    vec3 animated = position;
+    float classicPhase = mod(time, 12.0) / 3.0;
+    animated.y += sin(uv.x * 1.39626340 + classicPhase) * 0.9 - 0.1;
     gl_Position = projectionMatrix * modelViewMatrix * vec4(animated, 1.0);
   }
 `;
@@ -72,6 +104,7 @@ export class MapWater {
   readonly object = new THREE.Group();
   readonly #loader = new ClassicDdsTextureLoader();
   readonly #materials = new Map<string, Promise<THREE.ShaderMaterial | null>>();
+  readonly #textures = new Map<string, Promise<THREE.Texture | null>>();
   readonly #fieldGroups = new Map<string, THREE.Group>();
   readonly #fieldModelTypes = new Map<string, readonly number[]>();
   readonly #fieldSurfaces = new Map<string, readonly ClassicWaterSurface[]>();
@@ -102,10 +135,11 @@ export class MapWater {
     if (waterRecords.length === 0 && houseRecords.length === 0) return;
     const dungeon = dungeonType(column, row);
     const isDungeon = dungeon !== 0 && dungeon !== 3 && dungeon !== 4;
+    const surface = seaProfile(column, row, dungeon);
     const houseModelTypes = [...new Set(houseRecords.map((record) => HOUSE_WATER_COMPANIONS.get(record.type)!))];
     this.#fieldModelTypes.set(key, houseModelTypes);
     const [material, houseModels] = await Promise.all([
-      this.material(isDungeon),
+      this.material(surface),
       Promise.all(houseModelTypes.map(async (type) => [type, await this.models.retain(type)] as const)),
     ]);
     if (!material || this.#generations.get(key) !== generation || this.#fieldGroups.get(key) !== group) return;
@@ -204,14 +238,12 @@ export class MapWater {
     const materials = [...this.#materials.values()];
     this.#materials.clear();
     for (const entry of materials) {
-      void entry.then((material) => {
-        if (!material) return;
-        const uniforms = material.uniforms as Record<string, { value: unknown }>;
-        const textures = [uniforms.baseMap?.value, uniforms.detailMap?.value]
-          .filter((value): value is THREE.Texture => value instanceof THREE.Texture);
-        material.dispose();
-        for (const texture of textures) texture.dispose();
-      }).catch(() => undefined);
+      void entry.then((material) => material?.dispose()).catch(() => undefined);
+    }
+    const textures = [...this.#textures.values()];
+    this.#textures.clear();
+    for (const entry of textures) {
+      void entry.then((texture) => texture?.dispose()).catch(() => undefined);
     }
     this.object.removeFromParent();
     this.object.clear();
@@ -250,13 +282,37 @@ export class MapWater {
     return null;
   }
 
-  private material(dungeon: boolean): Promise<THREE.ShaderMaterial | null> {
-    return this.materialFor(
-      dungeon ? "dungeon" : "outdoor",
-      dungeon ? [8, 9] : [2, 3],
-      0.82,
-      surfaceVertexShader,
-    );
+  private material(profile: SeaProfile): Promise<THREE.ShaderMaterial | null> {
+    if (profile === "special") {
+      return this.materialFor(
+        "sea-special-406",
+        [406, 406],
+        0.9,
+        specialSurfaceVertexShader,
+        "effect",
+      );
+    }
+    if (profile === "dungeon-two") {
+      return this.materialFor(
+        profile,
+        [8, 9],
+        0.5,
+        dungeonSurfaceVertexShader,
+        "water",
+        -0.05,
+      );
+    }
+    if (profile === "dungeon") {
+      return this.materialFor(
+        profile,
+        [8, 9],
+        0.5,
+        dungeonSurfaceVertexShader,
+        "water",
+        -0.1,
+      );
+    }
+    return this.materialFor("outdoor", [2, 3], 0.9, outdoorSurfaceVertexShader);
   }
 
   private houseMaterial(profile: string): Promise<THREE.ShaderMaterial | null> {
@@ -274,20 +330,13 @@ export class MapWater {
     indices: readonly [number, number],
     opacity: number,
     shader: string,
+    textureSource: "water" | "effect" = "water",
+    waveBase = -0.1,
   ): Promise<THREE.ShaderMaterial | null> {
     const cached = this.#materials.get(key);
     if (cached) return cached;
-    const promise = Promise.all(indices.map(async (index) => {
-      const url = this.assets.waterTextureUrl(index);
-      if (!url) return null;
-      return this.#loader.loadAsync(url).then((texture) => {
-        texture.colorSpace = THREE.SRGBColorSpace;
-        texture.wrapS = THREE.RepeatWrapping;
-        texture.wrapT = THREE.RepeatWrapping;
-        texture.anisotropy = 4;
-        return texture;
-      }).catch(() => null);
-    })).then(([baseMap, detailMap]) => {
+    const promise = Promise.all(indices.map((index) => this.texture(textureSource, index)))
+      .then(([baseMap, detailMap]) => {
       if (!baseMap || !detailMap) return null;
       return new THREE.ShaderMaterial({
         name: `WYD water ${key}`,
@@ -296,6 +345,7 @@ export class MapWater {
           baseMap: { value: baseMap },
           detailMap: { value: detailMap },
           opacity: { value: opacity },
+          waveBase: { value: waveBase },
         },
         vertexShader: shader,
         fragmentShader,
@@ -308,6 +358,34 @@ export class MapWater {
     this.#materials.set(key, promise);
     return promise;
   }
+
+  private texture(source: "water" | "effect", index: number): Promise<THREE.Texture | null> {
+    const key = `${source}:${index}`;
+    const cached = this.#textures.get(key);
+    if (cached) return cached;
+    const url = source === "effect"
+      ? this.assets.effectTextureUrl(index)
+      : this.assets.waterTextureUrl(index);
+    if (!url) return Promise.resolve(null);
+    const promise = this.#loader.loadAsync(url).then((texture) => {
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.wrapS = THREE.RepeatWrapping;
+      texture.wrapT = THREE.RepeatWrapping;
+      texture.anisotropy = 4;
+      return texture;
+    }).catch(() => null);
+    this.#textures.set(key, promise);
+    return promise;
+  }
+}
+
+type SeaProfile = "outdoor" | "dungeon" | "dungeon-two" | "special";
+
+function seaProfile(column: number, row: number, dungeon: number): SeaProfile {
+  if ((column === 28 || column === 29) && (row === 22 || row === 23)) return "special";
+  if (dungeon === 2) return "dungeon-two";
+  if (dungeon !== 0 && dungeon !== 3 && dungeon !== 4) return "dungeon";
+  return "outdoor";
 }
 
 function parseFieldKey(key: string): [number, number] {

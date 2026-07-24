@@ -3,18 +3,34 @@ import type { ClassicAssetSource } from "../../assets/ClassicAssetSource";
 import { parseMsa } from "../../formats/classic/Msa";
 import { ClassicDdsTextureLoader } from "../textures/ClassicDdsTextureLoader";
 
+interface ModelResource {
+  readonly prototype: THREE.Group | null;
+  readonly textureFiles: readonly string[];
+}
+
+interface ModelCacheEntry {
+  references: number;
+  readonly promise: Promise<ModelResource>;
+}
+
+interface TextureCacheEntry {
+  references: number;
+  readonly promise: Promise<THREE.Texture | null>;
+}
+
 export class ModelLibrary {
   readonly #loader = new ClassicDdsTextureLoader();
-  readonly #cache = new Map<number, { references: number; promise: Promise<THREE.Group | null> }>();
+  readonly #cache = new Map<number, ModelCacheEntry>();
+  readonly #textures = new Map<string, TextureCacheEntry>();
 
   constructor(private readonly assets: ClassicAssetSource) {}
 
   load(type: number): Promise<THREE.Group | null> {
     const cached = this.#cache.get(type);
-    if (cached) return cached.promise;
+    if (cached) return cached.promise.then((resource) => resource.prototype);
     const promise = this.loadUncached(type);
     this.#cache.set(type, { references: 0, promise });
-    return promise;
+    return promise.then((resource) => resource.prototype);
   }
 
   /** Mantem o prototipo vivo enquanto ao menos um Field carregado o utiliza. */
@@ -25,7 +41,7 @@ export class ModelLibrary {
       this.#cache.set(type, cached);
     }
     cached.references++;
-    return cached.promise;
+    return cached.promise.then((resource) => resource.prototype);
   }
 
   /**
@@ -38,8 +54,8 @@ export class ModelLibrary {
     cached.references = Math.max(0, cached.references - 1);
     if (cached.references !== 0) return;
     this.#cache.delete(type);
-    void cached.promise.then((prototype) => {
-      if (prototype) disposePrototype(prototype);
+    void cached.promise.then((resource) => {
+      this.disposeResource(resource);
     }).catch(() => undefined);
   }
 
@@ -48,23 +64,40 @@ export class ModelLibrary {
     this.#cache.clear();
     for (const entry of entries) {
       entry.references = 0;
-      void entry.promise.then((prototype) => {
-        if (prototype) disposePrototype(prototype);
+      void entry.promise.then((resource) => {
+        this.disposeResource(resource);
       }).catch(() => undefined);
     }
   }
 
-  private async loadUncached(type: number): Promise<THREE.Group | null> {
+  private async loadUncached(type: number): Promise<ModelResource> {
     const source = await this.assets.loadModel(type);
-    if (!source) return null;
+    if (!source) return { prototype: null, textureFiles: [] };
     const model = parseMsa(source.buffer);
+    const textureFiles = [...new Set(
+      source.textures.filter((file): file is string => file !== null),
+    )];
+    const textureJobs = new Map(
+      textureFiles.map((file) => [file, this.retainTexture(file)]),
+    );
+    // TMObject reads only m_nTextureIndex[0].cAlpha and applies the resulting
+    // render state to every attribute range drawn by the TMMesh.
+    const firstAlphaMode = source.textureAlphas[0];
+    const usesAlpha = (firstAlphaMode != null && firstAlphaMode !== "N")
+      || (type >= 156 && type <= 185);
     const materials = await Promise.all(source.textures.map(async (file, index) => {
       if (!file) return fallbackMaterial(type, index);
-      const texture = await this.#loader.loadAsync(this.assets.dataUrl(file)).catch(() => null);
+      const texture = await textureJobs.get(file);
       if (!texture) return fallbackMaterial(type, index);
-      texture.colorSpace = THREE.SRGBColorSpace;
-      texture.anisotropy = 4;
-      return new THREE.MeshLambertMaterial({ map: texture, alphaTest: 0.35, side: THREE.DoubleSide });
+      // TMObject forces the dungeon set 156..185 through the alpha path even
+      // though its six DXT1 entries are marked N in MeshTextureList.
+      return new THREE.MeshLambertMaterial({
+        map: texture,
+        alphaTest: usesAlpha ? 0xaa / 0xff : 0,
+        transparent: usesAlpha,
+        depthWrite: true,
+        side: THREE.DoubleSide,
+      });
     }));
     if (materials.length === 0) materials.push(fallbackMaterial(type, 0));
     const mesh = new THREE.Mesh(model.geometry, materials);
@@ -77,24 +110,46 @@ export class ModelLibrary {
     mesh.name = `model-${type}`;
     const group = new THREE.Group();
     group.add(mesh);
-    return group;
+    return { prototype: group, textureFiles };
+  }
+
+  private retainTexture(file: string): Promise<THREE.Texture | null> {
+    let cached = this.#textures.get(file);
+    if (!cached) {
+      const promise = this.#loader.loadAsync(this.assets.dataUrl(file)).then((texture) => {
+        texture.colorSpace = THREE.SRGBColorSpace;
+        texture.anisotropy = 4;
+        return texture;
+      }).catch(() => null);
+      cached = { references: 0, promise };
+      this.#textures.set(file, cached);
+    }
+    cached.references++;
+    return cached.promise;
+  }
+
+  private releaseTexture(file: string): void {
+    const cached = this.#textures.get(file);
+    if (!cached) return;
+    cached.references = Math.max(0, cached.references - 1);
+    if (cached.references !== 0) return;
+    this.#textures.delete(file);
+    void cached.promise.then((texture) => texture?.dispose()).catch(() => undefined);
+  }
+
+  private disposeResource(resource: ModelResource): void {
+    if (resource.prototype) disposePrototype(resource.prototype);
+    for (const file of resource.textureFiles) this.releaseTexture(file);
   }
 }
 
 function disposePrototype(prototype: THREE.Group): void {
-  const textures = new Set<THREE.Texture>();
   prototype.traverse((child) => {
     if (!(child instanceof THREE.Mesh)) return;
     child.geometry.dispose();
     const materials = Array.isArray(child.material) ? child.material : [child.material];
-    for (const material of materials) {
-      const textured = material as THREE.Material & { map?: THREE.Texture | null; alphaMap?: THREE.Texture | null };
-      if (textured.map) textures.add(textured.map);
-      if (textured.alphaMap) textures.add(textured.alphaMap);
-      material.dispose();
-    }
+    for (const material of materials) material.dispose();
   });
-  for (const texture of textures) texture.dispose();
 }
 
 function fallbackMaterial(type: number, part: number): THREE.MeshLambertMaterial {

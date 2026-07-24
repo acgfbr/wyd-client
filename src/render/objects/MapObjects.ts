@@ -12,6 +12,9 @@ import { ClassicFloatObjects } from "../water/ClassicFloatObjects";
 const nonStaticTypes = new Set([2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 121, 343, 344, 1980]);
 const WATERFALL_OBJECT_TYPES = new Set([292, 490, 1526, 1665, 2005]);
 const BIKE_OBJECT_TYPES = new Set([1549, 1550, 1551]);
+const SKY_REFLECTION_OBJECT_TYPES = new Set([1934, 1976, 1977]);
+const SNOW_SKY_EFFECT_TEXTURE = 68;
+const OWNED_SKY_REFLECTION_MATERIAL = "classicOwnedSkyReflectionMaterial";
 const HOUSE_ROOF_TYPES = new Map<number, number>([
   [251, 252],
   [252, 253],
@@ -214,6 +217,9 @@ export class MapObjects {
     const floats = this.#floats.addBlock(column, row, records);
     const prototypes = new Map<number, THREE.Group | null>();
     const typeSet = new Set(records.map((record) => record.type).filter(isStaticMeshType));
+    const skyReflectionTexture = [...typeSet].some((type) => SKY_REFLECTION_OBJECT_TYPES.has(type))
+      ? this.#effects.effectTexture(SNOW_SKY_EFFECT_TEXTURE)
+      : Promise.resolve(null);
     // TMHouse(474) possui uma segunda MSA: as pas animadas do catavento.
     if (typeSet.has(474)) typeSet.add(475);
     if (typeSet.has(607)) {
@@ -241,16 +247,25 @@ export class MapObjects {
       if (index + 4 < types.length) await nextFrame();
     }
     if (this.#generations.get(key) !== generation || this.#fieldGroups.get(key) !== group) return;
+    const reflectionTexture = await skyReflectionTexture;
+    if (this.#generations.get(key) !== generation || this.#fieldGroups.get(key) !== group) return;
     for (let index = 0; index < records.length; index++) {
       const record = records[index]!;
       const prototype = prototypes.get(record.type);
       if (!prototype) continue;
       const instance = prototype.clone(true);
-      const scene = toScene({ x: column * FIELD_WORLD_SIZE + record.localX, y: row * FIELD_WORLD_SIZE + record.localY }, this.origin);
-      instance.position.set(scene.x, record.height, scene.z);
+      const worldPosition = {
+        x: column * FIELD_WORLD_SIZE + record.localX,
+        y: row * FIELD_WORLD_SIZE + record.localY,
+      };
+      const scene = toScene(worldPosition, this.origin);
+      instance.position.set(scene.x, classicVisualHeight(record, worldPosition), scene.z);
       instance.rotation.y = -record.angle;
       instance.scale.set(record.scaleH || 1, record.scaleV || 1, record.scaleH || 1);
       instance.name = `object-${record.type}`;
+      if (reflectionTexture && SKY_REFLECTION_OBJECT_TYPES.has(record.type)) {
+        installClassicSkyReflection(instance, reflectionTexture);
+      }
       if (record.type === 1855) {
         proximityBlendObjects.push({
           position: {
@@ -335,6 +350,13 @@ export class MapObjects {
     if (group) {
       this.#fieldGroups.delete(key);
       this.object.remove(group);
+      group.traverse((child) => {
+        if (!(child instanceof THREE.Mesh)) return;
+        const materials = Array.isArray(child.material) ? child.material : [child.material];
+        for (const material of materials) {
+          if (material.userData[OWNED_SKY_REFLECTION_MATERIAL]) material.dispose();
+        }
+      });
       // Instancias compartilham recursos com ModelLibrary. Limpar os filhos
       // solta as referencias, sem destruir recursos ainda usados por vizinhos.
       group.clear();
@@ -379,6 +401,88 @@ function parseFieldKey(key: string): [number, number] {
 
 function nextFrame(): Promise<void> {
   return new Promise((resolve) => requestAnimationFrame(() => resolve()));
+}
+
+function classicVisualHeight(record: MapObjectRecord, position: WydPosition): number {
+  const x = Math.trunc(position.x);
+  const y = Math.trunc(position.y);
+  // TMObject::FrameMove contains these four retail corrections. They alter
+  // only the rendered object's height after mask registration, so navigation
+  // must continue using the unmodified DAT height.
+  if (record.type === 443 && x === 2540 && y === 2086) return 0;
+  if (record.type === 454 && x === 2542 && y === 2090) return 0;
+  if (record.type === 454 && x === 2540 && y === 2082) return 0;
+  if (record.type === 449 && x === 2540 && y === 2094) return 0;
+  return record.height;
+}
+
+function installClassicSkyReflection(object: THREE.Object3D, texture: THREE.Texture): void {
+  object.traverse((child) => {
+    if (!(child instanceof THREE.Mesh)) return;
+    const sourceMaterials = Array.isArray(child.material) ? child.material : [child.material];
+    const materials = sourceMaterials.map((source) => {
+      const material = source.clone();
+      material.userData[OWNED_SKY_REFLECTION_MATERIAL] = true;
+      const previousCompile = material.onBeforeCompile;
+      material.onBeforeCompile = (
+        shader: THREE.WebGLProgramParametersWithUniforms,
+        renderer: THREE.WebGLRenderer,
+      ) => {
+        previousCompile.call(material, shader, renderer);
+        shader.uniforms.wydSkyReflection = { value: texture };
+        shader.vertexShader = shader.vertexShader
+          .replace(
+            "void main() {",
+            [
+              "varying vec3 vWydViewNormal;",
+              "varying vec3 vWydViewPosition;",
+              "void main() {",
+            ].join("\n"),
+          )
+          .replace(
+            "#include <project_vertex>",
+            [
+              "#include <project_vertex>",
+              "vWydViewNormal = normalize(transformedNormal);",
+              "vWydViewPosition = mvPosition.xyz;",
+            ].join("\n"),
+          );
+        shader.fragmentShader = shader.fragmentShader
+          .replace(
+            "void main() {",
+            [
+              "uniform sampler2D wydSkyReflection;",
+              "varying vec3 vWydViewNormal;",
+              "varying vec3 vWydViewPosition;",
+              "void main() {",
+            ].join("\n"),
+          )
+          .replace(
+            "#include <map_fragment>",
+            [
+              "#include <map_fragment>",
+              "vec3 wydIncident = normalize(vWydViewPosition);",
+              "vec3 wydReflection = reflect(wydIncident, normalize(vWydViewNormal));",
+              "float wydSphereM = 2.0 * sqrt(",
+              "  wydReflection.x * wydReflection.x",
+              "  + wydReflection.y * wydReflection.y",
+              "  + (wydReflection.z + 1.0) * (wydReflection.z + 1.0)",
+              ");",
+              "vec2 wydReflectionUv = wydSphereM > 0.0001",
+              "  ? wydReflection.xy / wydSphereM + 0.5",
+              "  : vec2(0.5);",
+              "vec3 wydSky = texture2D(wydSkyReflection, wydReflectionUv).rgb;",
+              "// D3DTOP_ADDSMOOTH: arg1 + arg2 * (1 - arg1).",
+              "diffuseColor.rgb = diffuseColor.rgb + wydSky * (1.0 - diffuseColor.rgb);",
+            ].join("\n"),
+          );
+      };
+      material.customProgramCacheKey = () => "wyd-snow-sky-reflection-v1";
+      material.needsUpdate = true;
+      return material;
+    });
+    child.material = Array.isArray(child.material) ? materials : materials[0]!;
+  });
 }
 
 function createWindmillBlade(

@@ -34,6 +34,10 @@ com vários drops, com NPC shop/cargo/inventário aberto e no iPhone.
   compartilha cache/model library e só usa renderer próprio pequeno quando
   necessário.
 - Texturas e geometrias de mundo entram por streaming de Field.
+- `ModelLibrary` deduplica os DDS por caminho: 2.098 slots de material das
+  963 MSA compartilham 419 arquivos físicos. Cada modelo retém
+  uma lease por DDS distinto e o último `release` descarta a textura; materiais
+  e geometrias continuam por protótipo para não compartilhar estado mutável.
 - Vários sistemas possuem `dispose()` explícito para pools, texturas,
   materiais, skeletons, labels canvas e renderers auxiliares.
 - `GameApp.dispose()` agora centraliza o shutdown: para o animation loop,
@@ -43,6 +47,20 @@ com vários drops, com NPC shop/cargo/inventário aberto e no iPhone.
   real.
 - Dados clássicos pesados carregam lazy: comércio, skills, ícones e modelos
   só são resolvidos quando necessários.
+- Materiais MSA de cenário preservam agora o `cAlpha` de
+  `MeshTextureList.bin`. O primeiro slot governa o mesh inteiro, igual ao
+  `TMObject`; somente `A/C` e a exceção `156..185` entram na fila transparente,
+  evitando tanto recortes opacos quanto ordenar todos os 963 modelos como
+  transparentes.
+- Folhas, árvores, navios, borboletas e peixes continuam agrupados em
+  `InstancedMesh`, mas não usam mais deformação procedural genérica. Quatro
+  poses amostradas dos BON/ANI clássicos são atributos compartilhados do
+  protótipo e o shader interpola o ciclo com o `m_dwFPS` de cada classe. Isso
+  preserva poucos draw calls sem alocar um `Skeleton` por instância.
+- `MapWater` separa os três shaders de `TMSea` (externo, dungeon e região
+  especial `28/29 × 22/23`) e deduplica seus DDS por origem/índice. Materiais
+  compartilham as texturas `2/3`, `8/9` e o efeito `406`, que são descartadas
+  uma única vez no lifecycle global da água.
 - O preview 3D do inventário usa LRU de no máximo 12 instâncias. Materiais
   clonados são descartados na expulsão e o protótipo do `ModelLibrary` é
   liberado quando nenhum outro preview daquele tipo continua residente. Assim,
@@ -91,7 +109,7 @@ A matriz fisica e reproduzivel agora e gerada por
 `bun run audit:coverage` em `docs/matriz-cobertura-classico.md` e
 `docs/matriz-cobertura-classico.json`. O gerador cruza o manifesto com os
 arquivos existentes e importa as definicoes TypeScript do runtime para nao
-confundir asset presente com feature jogavel. No snapshot atual existem 2.303
+confundir asset presente com feature jogavel. No snapshot atual existem 2.449
 caminhos unicos declarados e nenhum ausente; os 111 Fields possuem 111 TRN,
 108 DAT declarados e 103 minimapas declarados. As ausencias de DAT/minimapa
 nos demais Fields fazem parte do proprio manifesto, nao sao links quebrados.
@@ -100,11 +118,11 @@ nos demais Fields fazem parte do proprio manifesto, nao sao links quebrados.
 | --- | --- | --- | --- |
 | Mapas/Fields | 111 Fields, streaming, conexões, minimapas, seletor | `manifest.json`, `Field*.trn`, `regions.ts` | Revisão visual final dos 111 mapas |
 | Terreno/colisão | TRN, AttributeMap, object.bin, pontes/altura, pathfinding | `ClassicWorld`, `ClassicNavigation` | Casos isolados de máscara/altura que aparecerem em teste |
-| Objetos/props | DAT/WYS/MSH, água, folhas, fogueiras, fontes, floats, TMDust 531, tetos/partículas TMHouse e composições 1846/1980/2035 | `MapObjects`, `MapWater`, `ClassicEnvironmentObjects`, `MapEffects`, `MapMeshEffects` | Homologar pontos de grama e objetos raros |
+| Objetos/props | DAT/WYS/MSH, água, folhas/árvores/fauna/navios com ANI instanciada, fogueiras, fontes, floats, TMDust 531, tetos/partículas TMHouse, reflexos de céu e composições 1846/1980/2035 | `MapObjects`, `MapWater`, `ClassicEnvironmentObjects`, `MapEffects`, `MapMeshEffects` | Homologar pontos de grama e famílias ambientais raras |
 | Personagem | Quatro classes jogáveis, rigs, traje base, arma, montaria/familiar | `PlayerClasses`, `ClassicPlayerAvatar` | Cobertura completa de equipamentos visuais por classe |
 | Huntress | Mulher Kalintz, Skytalos Ancient +15, Griupan, 17 skills promovidas | `HuntressLooks`, `ClassicHuntressSkillEffects`, `ClassicAlchemyCatalog`, `ClassicLevelUpEffects` | 17 passivas e 2 casts ainda fora do runtime |
 | Montarias | 14 montarias nível 120, Unicórnio padrão, sela/bones | `MountLooks`, `ClassicMount` | Homologação visual de todas as variações |
-| NPCs/monstros | Spawn por Field, animação, hover/seleção, IA offline, drops | `MonsterCatalog`, `ClassicSpawnManager` | Cobertura de todos skins/itens/ações especiais |
+| NPCs/monstros | Spawn por Field, animação, hover/seleção, IA offline, drops e armas Equip[6]/[7] nos bones de mão | `MonsterCatalog`, `ClassicSpawnManager` | Homologar skins/armas e ações especiais por amostragem |
 | BeastMaster | 8 evocações (10 por cast), IA offline e 5 transformações de rig | `BeastMasterSummons`, `ClassicBeastMasterSummon`, `BeastMasterTransformations` | Invocação Final e fórmulas autoritativas ainda dependem do servidor |
 | Inventário/equipamento | UI 7.54, bolsas, equip/unequip, cargo, preview 3D, Extração e Alquimia somente leitura | `GameHud`, `ClassicInventoryPreview`, `ClassicAlchemyCatalog` | Compra/venda/economia e resultado das combinações somente com servidor |
 | Itens/comércio | 6.500 ItemList, ItemPrice, Carry de NPC, tooltips clássicos e footprint EF_GRID | `ClassicCommerceCatalog`, `PlayerState`, `ClassicItemTooltip` | Ownership/decadência de drops e economia autoritativa |
@@ -125,9 +143,14 @@ nos demais Fields fazem parte do proprio manifesto, nao sao links quebrados.
   ainda não existe. O próximo import deve partir de `ItemList.bin` e das regras
   de slot/mesh do cliente, não de uma lista manual de skins.
 - Monstros/NPCs: os 377 templates e 3.937 geradores estão catalogados e entram
-  no streaming. A lacuna é validar famílias visuais e ações especiais por
-  template; não faltam apenas arquivos. Casos com skin incorreta devem ser
-  corrigidos no catálogo/importador para beneficiar todos os spawns.
+  no streaming. As armas rígidas também foram fechadas a partir de
+  `Equip[6]/Equip[7]`: 76 MSAs cobrem 224 templates e 269 attachments,
+  incluindo o espelhamento/rotação das duas garras `EF_WTYPE 41`. Os rigs
+  humanoides cruzam o tipo com `nPos/position@136` nos mesmos branches de
+  `CheckWeapon` para escolher seu banco ANI. A lacuna restante é validar
+  famílias visuais, armas e ações especiais por amostragem; casos com skin
+  incorreta devem ser corrigidos no catálogo/importador para beneficiar todos
+  os spawns.
 - Itens: os 6.500 registros, preços, carries e ícones estão importados. Ainda
   são sistemas de servidor: propriedade real do drop, compra/venda, economia,
   persistência e validação. `EF_GRID` multicélula já é respeitado por
@@ -146,6 +169,22 @@ nos demais Fields fazem parte do proprio manifesto, nao sao links quebrados.
   que o cliente explicitamente zera ou interrompe;
   697 estruturas recuperaram os overlays indiretos `1555..1559/1598`, e 62
   objetos `TMBike 1549..1551` agora oscilam no ciclo clássico de 20 segundos;
+  157 objetos `1934/1976/1977` de `Field2722` recuperaram a segunda textura
+  de céu `68` com coordenada de reflexão de câmera e `ADDSMOOTH`; o importador
+  passou a incluir corretamente `EffectTextureList 67..70`, cujos arquivos
+  vivem em `mesh/`, não em `Effect/`;
+  os 817 flags `m_bAlphaObj` e as entradas genéricas
+  `507..510/519/533..599` foram auditados como branches sem instância ativa
+  nos setores/DAT deste corpus, portanto permanecem sem comportamento inventado;
+  quatro hotfixes de altura de `TMObject::FrameMove` em `Field1916` foram
+  aplicados somente aos meshes, preservando a máscara autoritativa;
+  os 2.024 metadados `cAlpha` das texturas MSA passaram a fazer parte do
+  manifest e do material de runtime, incluindo a exceção autoral `156..185`;
+  `TMButterFly/TMFish/TMLeaf/TMTree/TMShip` recuperaram movimentos, ritmos e
+  ANI por quatro poses instanciadas, a rotação adicional dos navios e as
+  partículas `80` dos tipos de árvore `363..367`;
+  `TMSea` recuperou os três perfis de UV/onda/material, incluindo as 14
+  superfícies especiais com efeito `406` em `Field2922/2923`;
   confirmou ainda que `520..530`, `657/658` e `674` são deliberadamente
   invisíveis no cliente.
 - Áudio: 333 SFX e 13 músicas estão no catálogo. Quatro referências não existem

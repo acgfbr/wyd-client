@@ -149,6 +149,10 @@ export class MapEffects {
     this.object.visible = enabled;
   }
 
+  effectTexture(index: number): Promise<THREE.Texture | null> {
+    return this.#textures.load(index);
+  }
+
   private async addRecord(
     column: number,
     row: number,

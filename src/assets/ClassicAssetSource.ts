@@ -21,7 +21,11 @@ export interface ClassicManifest {
   readonly textures: Record<string, { readonly file: string; readonly alpha: string }>;
   readonly effectTextures: Record<string, { readonly file: string; readonly alpha: string }>;
   readonly waterTextures: Record<string, { readonly file: string; readonly alpha: string }>;
-  readonly objectModels: Record<string, { readonly file: string; readonly textures: readonly (string | null)[] }>;
+  readonly objectModels: Record<string, {
+    readonly file: string;
+    readonly textures: readonly (string | null)[];
+    readonly textureAlphas?: readonly (string | null)[];
+  }>;
   readonly navigation: {
     readonly attributeMap: ClassicNavigationAssetEntry & { readonly baseChecksum: number };
     readonly objectMasks: ClassicNavigationAssetEntry & { readonly encryptedChecksum: number };
@@ -97,12 +101,20 @@ export class ClassicAssetSource {
     return response.arrayBuffer();
   }
 
-  async loadModel(type: number): Promise<{ buffer: ArrayBuffer; textures: readonly (string | null)[] } | null> {
+  async loadModel(type: number): Promise<{
+    buffer: ArrayBuffer;
+    textures: readonly (string | null)[];
+    textureAlphas: readonly (string | null)[];
+  } | null> {
     const entry = this.manifest.objectModels[String(type)];
     if (!entry) return null;
     const response = await fetch(`${ClassicAssetSource.base}/${entry.file}`);
     if (!response.ok) throw new Error(`Falha ao carregar modelo ${type}`);
-    return { buffer: await response.arrayBuffer(), textures: entry.textures };
+    return {
+      buffer: await response.arrayBuffer(),
+      textures: entry.textures,
+      textureAlphas: entry.textureAlphas ?? [],
+    };
   }
 
   dataUrl(file: string): string {

@@ -1,9 +1,9 @@
 {
-  "generatedAt": "2026-07-23T23:35:02.469Z",
+  "generatedAt": "2026-07-24T01:15:00.878Z",
   "command": "bun run audit:coverage",
   "source": "WYD classic",
   "referencedFiles": {
-    "total": 2303,
+    "total": 2449,
     "missing": []
   },
   "maps": {
@@ -17,9 +17,9 @@
   },
   "manifest": {
     "terrainTextures": 238,
-    "effectTextures": 495,
+    "effectTextures": 499,
     "waterTextures": 5,
-    "objectModels": 889
+    "objectModels": 963
   },
   "monsters": {
     "templates": 377,
@@ -406,11 +406,11 @@
     {
       "label": "Modelos de mapa",
       "directory": "models",
-      "files": 1240,
-      "bytes": 37104518,
+      "files": 1382,
+      "bytes": 38666248,
       "extensions": {
-        ".dds": 351,
-        ".msa": 889
+        ".dds": 419,
+        ".msa": 963
       }
     },
     {
@@ -425,10 +425,10 @@
     {
       "label": "Texturas de efeitos",
       "directory": "textures/effects",
-      "files": 495,
-      "bytes": 16493808,
+      "files": 499,
+      "bytes": 17018608,
       "extensions": {
-        ".dds": 495
+        ".dds": 499
       }
     },
     {
@@ -444,7 +444,7 @@
       "label": "Monstros/NPCs",
       "directory": "monsters",
       "files": 1340,
-      "bytes": 38973865,
+      "bytes": 38987616,
       "extensions": {
         ".ani": 555,
         ".bon": 47,

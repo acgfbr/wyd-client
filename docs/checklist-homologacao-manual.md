@@ -71,6 +71,29 @@ escopo atual.
   `1169,4019` (`1551`): devem completar a oscilação `-3..+3` em 20 segundos
   pelo eixo indicado pelo ângulo, sem criar clones ou deslocar a posição-base
   após descarregar/recarregar o Field.
+- Em `Field2722`, conferir `1934` em `3486.5,2849.5`, `1976` em
+  `3480.5,2878.5` e `1977` em `3478.5,2885.5`: o acabamento deve refletir a
+  textura azul de neve conforme a câmera gira, combinado suavemente com a
+  textura-base, sem ficar branco, opaco ou trocar o material dos vizinhos.
+  Sair e voltar ao Field não pode aumentar `GEO/TEX` a cada ciclo.
+- Em `Field1916`, conferir as peças `454@2540.5,2082.5`,
+  `443@2540.5,2086.5`, `454@2542.5,2090.5` e `449@2540.5,2094.5`: os
+  quatro meshes devem repousar na altura zero, sem flutuar de 1,175 a 1,925
+  unidades e sem abrir a máscara de colisão ao redor.
+- Homologar a ambientação esquelética em amostras curtas: borboletas/folhas/
+  árvores em `Field0101` perto de `142,176`; peixes em `Field0330` perto de
+  `420,3920`; navios `487..489` em `Field1612` perto de `2104,1570`; e árvores
+  com partículas `363/367` em `Field0129` perto de `202,3748`. As asas,
+  nadadeiras, folhas e galhos devem seguir a ANI sem parecer uma malha rígida;
+  os navios devem manter a orientação e animação autoradas, sem balanço
+  vertical artificial. `V` deve ocultar somente as partículas, não a
+  vegetação/fauna/navio. Repetir entrada/saída e confirmar que `GEO/TEX`
+  estabilizam.
+- Conferir o perfil especial de `TMSea` em `Field2922` perto de
+  `3712,2847` e em `Field2923` perto de `3729,2994`: a água deve usar a
+  textura de efeito `406`, duas direções de UV e onda alta, sem herdar a água
+  azul externa. Comparar também uma superfície externa e uma dungeon; trocar
+  repetidamente entre elas não pode duplicar `TEX`.
 
 ## Criterio de fechamento
 

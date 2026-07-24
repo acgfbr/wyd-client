@@ -399,7 +399,29 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
     importadas e agora acompanham posição/ângulo da base. As 62 plataformas
     `TMBike` (`1549..1551`) também reproduzem a senoide clássica de `20 s`,
     amplitude `±3` e seleção de eixo pelo ângulo. Falta homologar visualmente
-    esses dois lotes nas coordenadas registradas no checklist.
+    esses dois lotes nas coordenadas registradas no checklist. A sequência
+    seguinte recuperou o segundo estágio refletivo dos 157 objetos
+    `1934/1976/1977`, todos em `Field2722`: nessa região o cliente força neve,
+    seleciona `EffectTexture 68` (`mesh/sky02.wys`) e combina a amostra por
+    reflection-vector com `D3DTOP_ADDSMOOTH`. O importador passou a respeitar
+    também as entradas de `EffectTextureList.bin` que apontam para a pasta
+    `mesh`, e os materiais próprios dessas instâncias são descartados com o
+    Field. Falta homologar o reflexo nas coordenadas do checklist. Duas
+    aparentes lacunas foram descartadas por evidência: os 817 registros com
+    `m_bAlphaObj` não caem em nenhum dos setores onde o cliente executa seu
+    raycast de câmera, e não existe registro DAT dos tipos genéricos
+    `507..510/519/533..599`; não se deve criar comportamento ou objetos para
+    branches inativos neste corpus. Também foram portadas as quatro correções
+    de altura puramente visuais de `TMObject::FrameMove` em `Field1916`
+    (`443/449/454` perto de `2540,2082..2094`): o mesh vai para altura zero,
+    mas a altura DAT continua intacta no registro da máscara, como no cliente.
+    O caminho opaco/transparente dos objetos também deixou de usar uma regra
+    única: o manifest preserva agora os 2.024 bytes `cAlpha` das texturas MSA;
+    `ModelLibrary` consulta exatamente o primeiro slot, como
+    `TMObject::Render`, e ativa alpha-test `0xAA` +
+    `SRCALPHA/INVSRCALPHA` apenas para `A/C` ou para a faixa forçada
+    `156..185`. Isso corrige cercas/folhagens/ornamentos recortados sem ordenar
+    como transparente todo o cenário.
 11. Distribuição web — **implementação concluída; homologação manual pendente**. O build de produção
     não publica sourcemaps, remove comentários legais/`debugger`/`console.debug`,
     minifica identificadores/sintaxe/espaços e usa nomes de assets por hash. O
@@ -453,7 +475,7 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
     a manter esse contrato. A matriz automatica por
     arquivo importado foi concluida: `bun run audit:coverage` cruza o manifesto,
     o corpus fisico e as definicoes TypeScript do runtime, gerando Markdown e
-    JSON em `docs/matriz-cobertura-classico.*`. O snapshot atual valida 2.303
+    JSON em `docs/matriz-cobertura-classico.*`. O snapshot atual valida 2.449
     caminhos declarados sem faltantes, 111 TRN, 108 DAT declarados, 103
     minimapas declarados, 377 templates, 3.937 geradores, 6.500 itens, 248
     skills binárias, 14 montarias e oito evocacoes; tambem explicita por classe
@@ -462,12 +484,46 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
     ficou em cerca de 553 KiB minificados e os renderers de Foema, TransKnight
     e BeastMaster viraram chunks lazy na faixa de aproximadamente 37–124 KiB,
     carregados somente no primeiro switch para cada classe.
+    O `ModelLibrary` também passou a compartilhar DDS por caminho entre tipos:
+    os 2.098 slots das 963 MSA reutilizam o conjunto físico de 419 texturas,
+    com lease por modelo e descarte somente quando o último consumidor sai.
+    Geometria e material continuam pertencendo ao protótipo de cada tipo; isso
+    remove uploads GPU duplicados sem permitir que estados mutáveis vazem entre
+    objetos.
     O preview 3D do inventário também deixou de crescer com cada item
     selecionado: usa LRU de 12 instâncias, descarta os materiais próprios na
     expulsão e libera o protótipo compartilhado quando nenhum outro preview do
     mesmo tipo continua residente. A auditoria estática e o inventário objetivo
     de lacunas estão consolidados; baseline e bfcache permanecem homologação
     manual, não pendência de implementação.
+    A camada ambiental também foi confrontada diretamente com
+    `TMButterFly`, `TMFish`, `TMLeaf`, `TMTree`, `TMShip` e
+    `TMObjectContainer`. Os cinco indivíduos por emissor de fauna agora usam
+    os três movimentos, raios, escalas, fases e orientações de origem em vez
+    de uma órbita genérica. As ANI reais de folhas, árvores, navios,
+    borboletas e peixes são amostradas em quatro poses por protótipo e
+    interpoladas no shader, preservando um draw call por batch sem manter um
+    esqueleto vivo por folha. Os ritmos `80/30/15/10/8/4 ms` e os `90°`
+    extras de `TMShip::InitAngle` foram recuperados. O balanço senoidal
+    inventado do navio foi removido e os tipos de árvore `363..367` voltaram a
+    emitir a textura `80` nas alturas/cores clássicas. Falta somente
+    homologação visual dessa camada em Fields que contenham cada família.
+    `TMSea` também foi fechado contra seus três branches: água externa,
+    dungeon e a região especial `28/29 × 22/23`. Cada perfil agora conserva
+    texturas, escalas/direções de UV, opacidade e amplitude/base da onda do
+    cliente; a região especial carrega o efeito `406`, ausente do antigo
+    material genérico. O cache de `MapWater` passou a compartilhar cada DDS
+    físico entre materiais e o descarte ocorre uma única vez no shutdown.
+    A amostragem de NPCs/monstros também fechou a arma rígida que não pertence
+    às partes MSH do corpo: `Equip[6]/Equip[7]` agora resolve o item, importa
+    os 76 tipos MSA usados e prende 269 instâncias aos bones exatos de
+    `g_dwHandIndex` em 224 templates. `EF_WTYPE 41` espelha as duas garras
+    conhecidas e rotaciona a segunda mão. `CheckWeapon` agora cruza também
+    `nPos/position@136` para selecionar os bancos ANI autorados dos quatro rigs
+    humanoides; cada lease é liberado no unload. Escala e direção inicial
+    também seguem `SetCharHeight`, o `0,9` extra para `Equip[0] < 40` e o
+    nibble alto de `SCORE.Reserved`, em vez de tamanho/direção aleatórios.
+    Falta homologar visualmente uma amostra de cada skin humanoide armada.
     As verificações que exigem navegador/dispositivo estão isoladas em
     `docs/checklist-homologacao-manual.md`, com cenário, duração, coordenadas e
     critério de evidência; elas não são marcadas como aprovadas pelo build.

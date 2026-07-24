@@ -326,7 +326,7 @@ export class ClassicWorld {
 
   private startSpawnSubsystem(): void {
     if (this.#spawns || this.#spawnStartJob) return;
-    const job = ClassicSpawnManager.create(this.assets, {
+    const job = ClassicSpawnManager.create(this.assets, this.models, {
       origin: this.origin,
       heightAt: (position) => this.heightAt(position),
       isFieldLoaded: (column, row) =>

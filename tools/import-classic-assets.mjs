@@ -290,6 +290,10 @@ for (const [ownerType, waterType] of houseWaterCompanions) {
   if (usedObjectTypes.has(ownerType)) usedObjectTypes.add(waterType);
 }
 
+// NPC hand items are common MeshList MSAs, not skinned body parts. Discover
+// them before materializing objectModels so Equip[6]/Equip[7] can be rendered.
+const monsterImport = await importMonsterCatalog();
+
 for (const type of [...usedObjectTypes].sort((a, b) => a - b)) {
   const listedPath = meshList.get(type);
   if (!listedPath) continue;
@@ -304,6 +308,7 @@ for (const type of [...usedObjectTypes].sort((a, b) => a - b)) {
   await writeFile(path.join(modelsRoot, outputName), msa);
   const textureNames = readMsaTextureNames(msa);
   const modelTextures = [];
+  const modelTextureAlphas = [];
   for (const textureName of textureNames) {
     // Effect MSAs commonly embed root-relative Windows names (for example
     // "\\spec01"). Normalise separators before basename resolution.
@@ -315,6 +320,7 @@ for (const type of [...usedObjectTypes].sort((a, b) => a - b)) {
     const wysName = directoryFiles.get(`${baseName}.wys`.toLowerCase());
     if (!wysName) {
       modelTextures.push(null);
+      modelTextureAlphas.push(null);
       continue;
     }
     const encoded = await readFile(path.join(sourceDir, wysName));
@@ -322,8 +328,13 @@ for (const type of [...usedObjectTypes].sort((a, b) => a - b)) {
     const textureOutput = `${isEffect ? "effect" : "mesh"}-${baseName.toLowerCase()}.dds`;
     await writeFile(path.join(modelTexturesRoot, textureOutput), dds);
     modelTextures.push(`models/textures/${textureOutput}`);
+    modelTextureAlphas.push(modelTextureAlphaByFile.get(wysName.toLowerCase()) ?? null);
   }
-  objectModels[type] = { file: `models/${outputName}`, textures: modelTextures };
+  objectModels[type] = {
+    file: `models/${outputName}`,
+    textures: modelTextures,
+    textureAlphas: modelTextureAlphas,
+  };
 }
 
 // EffectTextureList.bin uses the same 528-byte on-disk records as the
@@ -338,9 +349,14 @@ for (let index = 0; index < effectList.length / envRecordBytes; index++) {
   const end = terminator < start || terminator > start + 255 ? start + 255 : terminator;
   const listedFile = effectList.subarray(start, end).toString("latin1").replaceAll("\\", path.sep);
   if (!listedFile || path.extname(listedFile).toLowerCase() !== ".wys") continue;
-  const actualName = effectFiles.get(path.basename(listedFile).toLowerCase());
+  const listedDirectory = path.dirname(listedFile).toLowerCase();
+  const sourceFiles = listedDirectory === "mesh" ? meshFiles : effectFiles;
+  const sourceDirectory = listedDirectory === "mesh"
+    ? path.join(clientRoot, "mesh")
+    : path.join(clientRoot, "Effect");
+  const actualName = sourceFiles.get(path.basename(listedFile).toLowerCase());
   if (!actualName) continue;
-  const encoded = await readFile(path.join(clientRoot, "Effect", actualName));
+  const encoded = await readFile(path.join(sourceDirectory, actualName));
   const outputName = `${String(index).padStart(3, "0")}.dds`;
   await writeFile(path.join(effectTexturesRoot, outputName), decodeWys(encoded));
   effectTextures[index] = {
@@ -348,8 +364,6 @@ for (let index = 0; index < effectList.length / envRecordBytes; index++) {
     alpha: String.fromCharCode(effectList[start + 510] ?? 0),
   };
 }
-
-const monsterImport = await importMonsterCatalog();
 
 const manifest = {
   version: 1,
@@ -462,9 +476,13 @@ async function importMonsterCatalog() {
     if (itemCache.has(index)) return itemCache.get(index);
     const offset = index * itemRecordBytes;
     let itemClass = null;
+    let weaponType = null;
     for (let effect = 0; effect < 12; effect++) {
       const effectOffset = offset + 80 + effect * 4;
-      if (itemList.readInt16LE(effectOffset) === 18) itemClass = itemList.readInt16LE(effectOffset + 2);
+      const code = itemList.readInt16LE(effectOffset);
+      const value = itemList.readInt16LE(effectOffset + 2);
+      if (code === 18) itemClass = value;
+      if (code === 21) weaponType = value;
     }
     const item = {
       index,
@@ -473,6 +491,10 @@ async function importMonsterCatalog() {
       texture: itemList.readInt16LE(offset + 66),
       visualEffect: itemList.readInt16LE(offset + 68),
       itemClass,
+      // BASE_GetItemAbility(..., 17) resolves the dedicated nPos field. It is
+      // not one of the twelve STRUCT_ITEM effects in this ItemList layout.
+      weaponPosition: itemList.readUInt16LE(offset + 136),
+      weaponType,
     };
     itemCache.set(index, item);
     return item;
@@ -560,6 +582,16 @@ async function importMonsterCatalog() {
         ]);
       }
       visual = { skin, itemClass: faceItem.itemClass, parts };
+      if (skin < 19) {
+        for (const slot of [6, 7]) {
+          const weapon = readItem(equipmentIndices[slot]);
+          if (
+            weapon
+            && ((weapon.mesh >= 13 && weapon.mesh <= 999)
+              || (weapon.mesh >= 2_701 && weapon.mesh <= 3_000))
+          ) usedObjectTypes.add(weapon.mesh);
+        }
+      }
     }
 
     templates.push({

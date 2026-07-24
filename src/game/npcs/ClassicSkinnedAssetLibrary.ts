@@ -97,6 +97,7 @@ export class ClassicSkinnedAssetLibrary {
   createTemplateInstance(templateIndex: number): Promise<ClassicSkinnedInstanceLease | null> {
     const template = this.catalog.template(templateIndex);
     if (!template?.visual) return Promise.resolve(null);
+    const animationWeaponType = classicNpcAnimationWeaponType(template, this.catalog);
     return this.createInstance({
       skin: template.visual.skin,
       parts: template.visual.parts.map((part) => ({
@@ -108,6 +109,7 @@ export class ClassicSkinnedAssetLibrary {
       actions: ["STAND01", "WALK", "ATTACK1", "STRIKE", "DIE", "DEAD"],
       initialAction: "STAND01",
       actionVariant: animationVariant(template),
+      ...(animationWeaponType === undefined ? {} : { animationWeaponType }),
     });
   }
 
@@ -443,6 +445,76 @@ function buildClassicWeaponAnimationTable(
 
 function animationVariant(template: MonsterTemplate): number {
   return Math.max(0, Math.min(3, Math.trunc(template.characterClass ?? 0)));
+}
+
+/**
+ * Unmounted branches of TMHuman::CheckWeapon for the four humanoid rigs.
+ * Other monster skins leave m_nWeaponTypeIndex at the constructor default and
+ * continue using the family action table directly.
+ */
+function classicNpcAnimationWeaponType(
+  template: MonsterTemplate,
+  catalog: MonsterCatalog,
+): number | undefined {
+  const skin = template.visual?.skin;
+  if (skin === undefined || skin < 0 || skin > 4 || skin === 3) return undefined;
+  const equipment = template.equipment ?? [];
+  const left = catalog.item(equipment[6 * 7] ?? 0);
+  const right = catalog.item(equipment[7 * 7] ?? 0);
+  const leftType = left?.weaponType ?? 0;
+  const rightType = right?.weaponType ?? 0;
+  const leftPosition = left?.weaponPosition ?? 0;
+  const rightPosition = right?.weaponPosition ?? 0;
+
+  if (skin === 0) {
+    if (leftType === 0 && rightPosition === 128) return 2;
+    if (leftPosition === 192 && rightPosition === 192) return 4;
+    if ([1, 11, 61, 31].includes(leftType)) {
+      if (rightType === 0 || rightPosition === 128) return 1;
+      if (rightPosition === 196) return 4;
+    } else if ([2, 12, 62].includes(leftType)) {
+      if (rightPosition === 128) return 3;
+      if (rightType === 0) return 5;
+      if (rightPosition === 196) return 4;
+    } else if (leftType === 3 || leftType === 63) return 6;
+    else if (leftType === 13 && leftPosition === 64) return 7;
+    else if ([21, 22, 23].includes(leftType) && leftPosition === 64) return 8;
+    else if ([102, 103].includes(leftType) && leftPosition === 64) return 10;
+    else if (leftType === 104 && leftPosition === 64) return 9;
+    else if (leftType === 101) return 3;
+    else if (leftType === 32 || leftType === 33) return 5;
+    return 0;
+  }
+
+  if (skin === 1) {
+    if (leftType === 0 && rightPosition === 128) return 2;
+    if (leftPosition === 192 && rightPosition === 192) return 4;
+    if (leftType === 3 || leftType === 63) return 10;
+    if ([1, 11, 61, 2, 12, 62, 31].includes(leftType)) {
+      if (rightType === 0) return 1;
+      if (rightPosition === 128) return 3;
+      if (rightPosition === 196) return 4;
+    } else if ([21, 22, 23].includes(leftType)) return 5;
+    else if ([102, 103].includes(leftType) && leftPosition === 64) return 3;
+    else if (leftType === 13) return 7;
+    else if ([32, 33].includes(leftType) && leftPosition === 64) return 9;
+    else if (leftType === 101 && leftPosition === 64) return 6;
+    return 0;
+  }
+
+  if (skin === 2) {
+    if (leftType === 101) return 1;
+    if (leftType === 12) return 2;
+    if (rightPosition === 128 || leftType === 1 || leftType === 11) return 5;
+    if ([13, 21].includes(leftType)) return 3;
+    if ([31, 32, 33].includes(leftType)) return 4;
+    return 0;
+  }
+
+  if ([1, 11, 61].includes(leftType)) return 1;
+  if ([21, 22, 23, 13].includes(leftType)) return 2;
+  if ([102, 103].includes(leftType)) return 3;
+  return 0;
 }
 
 function fallbackColor(skin: number): THREE.Color {

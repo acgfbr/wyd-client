@@ -24,7 +24,14 @@ export function isClassicEnvironmentType(type: number): boolean {
     || (type >= 487 && type <= 489);
 }
 
-type ShaderProfile = "leaf" | "tree" | "ship" | "butterfly" | "butterfly-tiny" | "fish";
+type ShaderProfile =
+  | "leaf"
+  | "tree"
+  | "ship"
+  | "butterfly"
+  | "butterfly-natural"
+  | "butterfly-tiny"
+  | "fish";
 
 interface AmbientInstance {
   readonly x: number;
@@ -33,6 +40,8 @@ interface AmbientInstance {
   readonly yaw: number;
   readonly scale: number;
   readonly seed: number;
+  readonly type: number;
+  readonly copy: number;
 }
 
 interface InstanceBatch {
@@ -149,7 +158,7 @@ export class ClassicEnvironmentObjects {
           batches.set(batchKey, batch);
         }
         batch.types.add(record.type);
-        batch.instances.push(createInstance(column, row, record, definition.kind, seed, this.origin));
+        batch.instances.push(createInstance(column, row, record, definition.kind, seed, copy, this.origin));
       }
     }
 
@@ -162,6 +171,7 @@ export class ClassicEnvironmentObjects {
       this.addParticleBatch(key, generation, state, column, row, special.map(({ record }) => record), 10),
       this.addParticleBatch(key, generation, state, column, row, special.map(({ record }) => record), 13),
       this.addParticleBatch(key, generation, state, column, row, special.map(({ record }) => record), 531),
+      this.addTreeParticleBatch(key, generation, state, column, row, special.map(({ record }) => record)),
     ]);
   }
 
@@ -233,8 +243,28 @@ export class ClassicEnvironmentObjects {
     if (isFauna(batch.profile)) {
       geometry = prototype.geometry.clone();
       geometry.setAttribute(
-        "wydSeed",
-        new THREE.InstancedBufferAttribute(new Float32Array(batch.instances.map((entry) => entry.seed)), 1),
+        "wydFauna",
+        new THREE.InstancedBufferAttribute(
+          new Float32Array(batch.instances.flatMap((entry) => [
+            entry.type,
+            entry.copy,
+            faunaMotionType(entry),
+            faunaCircleSpeed(entry),
+          ])),
+          4,
+        ),
+      );
+      geometry.setAttribute(
+        "wydFaunaRange",
+        new THREE.InstancedBufferAttribute(
+          new Float32Array(batch.instances.flatMap((entry) => [
+            faunaHorizontalRange(entry),
+            faunaVerticalRange(entry),
+            faunaTimeOffset(entry),
+            0,
+          ])),
+          4,
+        ),
       );
       state.disposers.push(() => geometry.dispose());
     }
@@ -309,6 +339,7 @@ export class ClassicEnvironmentObjects {
       }],
       actions: ["STAND01"],
       initialAction: "STAND01",
+      quarterStepMs: classicQuarterStepMilliseconds(batch),
     });
     if (!lease) return null;
     try {
@@ -318,6 +349,10 @@ export class ClassicEnvironmentObjects {
       // their deliberately off-centre footprints by roughly one tile.
       lease.model.setClassicTransform({ yaw: 0, scale: 1, mirrorModelZ: false });
       const geometry = bakeFirstPose(lease);
+      const animationDuration = lease.actionDurationSeconds("STAND01");
+      if (animationDuration && animationDuration > 0) {
+        installBakedAnimationPoses(geometry, lease, animationDuration);
+      }
       const sourceMaterial = lease.model.meshes[0]?.material;
       if (!sourceMaterial || Array.isArray(sourceMaterial) || !(sourceMaterial instanceof THREE.MeshLambertMaterial)) {
         geometry.dispose();
@@ -326,7 +361,12 @@ export class ClassicEnvironmentObjects {
       }
       const material = sourceMaterial.clone();
       configureMaterial(material, batch.profile, batch.variant.alpha);
-      const time = installAmbientShader(material, geometry, batch.profile);
+      const time = installAmbientShader(
+        material,
+        geometry,
+        batch.profile,
+        animationDuration ?? 1,
+      );
       return { geometry, material, time, lease };
     } catch (error) {
       lease.release();
@@ -411,6 +451,106 @@ export class ClassicEnvironmentObjects {
     });
     state.group.add(particles);
   }
+
+  private async addTreeParticleBatch(
+    field: string,
+    generation: number,
+    state: FieldState,
+    column: number,
+    row: number,
+    records: readonly MapObjectRecord[],
+  ): Promise<void> {
+    const matching = records.filter((record) => record.type >= 363 && record.type <= 367);
+    if (matching.length === 0) return;
+    const texture = await this.#textures.load(80);
+    if (!texture || !this.isCurrent(field, generation, state)) return;
+
+    const positions = new Float32Array(matching.length * 3);
+    const colors = new Float32Array(matching.length * 3);
+    const seeds = new Float32Array(matching.length);
+    const heights = [1.6, 1.4, 1.4] as const;
+    const tints = [0x008822, 0x884400, 0x770000] as const;
+    for (let index = 0; index < matching.length; index++) {
+      const record = matching[index]!;
+      const scene = toScene({
+        x: column * FIELD_WORLD_SIZE + record.localX,
+        y: row * FIELD_WORLD_SIZE + record.localY,
+      }, this.origin);
+      const variant = Math.min(2, Math.max(0, (record.type - 363) >> 1));
+      const seed = deterministic(column, row, index, 0, record.type);
+      positions[index * 3] = scene.x;
+      positions[index * 3 + 1] = record.height + heights[variant]!;
+      positions[index * 3 + 2] = scene.z;
+      new THREE.Color(tints[variant]!).toArray(colors, index * 3);
+      seeds[index] = seed;
+    }
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+    geometry.setAttribute("seed", new THREE.BufferAttribute(seeds, 1));
+    geometry.computeBoundingSphere();
+    if (geometry.boundingSphere) geometry.boundingSphere.radius += 2;
+    const time = { value: 0 };
+    const material = new THREE.ShaderMaterial({
+      name: "WYD TMTree 363-367 particles",
+      uniforms: {
+        time,
+        spriteMap: { value: texture },
+      },
+      vertexShader: /* glsl */ `
+        uniform float time;
+        attribute float seed;
+        attribute vec3 color;
+        varying vec3 vColor;
+        varying float vFade;
+        void main() {
+          float phase = fract(time / 1.5 + seed);
+          vec3 animated = position;
+          animated.x += sin(seed * 91.0 + phase * 6.2831853) * 0.25;
+          animated.z += cos(seed * 73.0 + phase * 6.2831853) * 0.25;
+          animated.y += phase * 2.0;
+          vColor = color;
+          vFade = sin(phase * 3.14159265);
+          vec4 mvPosition = modelViewMatrix * vec4(animated, 1.0);
+          gl_PointSize = clamp(115.0 / max(1.0, -mvPosition.z), 3.0, 15.0);
+          gl_Position = projectionMatrix * mvPosition;
+        }
+      `,
+      fragmentShader: /* glsl */ `
+        uniform sampler2D spriteMap;
+        varying vec3 vColor;
+        varying float vFade;
+        void main() {
+          vec4 sampleColor = texture2D(spriteMap, gl_PointCoord);
+          float sourceAlpha = max(sampleColor.a, dot(sampleColor.rgb, vec3(0.333333)));
+          float shape = smoothstep(0.5, 0.08, length(gl_PointCoord - vec2(0.5)));
+          float alpha = sourceAlpha * shape * vFade * 0.72;
+          if (alpha < 0.015) discard;
+          gl_FragColor = vec4(vColor * max(sampleColor.rgb, vec3(0.45)), alpha);
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
+        }
+      `,
+      transparent: true,
+      depthTest: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      fog: false,
+    });
+    const particles = new THREE.Points(geometry, material);
+    particles.name = "classic-tree-particles-363-367";
+    particles.renderOrder = 5;
+    particles.visible = this.#effectsEnabled;
+    particles.onBeforeRender = () => {
+      time.value = performance.now() / 1_000;
+    };
+    state.disposers.push(() => {
+      geometry.dispose();
+      material.dispose();
+    });
+    state.group.add(particles);
+  }
 }
 
 function parseFieldKey(key: string): [number, number] {
@@ -442,12 +582,18 @@ function regionalLeafVariant(
 
 function shaderProfile(type: number, kind: CatalogSkinnedObject["kind"]): ShaderProfile {
   if (kind === "float") throw new Error("TMFloat pertence à camada aquática animada");
-  if (kind === "butterfly") return type === 7 ? "butterfly-tiny" : "butterfly";
+  if (kind === "butterfly") {
+    if (type === 7) return "butterfly-tiny";
+    return type === 343 ? "butterfly-natural" : "butterfly";
+  }
   return kind;
 }
 
 function isFauna(profile: ShaderProfile): boolean {
-  return profile === "butterfly" || profile === "butterfly-tiny" || profile === "fish";
+  return profile === "butterfly"
+    || profile === "butterfly-natural"
+    || profile === "butterfly-tiny"
+    || profile === "fish";
 }
 
 function createInstance(
@@ -456,6 +602,7 @@ function createInstance(
   record: MapObjectRecord,
   kind: CatalogSkinnedObject["kind"],
   seed: number,
+  copy: number,
   origin: WydPosition,
 ): AmbientInstance {
   const scene = toScene({
@@ -472,15 +619,18 @@ function createInstance(
     z -= hash01(seed * 17.3) * 0.4;
     y += hash01(seed * 23.9) * 1.8;
     scale = record.type === 7 ? 0.2 : record.type === 4 ? (seed < 0.5 ? 1 : 0.69) : 0.5;
-    yaw = record.type === 7 ? -Math.PI / 2 : seed * Math.PI * 2;
+    yaw = record.type === 7 ? -Math.PI / 2 : Math.floor(hash01(seed * 29.1) * 4) * Math.PI / 12;
   } else if (kind === "fish") {
     x += hash01(seed * 31.1) * 0.2;
     z -= hash01(seed * 43.7) * 0.2;
     y += hash01(seed * 53.3) * 0.18;
     scale = 1 + Math.floor(hash01(seed * 67.1) * 10) * 0.1;
-    yaw = seed * Math.PI * 2;
+    yaw = 0;
+  } else if (kind === "ship") {
+    // TMShip::InitAngle adds 90 degrees to the angle stored in the DAT.
+    yaw = record.angle + Math.PI / 2;
   }
-  return { x, y, z, yaw, scale, seed };
+  return { x, y, z, yaw, scale, seed, type: record.type, copy };
 }
 
 function deterministic(column: number, row: number, record: number, copy: number, type: number): number {
@@ -491,7 +641,76 @@ function hash01(value: number): number {
   return Math.abs(Math.sin(value * 12.9898 + 78.233) * 43_758.5453) % 1;
 }
 
+function classicQuarterStepMilliseconds(batch: InstanceBatch): number {
+  if (batch.profile === "leaf" || batch.profile === "tree") return 80;
+  if (batch.profile === "ship" || batch.profile === "fish") return 30;
+  const type = batch.instances[0]?.type;
+  if (type === 4) return 10;
+  if (type === 6) return 8;
+  if (type === 7) return 4;
+  return 15;
+}
+
+function faunaMotionType(instance: AmbientInstance): number {
+  if (instance.type === 7) return 3;
+  return Math.floor(hash01(instance.seed * 79.7) * 3);
+}
+
+function faunaCircleSpeed(instance: AmbientInstance): number {
+  if (instance.type === 6 || instance.type === 7) return instance.copy + 8;
+  if (instance.type === 12 || instance.type === 344) {
+    return 0.7 + Math.floor(hash01(instance.seed * 83.3) * 10) * 0.1;
+  }
+  const classicRand = Math.floor(hash01(instance.seed * 89.9) * 100);
+  return classicRand * 0.1 + 1;
+}
+
+function faunaHorizontalRange(instance: AmbientInstance): number {
+  if (instance.type === 7) return 5;
+  if (instance.type === 12 || instance.type === 344) {
+    return 3 + Math.floor(hash01(instance.seed * 97.7) * 7) * 0.5;
+  }
+  const classicRand = Math.floor(hash01(instance.seed * 101.3) * 100);
+  const range = classicRand * 0.05 + 0.2;
+  return instance.type === 6 ? range * 0.5 : range;
+}
+
+function faunaVerticalRange(instance: AmbientInstance): number {
+  if (instance.type === 7) return 5;
+  // TMButterFly leaves this field uninitialised for its ordinary variants in
+  // the recovered C++; a small deterministic value avoids reproducing heap
+  // garbage while retaining the intended vertical flutter.
+  const range = 0.2 + hash01(instance.seed * 103.9) * 0.2;
+  return instance.type === 6 ? range * 0.5 : range;
+}
+
+function faunaTimeOffset(instance: AmbientInstance): number {
+  if (instance.type === 7) return instance.copy * 0.2;
+  if (instance.type === 12 || instance.type === 344) {
+    const range = faunaHorizontalRange(instance);
+    const circle = faunaCircleSpeed(instance);
+    const mesh = Math.floor(hash01(instance.seed * 107.7) * 3);
+    const scale = instance.scale;
+    return (range * 12 + circle * 12 + instance.copy * 20 + mesh * 10 + scale * 10 + faunaMotionType(instance) * 5) / 1_000;
+  }
+  return (faunaHorizontalRange(instance) * 10 + faunaVerticalRange(instance) * 100 + faunaMotionType(instance) * 5) / 1_000;
+}
+
 function bakeFirstPose(lease: ClassicSkinnedInstanceLease): THREE.BufferGeometry {
+  const positions = bakeCurrentPosePositions(lease);
+  const source = lease.model.meshes[0];
+  if (!source) throw new Error("Objeto ambiental clássico sem MSH");
+  const geometry = source.geometry.clone();
+  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  geometry.deleteAttribute("skinIndex");
+  geometry.deleteAttribute("skinWeight");
+  geometry.computeVertexNormals();
+  geometry.computeBoundingBox();
+  geometry.computeBoundingSphere();
+  return geometry;
+}
+
+function bakeCurrentPosePositions(lease: ClassicSkinnedInstanceLease): Float32Array {
   const source = lease.model.meshes[0];
   if (!source) throw new Error("Objeto ambiental clássico sem MSH");
   lease.model.object.updateMatrixWorld(true);
@@ -507,14 +726,22 @@ function bakeFirstPose(lease: ClassicSkinnedInstanceLease): THREE.BufferGeometry
     positions[index * 3 + 1] = vertex.y;
     positions[index * 3 + 2] = vertex.z;
   }
-  const geometry = source.geometry.clone();
-  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-  geometry.deleteAttribute("skinIndex");
-  geometry.deleteAttribute("skinWeight");
-  geometry.computeVertexNormals();
-  geometry.computeBoundingBox();
-  geometry.computeBoundingSphere();
-  return geometry;
+  return positions;
+}
+
+function installBakedAnimationPoses(
+  geometry: THREE.BufferGeometry,
+  lease: ClassicSkinnedInstanceLease,
+  durationSeconds: number,
+): void {
+  const sampleStep = durationSeconds / 4;
+  for (let sample = 1; sample <= 3; sample++) {
+    lease.model.update(sampleStep);
+    geometry.setAttribute(
+      `wydPose${sample}`,
+      new THREE.BufferAttribute(bakeCurrentPosePositions(lease), 3),
+    );
+  }
 }
 
 function configureMaterial(
@@ -535,6 +762,11 @@ function configureMaterial(
     material.alphaTest = 0;
     material.depthWrite = profile === "butterfly-tiny";
     material.blending = THREE.AdditiveBlending;
+  } else if (profile === "butterfly-natural") {
+    material.transparent = true;
+    material.alphaTest = 0.22;
+    material.depthWrite = true;
+    material.blending = THREE.NormalBlending;
   } else if (profile === "ship") {
     material.transparent = false;
     material.alphaTest = alpha === "C" ? 0 : material.alphaTest;
@@ -545,51 +777,40 @@ function installAmbientShader(
   material: THREE.MeshLambertMaterial,
   geometry: THREE.BufferGeometry,
   profile: ShaderProfile,
+  animationDuration: number,
 ): { value: number } {
   const time = { value: 0 };
   if (!geometry.boundingBox) geometry.computeBoundingBox();
   const bounds = geometry.boundingBox ?? new THREE.Box3(new THREE.Vector3(), new THREE.Vector3(0, 1, 0));
   const minimum = bounds.min.y;
   const height = Math.max(0.001, bounds.max.y - bounds.min.y);
+  const hasBakedAnimation = geometry.hasAttribute("wydPose1")
+    && geometry.hasAttribute("wydPose2")
+    && geometry.hasAttribute("wydPose3");
   material.onBeforeCompile = (shader) => {
     shader.uniforms.wydTime = time;
     shader.vertexShader = shader.vertexShader.replace(
       "#include <common>",
-      `#include <common>\nuniform float wydTime;${isFauna(profile) ? "\nattribute float wydSeed;" : ""}`,
+      `#include <common>
+uniform float wydTime;
+${hasBakedAnimation ? "attribute vec3 wydPose1;\nattribute vec3 wydPose2;\nattribute vec3 wydPose3;" : ""}
+${isFauna(profile) ? "attribute vec4 wydFauna;\nattribute vec4 wydFaunaRange;" : ""}`,
     );
-    if (profile === "leaf" || profile === "tree") {
-      const amplitude = profile === "leaf" ? 0.055 : Math.min(0.18, Math.max(0.025, height * 0.018));
+    if (hasBakedAnimation) {
+      const animationClock = isFauna(profile)
+        ? `(wydTime + wydFaunaRange.z) / ${Math.max(0.001, animationDuration).toFixed(6)}`
+        : `wydTime / ${Math.max(0.001, animationDuration).toFixed(6)}`;
       shader.vertexShader = shader.vertexShader.replace(
         "#include <begin_vertex>",
         `#include <begin_vertex>
-        #ifdef USE_INSTANCING
-          float wydTop = clamp((position.y - ${minimum.toFixed(6)}) / ${height.toFixed(6)}, 0.0, 1.0);
-          float wydWind = wydTime * ${profile === "leaf" ? "1.45" : "0.72"}
-            + instanceMatrix[3].x * 0.071 + instanceMatrix[3].z * 0.053;
-          transformed.x += sin(wydWind) * wydTop * wydTop * ${amplitude.toFixed(6)};
-          transformed.z += cos(wydWind * 0.83) * wydTop * wydTop * ${(amplitude * 0.55).toFixed(6)};
-        #endif`,
+        float wydPosePhase = fract(${animationClock}) * 4.0;
+        if (wydPosePhase < 1.0) transformed = mix(position, wydPose1, wydPosePhase);
+        else if (wydPosePhase < 2.0) transformed = mix(wydPose1, wydPose2, wydPosePhase - 1.0);
+        else if (wydPosePhase < 3.0) transformed = mix(wydPose2, wydPose3, wydPosePhase - 2.0);
+        else transformed = mix(wydPose3, position, wydPosePhase - 3.0);`,
       );
-    } else if (profile === "ship") {
-      shader.vertexShader = shader.vertexShader.replace(
-        "#include <begin_vertex>",
-        `#include <begin_vertex>
-        #ifdef USE_INSTANCING
-          transformed.y += sin(wydTime * 0.72 + instanceMatrix[3].x * 0.09 + instanceMatrix[3].z * 0.07) * 0.075;
-        #endif`,
-      );
-    } else {
-      const fish = profile === "fish";
-      const tiny = profile === "butterfly-tiny";
-      const radius = fish ? 1.7 : tiny ? 1.0 : 0.72;
-      const vertical = fish ? 0.08 : tiny ? 0.48 : 0.32;
-      const speed = fish ? 0.62 : tiny ? 1.25 : 0.92;
-      shader.vertexShader = shader.vertexShader.replace(
-        "#include <begin_vertex>",
-        `#include <begin_vertex>
-        transformed.y += sin(wydTime * ${fish ? "7.0" : "18.0"} + wydSeed * 31.4159)
-          * abs(position.x) * ${fish ? "0.012" : "0.045"};`,
-      );
+    }
+    if (isFauna(profile)) {
       shader.vertexShader = shader.vertexShader.replace(
         "#include <project_vertex>",
         `vec4 mvPosition = vec4(transformed, 1.0);
@@ -598,24 +819,67 @@ function installAmbientShader(
         #endif
         #ifdef USE_INSTANCING
           mvPosition = instanceMatrix * mvPosition;
-          float wydPhase = wydTime * ${speed.toFixed(4)} + wydSeed * 31.415926;
-          mvPosition.x += sin(wydPhase) * ${radius.toFixed(4)};
-          mvPosition.z += cos(wydPhase * ${fish ? "0.79" : "0.73"}) * ${radius.toFixed(4)};
-          mvPosition.y += sin(wydPhase * ${fish ? "1.61" : "2.4"}) * ${vertical.toFixed(4)};
+          float wydType = wydFauna.x;
+          float wydMotion = wydFauna.z;
+          float wydCircle = wydFauna.w;
+          float wydRange = wydFaunaRange.x;
+          float wydVertical = wydFaunaRange.y;
+          float wydOffset = wydFaunaRange.z;
+          vec3 wydTravel = vec3(0.0);
+          if (wydType == 12.0 || wydType == 344.0) {
+            float wydCycle = mod(wydTime + wydOffset, 40.0) / 40.0;
+            float wydProgress = sin(wydCycle * 6.28318530718);
+            float wydAngle = wydProgress * 3.14159265359 * wydCircle + wydOffset * 50.0;
+            if (wydMotion < 0.5) {
+              wydTravel.x = wydProgress * wydRange * 0.4;
+              wydTravel.z = -sin(wydAngle) * wydRange * 0.3;
+            } else if (wydMotion < 1.5) {
+              wydTravel.x = cos(wydAngle) * wydRange * 0.4;
+              wydTravel.z = -wydProgress * wydRange * 0.3;
+            } else {
+              float wydSmallAngle = wydProgress * 6.28318530718 + wydOffset * 50.0;
+              wydTravel.x = cos(wydSmallAngle) * wydRange * 0.1;
+              wydTravel.z = -sin(wydSmallAngle) * wydRange * 0.1;
+            }
+          } else if (wydMotion > 2.5) {
+            float wydProgress = mod(max(0.0, wydTime - wydOffset), 7.0) / 7.0;
+            float wydAngle = wydProgress * 6.28318530718;
+            wydTravel.x = cos(wydAngle) * wydRange * 0.5;
+            wydTravel.z = -sin(wydAngle) * wydRange * 0.5;
+            wydTravel.y = cos(wydAngle) * wydVertical * 0.5;
+          } else {
+            float wydProgress = abs(sin(mod(max(0.0, wydTime - wydOffset), 20.0) / 20.0 * 3.14159265359));
+            if (wydMotion < 0.5) {
+              wydTravel.x = wydProgress * wydRange * 0.5;
+              wydTravel.z = -sin(wydProgress * 3.14159265359 * wydCircle) * wydRange * 0.5;
+              wydTravel.y = sin(wydProgress * 18.8495559215 * wydCircle) * wydVertical;
+            } else if (wydMotion < 1.5) {
+              wydTravel.x = cos(wydProgress * 3.14159265359 * wydCircle) * wydRange * 0.5;
+              wydTravel.z = -wydProgress * wydRange * 0.5;
+              wydTravel.y = cos(wydProgress * 18.8495559215 * wydCircle) * wydVertical;
+            } else {
+              float wydAngle = wydProgress * 6.28318530718;
+              wydTravel.x = cos(wydAngle) * wydRange * 0.5;
+              wydTravel.z = -sin(wydAngle) * wydRange * 0.5;
+              wydTravel.y = cos(wydAngle) * wydVertical * 0.5;
+            }
+          }
+          mvPosition.xyz += wydTravel;
         #endif
         mvPosition = modelViewMatrix * mvPosition;
         gl_Position = projectionMatrix * mvPosition;`,
       );
     }
   };
-  // Wind deformation embeds the prototype bounds directly in GLSL. Include
-  // them in the cache key so Three.js cannot reuse (for example) a shrub's
-  // program for a tall tree that happens to share the same material profile.
+  // Pose attributes and animation duration are prototype-specific. Keep them
+  // in the cache key so Three.js never reuses a program with another cycle.
   material.customProgramCacheKey = () => [
     "wyd-environment",
     profile,
     minimum.toFixed(6),
     height.toFixed(6),
+    animationDuration.toFixed(6),
+    hasBakedAnimation ? "baked-4" : "static",
   ].join("-");
   material.needsUpdate = true;
   return time;

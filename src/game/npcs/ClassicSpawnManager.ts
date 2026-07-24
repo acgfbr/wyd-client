@@ -1,5 +1,7 @@
 import * as THREE from "three";
 import type { ClassicAssetSource } from "../../assets/ClassicAssetSource";
+import { createClassicD3DLocalMatrix } from "../../render/characters/ClassicSkinnedModel";
+import type { ModelLibrary } from "../../render/objects/ModelLibrary";
 import {
   createClassicSkinnedAfterimage,
   type ClassicSkinnedAfterimage,
@@ -64,6 +66,27 @@ const FRIENDLY_IDLE_NAVIGATION_STEP = 0.25;
 const HOSTILE_HOVER_OUTLINE_COLOR = 0xff5b4d;
 const HOSTILE_SELECTED_OUTLINE_COLOR = 0xffd45a;
 const ACTOR_SOUND_DISTANCE = 36;
+const CLASSIC_HAND_BONES = [
+  [19, 25],
+  [18, 24],
+  [15, 21],
+  [15, 21],
+  [12, 18],
+  [22, 28],
+  [23, 29],
+  [20, 26],
+  [24, 30],
+  [23, 31],
+  [32, 17],
+  [22, 35],
+  [34, 44],
+  [34, 44],
+  [34, 44],
+  [34, 44],
+  [34, 44],
+  [34, 44],
+  [34, 44],
+] as const;
 const LOOPING_SOUND_ACTIONS = new Set([
   "STAND01",
   "STAND02",
@@ -116,6 +139,7 @@ interface SpawnedActor {
   readonly generator: MonsterGenerator;
   readonly object: THREE.Group;
   readonly lease: ClassicSkinnedInstanceLease;
+  readonly weaponModelTypes: readonly number[];
   readonly position: { x: number; y: number };
   readonly spawnPosition: WydPosition;
   readonly homePosition: WydPosition;
@@ -205,6 +229,7 @@ export class ClassicSpawnManager {
   private constructor(
     private readonly catalog: MonsterCatalog,
     assets: ClassicAssetSource,
+    private readonly models: ModelLibrary,
     private readonly environment: ClassicSpawnEnvironment,
   ) {
     this.#assets = new ClassicSkinnedAssetLibrary(assets, catalog);
@@ -216,9 +241,10 @@ export class ClassicSpawnManager {
 
   static async create(
     assets: ClassicAssetSource,
+    models: ModelLibrary,
     environment: ClassicSpawnEnvironment,
   ): Promise<ClassicSpawnManager> {
-    return new ClassicSpawnManager(await MonsterCatalog.load(assets), assets, environment);
+    return new ClassicSpawnManager(await MonsterCatalog.load(assets), assets, models, environment);
   }
 
   dispose(): void {
@@ -875,6 +901,7 @@ export class ClassicSpawnManager {
     if (!template || template.missing || !template.visual) return null;
     const lease = await this.#assets.createTemplateInstance(spec.templateIndex);
     if (!lease) return null;
+    const weaponModelTypes: number[] = [];
     try {
       const id = stableActorId(spec);
       const name = template.name.replaceAll("_", " ");
@@ -896,7 +923,7 @@ export class ClassicSpawnManager {
         : authoredRoute;
       const routeMode = routeModeFor(spec.generator, route, enablesFriendlyIdle);
       const animationPhaseSeconds = classicAnimationPhase(spec);
-      const initialYaw = spawnYaw(spec);
+      const initialYaw = spawnYaw(template);
       lease.model.setClassicTransform({
         yaw: initialYaw,
         scale,
@@ -916,6 +943,7 @@ export class ClassicSpawnManager {
         ? createQuestResetSprite(label.sprite.position.y)
         : null;
       if (questResetLabel) actor.add(questResetLabel.sprite);
+      await this.attachEquipmentWeapons(template, lease, weaponModelTypes);
       for (const mesh of lease.model.meshes) mesh.userData[TARGET_ID_USER_DATA_KEY] = id;
       const spawned: SpawnedActor = {
         id,
@@ -925,6 +953,7 @@ export class ClassicSpawnManager {
         generator: spec.generator,
         object: actor,
         lease,
+        weaponModelTypes,
         position: { ...spec.position },
         spawnPosition: { ...spec.position },
         homePosition: { ...(route[0] ?? spec.position) },
@@ -981,8 +1010,71 @@ export class ClassicSpawnManager {
       actor.position.set(scene.x, this.environment.heightAt(spawned.position), scene.z);
       return spawned;
     } catch {
+      for (const type of weaponModelTypes) this.models.release(type);
       lease.release();
       return null;
+    }
+  }
+
+  /**
+   * TMHuman::SetPacketMOBItem materializes LOOK Mesh6/Mesh7 as common meshes
+   * parented to g_dwHandIndex. Body/armor are skinned MSH parts; weapons are
+   * deliberately kept as rigid MSA children of the animated hand bones.
+   */
+  private async attachEquipmentWeapons(
+    template: MonsterTemplate,
+    lease: ClassicSkinnedInstanceLease,
+    retainedTypes: number[],
+  ): Promise<void> {
+    const skin = template.visual?.skin;
+    if (skin === undefined || skin < 0 || skin >= CLASSIC_HAND_BONES.length) return;
+    const equipment = template.equipment ?? [];
+    const left = this.catalog.item(equipment[6 * 7] ?? 0);
+    let right = this.catalog.item(equipment[7 * 7] ?? 0);
+    // EF_WTYPE 41 is the client's paired-claw rule: Mesh6 is copied to Mesh7.
+    if (left?.weaponType === 41) right = left;
+    const handItems = [left, right] as const;
+
+    for (let hand = 0; hand < handItems.length; hand++) {
+      const item = handItems[hand];
+      if (!item || !classicCommonWeaponMesh(item.mesh)) continue;
+      retainedTypes.push(item.mesh);
+      const prototype = await this.models.retain(item.mesh);
+      if (!prototype) {
+        this.models.release(item.mesh);
+        retainedTypes.pop();
+        continue;
+      }
+
+      const weapon = prototype.clone(true);
+      weapon.name = `npc-weapon-${item.index}-${hand}`;
+      // ModelLibrary applies the map-only +90° pitch. CMesh hand rendering
+      // consumes the MSA directly, so remove that basis from every root mesh.
+      for (const child of weapon.children) {
+        child.position.set(0, 0, 0);
+        child.rotation.set(0, 0, 0);
+        child.scale.set(1, 1, 1);
+        child.updateMatrix();
+      }
+      weapon.traverse((child) => {
+        if (!(child instanceof THREE.Mesh)) return;
+        child.castShadow = true;
+        child.receiveShadow = false;
+        child.frustumCulled = false;
+      });
+
+      const holder = new THREE.Group();
+      holder.name = `npc-hand-${hand}-item-${item.index}`;
+      holder.matrixAutoUpdate = false;
+      holder.matrix.copy(classicNpcHandMatrix(
+        skin,
+        hand,
+        left?.weaponType === 41 || skin === 11,
+      ));
+      holder.matrixWorldNeedsUpdate = true;
+      holder.add(weapon);
+      const boneIndex = CLASSIC_HAND_BONES[skin]![hand]!;
+      (lease.model.bones[boneIndex] ?? lease.model.object).add(holder);
     }
   }
 
@@ -998,6 +1090,7 @@ export class ClassicSpawnManager {
     }
     if (this.#hostileHoverId === actor.id) this.#hostileHoverId = null;
     if (this.#selectedHostileId === actor.id) this.#selectedHostileId = null;
+    for (const type of actor.weaponModelTypes) this.models.release(type);
     disposeActor(actor);
     // Most life entries are pristine and need not accumulate while the player
     // explores many maps. Preserve only gameplay-relevant state (damage/death
@@ -1272,16 +1365,20 @@ function classicAiProfile(
   };
 }
 
-function spawnYaw(spec: SpawnSpec): number {
-  const destination = spec.generator.destination;
-  const start = spec.generator.start;
-  if (destination.x !== null && destination.y !== null && start.x !== null && start.y !== null) {
-    const dx = destination.x - start.x;
-    const dy = destination.y - start.y;
-    if (dx * dx + dy * dy > 0.01) return classicYawForVelocity(dx, dy);
-  }
-  const direction = ((spawnHash(spec.generator, spec.ordinal) & 0xffff) / 0xffff) * Math.PI * 2;
-  return -(direction + Math.PI / 2);
+function spawnYaw(template: MonsterTemplate): number {
+  const reserved = Math.trunc(template.currentScore?.[3] ?? template.baseScore?.[3] ?? 0);
+  const direction = (reserved >>> 4) & 0xf;
+  const degrees = direction === 6 ? 180
+    : direction === 9 ? 135
+      : direction === 8 ? 90
+        : direction === 7 ? 45
+          : direction === 4 ? 0
+            : direction === 1 ? 315
+              : direction === 2 ? 270
+                : direction === 3 ? 225
+                  : 0;
+  // TMHuman::SetAngle forwards -fPitch to TMSkinMesh.
+  return -THREE.MathUtils.degToRad(degrees);
 }
 
 function routeForSpawn(spec: SpawnSpec): readonly RouteWaypoint[] {
@@ -1904,7 +2001,63 @@ function classicWaitSeconds(wait: number): number {
 
 function classicMobScale(template: MonsterTemplate): number {
   const constitution = template.baseScore?.[12] ?? template.currentScore?.[12] ?? 0;
-  return Math.max(0.12, Math.min(5, 0.9 * (1 + constitution / 2_000)));
+  const lowFaceScale = (template.equipment?.[0] ?? 0) < 40 ? 0.9 : 1;
+  return Math.max(0.12, Math.min(5, 0.9 * (1 + constitution / 2_000) * lowFaceScale));
+}
+
+function classicCommonWeaponMesh(mesh: number): boolean {
+  return (mesh >= 13 && mesh <= 999) || (mesh >= 2_701 && mesh <= 3_000);
+}
+
+function classicNpcHandMatrix(
+  skin: number,
+  hand: number,
+  rotateSecondHand: boolean,
+): THREE.Matrix4 {
+  const length = skin === 1 ? 0.07 : 0.1;
+  if (hand === 0) {
+    return createClassicD3DLocalMatrix({
+      x: -length,
+      y: 0.01,
+      ...(skin === 10 ? { roll: Math.PI } : { yaw: Math.PI }),
+    });
+  }
+  if (rotateSecondHand) {
+    return createClassicD3DLocalMatrix({
+      x: -length,
+      y: 0.01,
+      yaw: Math.PI,
+    });
+  }
+  if (skin === 6) {
+    return createClassicD3DLocalMatrix({
+      x: -length * 0.5,
+      y: -0.01,
+      yaw: THREE.MathUtils.degToRad(-20),
+      roll: Math.PI,
+    });
+  }
+  if (skin === 9) {
+    return createClassicD3DLocalMatrix({
+      x: -length * 1.6,
+      y: 0.03,
+      roll: Math.PI,
+    });
+  }
+  if (skin === 1) {
+    return createClassicD3DLocalMatrix({
+      x: -length,
+      y: -0.01,
+      yaw: THREE.MathUtils.degToRad(-15),
+      pitch: THREE.MathUtils.degToRad(-10),
+      roll: Math.PI,
+    });
+  }
+  return createClassicD3DLocalMatrix({
+    x: -length,
+    y: -0.01,
+    roll: Math.PI,
+  });
 }
 
 function createStatusSprite(

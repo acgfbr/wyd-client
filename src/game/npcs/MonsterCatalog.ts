@@ -41,6 +41,19 @@ export interface MonsterTemplate {
   readonly visual?: MonsterTemplateVisual;
 }
 
+export interface MonsterCatalogItem {
+  readonly index: number;
+  readonly name: string;
+  readonly mesh: number;
+  readonly texture: number;
+  readonly visualEffect: number;
+  readonly itemClass: number | null;
+  /** ItemList nPos/position@136, returned for ability 17 by CheckWeapon. */
+  readonly weaponPosition?: number | null;
+  /** EF_WTYPE (21) from ItemList; claws use 41 to mirror the left hand. */
+  readonly weaponType?: number | null;
+}
+
 export interface MonsterVisualFamily {
   readonly base: string;
   readonly declaredParts: number;
@@ -96,14 +109,7 @@ interface RawMonsterCatalog {
   readonly version: number;
   readonly generatorColumns: readonly string[];
   readonly templates: readonly MonsterTemplate[];
-  readonly items: readonly {
-    readonly index: number;
-    readonly name: string;
-    readonly mesh: number;
-    readonly texture: number;
-    readonly visualEffect: number;
-    readonly itemClass: number | null;
-  }[];
+  readonly items: readonly MonsterCatalogItem[];
   readonly visualFamilies: Readonly<Record<string, MonsterVisualFamily>>;
   readonly skinnedObjects?: Readonly<Record<string, CatalogSkinnedObject>>;
   readonly generators: readonly (readonly (number | null)[])[];
@@ -121,11 +127,13 @@ export class MonsterCatalog {
   readonly #families = new Map<number, MonsterVisualFamily>();
   readonly #skinnedObjects = new Map<number, CatalogSkinnedObject>();
   readonly #generatorsByField = new Map<string, MonsterGenerator[]>();
+  readonly #itemsByIndex = new Map<number, MonsterCatalogItem>();
 
   private constructor(raw: RawMonsterCatalog) {
     this.templates = raw.templates;
     this.items = raw.items;
     this.unresolvedTemplates = raw.unresolvedTemplates;
+    for (const item of raw.items) this.#itemsByIndex.set(item.index, item);
     for (const [skin, family] of Object.entries(raw.visualFamilies)) this.#families.set(Number(skin), family);
     for (const [type, look] of Object.entries(raw.skinnedObjects ?? {})) this.#skinnedObjects.set(Number(type), look);
 
@@ -168,6 +176,10 @@ export class MonsterCatalog {
 
   template(index: number): MonsterTemplate | null {
     return this.templates[index] ?? null;
+  }
+
+  item(index: number): MonsterCatalogItem | null {
+    return this.#itemsByIndex.get(index) ?? null;
   }
 
   visualFamily(skin: number): MonsterVisualFamily | null {

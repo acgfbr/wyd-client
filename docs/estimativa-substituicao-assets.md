@@ -10,7 +10,7 @@ Armia:
 
 - 111 terrenos, 108 arquivos de objetos e 103 minimapas;
 - 875 modelos estáticos de mapa e 347 texturas associadas;
-- 238 texturas de terreno, 495 de efeitos e cinco de água;
+- 238 texturas de terreno, 499 de efeitos e cinco de água;
 - 47 famílias visuais de monstros/NPCs, 400 MSH, 555 ANI e 337 texturas;
 - quatro classes, 166 MSH de player e 141 ANI;
 - 14 montarias de nove famílias e oito famílias de summon;

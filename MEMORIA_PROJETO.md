@@ -1,6 +1,6 @@
 # Memoria canonica do projeto WYD Web
 
-Atualizado em 22/07/2026. Este documento preserva as descobertas e decisoes
+Atualizado em 23/07/2026. Este documento preserva as descobertas e decisoes
 tecnicas da reconstrucao. A fila executavel continua em `PENDENCIAS.md`; a
 matriz gerada fica em `docs/matriz-cobertura-classico.md`.
 
@@ -63,7 +63,7 @@ corpus para `public/game-data/classic`; o runtime consome apenas esse pacote.
 | `Field*.dat` | objetos por Field | 108 declarados; ausencia nos demais e do manifesto |
 | `m*.wyt` | minimapas | 103 declarados; nem todo Field possui um |
 | `.wys` | malhas/objetos compostos | transformacao difere de personagem |
-| `.msa/.msh` | objetos e meshes | 889 modelos de mapa no manifesto |
+| `.msa/.msh` | objetos, efeitos e armas rígidas | 963 modelos no manifesto |
 | `.bon/.ani` | skeleton e animacao | bancos nao podem ser cruzados entre rigs |
 | `AttributeMap.dat` | flags globais de navegacao | inclui portal `0x10` |
 | `object.bin` | mascaras de objeto | compoe colisao depois do AttributeMap |
@@ -102,6 +102,13 @@ foi homologada; nao reabrir sua colisao global sem regressao reproduzivel.
 - Agua usa os cinco DDS classicos e geometria/altura do mapa. Fontes possuem
   arcos descendentes; deslocar UV lateralmente dava a impressao errada de agua
   movendo de um lado para outro.
+- `TMSea::FrameMove` possui três perfis, não um scroll genérico. A água
+  externa mantém UV1 estático e move somente V de UV2; dungeon usa escalas
+  `1,8/1,2`, texturas `8/9` e base de onda própria para o modo `2`. A região
+  especial dos Fields `28/29 × 22/23` usa a textura de efeito `406`, UVs
+  `9,5/3,8` em eixos distintos e onda visual de `0,9`. Os materiais agora
+  separam esses caminhos, enquanto os seis DDS físicos de água/efeito são
+  deduplicados no carregador.
 - Fogueira tipo `501` usa frames `011..018`, alpha/cor/escala do
   `TMEffectBillBoard`. O DDS precisava da orientacao vertical correta; a
   inversao anterior fazia a chama aparecer separada ou abaixo da brasa.
@@ -158,6 +165,52 @@ foi homologada; nao reabrir sua colisao global sem regressao reproduzivel.
   demais ângulos. A conversão para Three.js inverte somente o deslocamento de
   Y para Z; geometria/material continuam compartilhados e o Field controla o
   lifecycle.
+- `TMObject::Render` aplica um segundo estágio somente aos tipos
+  `1934/1976/1977`. Existem 157 instâncias, todas em `Field2722`, região que
+  `TMFieldScene` força para o clima de neve: a transição `SetWeatherState(11)`
+  fixa `TMSky::m_nTextureIndex` em `68`, correspondente a
+  `mesh/sky02.wys`. O estágio usa `D3DTCI_CAMERASPACEREFLECTIONVECTOR`,
+  transformação 2D e `D3DTOP_ADDSMOOTH`; o runtime reproduz a reflexão
+  esférica no shader do material Lambert e conserva o mapa-base. Os materiais
+  clonados pertencem à instância e são descartados no unload; geometria,
+  mapa-base e textura de céu continuam compartilhados.
+- `EffectTextureList.bin` não referencia somente `Effect/`: os índices
+  `67..70` apontam para `mesh/sky01..04.wys`. O importador antigo resolvia
+  todos os nomes dentro de `Effect/` e descartava silenciosamente os quatro.
+  A resolução agora respeita a pasta declarada pelo registro; os quatro DDS
+  entram no manifesto de forma determinística.
+- Cada MSA pode ter vários materiais, mas `TMObject::Render` decide o estado de
+  alpha pelo `cAlpha` do primeiro índice de textura e aplica esse estado ao
+  `TMMesh` inteiro. O importador agora persiste os 2.098 slots encontrados em
+  `MeshTextureList.bin` (`1.875 N`, `148 A`, `10 C`, `65` sem entrada); entre
+  os primeiros slots dos 963 modelos são `827 N`, `87 A`, `2 C` e `47` sem
+  entrada. `ModelLibrary` replica essa decisão: `A/C` recebem alpha-test
+  `0xAA/0xFF` e blend `SRCALPHA/INVSRCALPHA`; `N` permanece opaco. A faixa
+  `156..185` continua no caminho alpha por exceção explícita do cliente,
+  mesmo usando DXT1 marcado como `N`.
+- A ambientação especial do DAT não é uma coleção de MSA estática.
+  `TMButterFly` e `TMFish` criam cinco indivíduos por registro, com movimento,
+  raio, fase, escala e orientação próprios. `TMLeaf`, `TMTree`, `TMShip`,
+  borboletas e peixes usam ANI mesmo sem tabela de ações nomeadas. Para manter
+  o instancing, o runtime amostra quatro poses do BON/ANI por protótipo e
+  interpola o ciclo na GPU; isso substituiu o vento/balanço genérico. Os ritmos
+  vêm de `m_dwFPS`: folhas/árvores `80 ms`, navios/peixes `30 ms` e
+  borboletas `4/8/10/15 ms` conforme o tipo. `TMShip::InitAngle` ainda soma
+  `90°`; os tipos de árvore `363..367` emitem o billboard `80` nas três
+  alturas/cores recuperadas e obedecem à tecla global de efeitos.
+- O flag `m_bAlphaObj` aparece em 817 registros, porém eles estão apenas nos
+  Fields `2824/2823/2822/2611/2821/3026/2923/2922/2723/2722/2608`. Nenhum
+  satisfaz os setores restritos do raycast de câmera do cliente
+  (`31,31`, `17..19,30..` ou `13/14,28`), logo o branch é inerte neste corpus.
+  De modo semelhante, não existe registro DAT de
+  `507..510/519/533..599`; não instanciar suas entradas de MeshList por
+  suposição.
+- `TMObject::FrameMove` corrige quatro alturas visuais em `Field1916`:
+  `454@2540,2082`, `443@2540,2086`, `454@2542,2090` e
+  `449@2540,2094` passam para `height 0`, apesar dos valores DAT entre
+  `1,175` e `1,925`. A correção acontece depois do registro da máscara no
+  cliente; portanto o runtime altera somente a posição do mesh e preserva a
+  altura original para navegação/colisão.
 - Os tipos `520..530` são criados como `TMEffectMesh`, mas o próprio
   `TMEffectMesh::Render` retorna sem desenhá-los. `657/658` são `m_bNullObj` e
   `674` não possui entrada utilizável. Eles devem continuar invisíveis.
@@ -175,6 +228,13 @@ O renderer principal e unico. Modelos, materiais e texturas usam bibliotecas
 cacheadas e liberacao explicita. `GameApp.dispose()` encerra animation loop,
 listeners, input, mundo, spawns, player, drops, preview, VFX, caches e renderer;
 `pagehide.persisted=true` preserva o bfcache do Safari/iOS.
+
+`ModelLibrary` separa ownership de protótipo e DDS. As 963 MSA possuem 2.098
+slots de material, mas só 419 arquivos de textura físicos; o cache usa o
+caminho do DDS como chave, mantém uma referência por modelo distinto que o
+consome e descarta a textura somente após o último `release`. Materiais e
+geometrias continuam por protótipo, pois alpha, shader e outros estados podem
+ser específicos do tipo/instância.
 
 A HUD expoe FPS, heap JS quando suportado, proxy da callback principal e
 `WebGLRenderer.info` (`GEO/TEX/CALLS/TRIS`). Safari nao expoe
@@ -250,6 +310,23 @@ Monstros possuem autonomia independente da camera e separacao local para nao
 se sobrepor. NPCs amistosos podem passear ate 2,25 unidades da origem; guardas
 `RouteType 0` ficam parados. O outline de hover usa extrusao por normal depois
 do skinning, pois escala pelo pivo desaparecia dentro de rigs multipartes.
+
+O corpo/armadura dos 377 templates vem das partes skinned de `LOOK_INFO`, mas
+`Equip[6]` e `Equip[7]` são armas MSA rígidas. O importador agora lê também
+`EF_WTYPE 21`, inclui no manifesto os 76 tipos de arma efetivamente usados e
+prende cada clone aos índices exatos de `g_dwHandIndex[skin][0/1]`. São 224
+templates armados e 269 attachments no catálogo atual; `WTYPE 41` duplica a
+garra esquerda na mão direita para `Demo_Gorgon` e `Kalintz(H)`, como
+`SetPacketEquipItem`, e também ativa a matriz rotacionada da segunda mão.
+`CheckWeapon` não usa somente `EF_WTYPE 21`: a ability 17 vem do campo dedicado
+`nPos/position@136`. A combinação tipo/posição agora escolhe o banco ANI exato
+dos rigs `ch01/ch02/or01/mi01`, incluindo escudo, duas mãos, arco e cajado.
+Esses leases pertencem ao ator e são liberados junto do streaming. A escala
+aplica `TMHuman::SetCharHeight` e o fator adicional `0,9`
+de `OnPacketCreateMob` quando `Equip[0] < 40`. A orientação inicial não é
+aleatória: usa o nibble alto de `SCORE.Reserved` e o sinal invertido passado
+por `TMHuman::SetAngle`; a rota assume a direção somente quando o ator começa
+a andar.
 
 O C.C possui modos desligado, fisico, magico e suporte. No continuo, procura um
 hostil alem do alcance imediato e entrega a aproximacao ao A*. Alvos sem rota
