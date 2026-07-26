@@ -221,10 +221,13 @@ export class ClassicAudio {
     this.playSoundSet(CLASSIC_SKILL_IMPACT_SOUNDS[classicIndex], 0.27);
   }
 
-  playLevelUp(): void {
-    // Generic remote-player level-up sample used by TMHuman when the focused
-    // model has no authored LEVELUP sound in AniSound4.
-    void this.playSound(158, 0.34);
+  playLevelUp(soundIndices: readonly number[]): void {
+    // Focused actors use their rig's AniSound4 LEVELUP entry. Sound 158 is
+    // exclusively TMHuman's remote-actor fallback and must not be forced onto
+    // the local player when the ch01/ch02 entry is zero.
+    for (const index of new Set(soundIndices)) {
+      if (index > 0) void this.playSound(index, 0.34);
+    }
   }
 
   async playSound(index: number, volume = 0.32): Promise<boolean> {

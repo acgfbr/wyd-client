@@ -74,6 +74,7 @@ import {
   hasClassicBodyEquipment,
   loadClassicPlayerEquipmentCatalog,
 } from "../game/player/ClassicPlayerEquipmentCatalog";
+import { loadClassicPlayerFaceCatalog } from "../game/player/ClassicPlayerFaceCatalog";
 import { loadClassicPlayerWeaponCatalog } from "../game/player/ClassicPlayerWeaponCatalog";
 import { loadClassicPlayerMantuaCatalog } from "../game/player/ClassicPlayerMantuaCatalog";
 import {
@@ -3270,7 +3271,7 @@ export class GameApp {
     if (rewards.levelsGained > 0) {
       const snapshot = this.#playerState.snapshot;
       this.#player?.playLevelUp();
-      this.#audio.playLevelUp();
+      this.#audio.playLevelUp(this.#player?.levelUpSoundIndices ?? []);
       if (this.#player) this.#levelUpEffects.playLevelUp(this.#player.object.position);
       this.#hud.addLog(
         `LEVEL UP · nível ${snapshot.level} · ${rewards.attributePointsGained} pontos · ATQ +${rewards.attackGained} (total ${snapshot.attack})!`,
@@ -3649,13 +3650,19 @@ export class GameApp {
           ? "Atualizando armadura…"
           : "Retirando traje…";
     }
-    const equipmentCatalogRequest = wantsBodyEquipment || cape
+    const equipmentCatalogRequest = !costume || cape
       ? loadClassicPlayerEquipmentCatalog(this.#assets)
       : Promise.resolve(null);
-    const lookRequest = wantsBodyEquipment
-      ? equipmentCatalogRequest.then((catalog) => (
-          catalog?.composeLook(definition, bodyEquipment) ?? desiredLookKey
-        ))
+    const lookRequest = !costume
+      ? Promise.all([
+          equipmentCatalogRequest,
+          loadClassicPlayerFaceCatalog(this.#assets),
+        ]).then(([equipmentCatalog, faceCatalog]) => {
+          const bodyLook = equipmentCatalog?.composeLook(definition, bodyEquipment);
+          return bodyLook
+            ? faceCatalog.composeLook(definition, definition.baseFaceItemIndex, bodyLook)
+            : desiredLookKey;
+        })
       : Promise.resolve(desiredLookKey);
     const weaponRequest = loadClassicPlayerWeaponCatalog(this.#assets).then((catalog) => (
       catalog.composeLoadout(definition, { leftHand, rightHand })

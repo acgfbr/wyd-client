@@ -4,17 +4,16 @@ import type { MonsterTemplate } from "./MonsterCatalog";
 const MIX_HEAD_ITEMS = new Set([54, 55, 56, 68]);
 
 /**
- * The importer names npcdb byte 17 `merchant`; its values strongly corroborate
- * the runtime SCORE.Reserved values inspected by TMHuman::IsMerchant and
- * TMFieldScene::MouseClick_NPC. Without the server-side MOB packet schema this
- * adapter remains an evidence-backed inference, not a proven wire-level
- * equivalence. Preserve the exact 7.54 low-nibble operation on that source.
+ * Reads STRUCT_MOB_OLD.CurrentScore.Reserved directly from npcdb. The classic
+ * MSG_CreateMob transports the complete STRUCT_SCORE, OnPacketCreateMob copies
+ * it to TMHuman::m_stScore, and every interaction branch inspects its low
+ * nibble. `currentScore[3]` keeps older generated catalogs compatible.
  */
 export function classicNpcInteractionCode(
-  template: Pick<MonsterTemplate, "merchant">,
+  template: Pick<MonsterTemplate, "currentScore" | "currentScoreReserved">,
 ): number {
-  const merchant = template.merchant;
-  return (Number.isFinite(merchant) ? Math.trunc(merchant ?? 0) : 0) & 0x0f;
+  const reserved = template.currentScoreReserved ?? template.currentScore?.[3];
+  return (Number.isFinite(reserved) ? Math.trunc(reserved ?? 0) : 0) & 0x0f;
 }
 
 /** Equip[0] becomes TMHuman::m_sHeadIndex in the classic MOB look packet. */

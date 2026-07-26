@@ -190,7 +190,14 @@ export async function prepareClassicInitialCache(
         const response = await fetch(request, { signal: options.signal });
         if (!response.ok) throw new Error(`${response.status} ${asset.url}`);
         inFlightBytes.set(asset.url, 0);
-        const cacheJob = cache.put(request, response.clone());
+        // The skip button aborts both the response stream and Cache.put().
+        // Attach the rejection handler immediately: if the stream reader
+        // rejects first, execution jumps to the outer catch before reaching
+        // `await cacheJob`, which would otherwise leave an unhandled Promise.
+        let cachePutError: unknown = null;
+        const cacheJob = cache.put(request, response.clone()).catch((error: unknown) => {
+          cachePutError = error;
+        });
         if (response.body) {
           const reader = response.body.getReader();
           while (true) {
@@ -204,6 +211,7 @@ export async function prepareClassicInitialCache(
           inFlightBytes.set(asset.url, asset.bytes);
         }
         await cacheJob;
+        if (cachePutError) throw cachePutError;
         inFlightBytes.delete(asset.url);
         completedAssets++;
         completedBytes += asset.bytes;

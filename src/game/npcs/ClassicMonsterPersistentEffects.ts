@@ -117,6 +117,11 @@ const TEMP_POINTS: Readonly<Record<number, Readonly<Record<number, TempPoint>>>>
     8: { bone: 7, offset: [0.05, 0.37, 0.1] },
     9: { bone: 7, offset: [0.05, 0.37, -0.1] },
   },
+  22: {
+    // CFrame::UpdateFrames writes only m_vecTempPos[0] from cr01 bone 25.
+    // RenderEffect_Crill also reads [1], but no source path initializes it.
+    0: { bone: 25 },
+  },
   25: {
     0: { bone: 6 },
   },
@@ -229,6 +234,7 @@ export class ClassicMonsterPersistentEffects {
     scale: number,
     randomState: number,
     ownerYaw: number,
+    currentAction: string | null,
   ): number {
     if (!this.#enabled || !template.visual) return randomState;
     const visual = template.visual;
@@ -252,7 +258,20 @@ export class ClassicMonsterPersistentEffects {
       this.emitAtPoint(body, visual.skin, point, options, jitterX, jitterZ);
     };
 
-    if (characterClass === 16 && faceMesh === 6) {
+    if (characterClass === 18 && currentAction === "ATTACK2") {
+      // TMHuman::RenderEffect_Crill emits twice, but rig 22 only materializes
+      // point zero. Preserve that reachable bone-25 particle and deliberately
+      // omit the uninitialized m_vecTempPos[1].
+      spawn(0, {
+        texture: 0,
+        startScaleX: 0.1,
+        startScaleY: 0.1,
+        scaleVelocity: 1,
+        verticalDistance: 0,
+        lifeSeconds: 1.5,
+        color: 0xff6666,
+      }, 0.05);
+    } else if (characterClass === 16 && faceMesh === 6) {
       for (let point = 1; point < 8; point++) {
         spawn(point, {
           texture: 0,
@@ -849,6 +868,7 @@ class ShadeBatch {
 export function classicMonsterEmissionPeriod(
   template: MonsterTemplate,
   scale: number,
+  currentAction: string | null = null,
 ): number | null {
   const visual = template.visual;
   if (!visual) return null;
@@ -859,6 +879,7 @@ export function classicMonsterEmissionPeriod(
   const faceSkin = face?.[3] ?? 0;
   const coatMesh = coat?.[2] ?? 0;
   const hasMantua = (template.equipment?.[15 * 7] ?? 0) > 0;
+  if (characterClass === 18 && currentAction === "ATTACK2") return 1 / 60;
   if (characterClass === 16 && faceMesh === 6) return 0.3;
   if (characterClass === 16 && faceMesh === 0 && faceSkin === 1) return 0.3;
   if (characterClass === 30 && (faceMesh === 0 || faceMesh === 1 || faceMesh === 2)) return 0.3;

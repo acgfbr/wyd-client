@@ -1,6 +1,6 @@
 # Memoria canonica do projeto WYD Web
 
-Atualizado em 23/07/2026. Este documento preserva as descobertas e decisoes
+Atualizado em 25/07/2026. Este documento preserva as descobertas e decisoes
 tecnicas da reconstrucao. A fila executavel continua em `PENDENCIAS.md`; a
 matriz gerada fica em `docs/matriz-cobertura-classico.md`.
 
@@ -77,6 +77,16 @@ Offsets confirmados neste corpus para o final do registro de `ItemList.bin`:
 `grade@142`. O layout antigo `position@134/grade@138` corrompia adicionais e
 Ancient. A instancia conserva tres efeitos `STRUCT_ITEM`; efeitos estaticos nao
 recebem escala de refino.
+
+O codigo de interacao de NPC nao precisa ser inferido de `Merchant`. No
+`STRUCT_MOB_OLD` do `npcdb`, `CurrentScore` começa no offset 64 e seu
+`Reserved` está no byte 70. `MSG_CreateMob` transporta o `STRUCT_SCORE`
+completo; `TMFieldScene::OnPacketCreateMob` o copia para
+`TMHuman::m_stScore`, e `IsMerchant`, `CheckMerchant` e `MouseClick_NPC`
+consultam diretamente `Reserved & 0x0F`. O catálogo de criaturas agora expõe
+`currentScoreReserved` e o runtime usa esse campo. A coincidência de
+`Merchant & 0x0F` nos 377 templates continua registrada apenas como evidência
+auxiliar do catálogo comercial, não como contrato de execução.
 
 ## Coordenadas, orientacao e terreno
 
@@ -244,7 +254,7 @@ decodificar DDS para RGBA na CPU.
 
 O build separa Three.js em vendor cacheavel. Renderers de Foema, TransKnight e
 BeastMaster sao chunks lazy carregados no primeiro switch; Huntress permanece
-no boot por ser a classe inicial. Medicao de 24/07/2026: app ~607 KiB, Three.js
+no boot por ser a classe inicial. Medição de 25/07/2026: app ~611 KiB, Three.js
 ~518 KiB e chunks de classe na faixa de ~37–124 KiB, todos minificados.
 
 O plano do servidor autoritativo está em
@@ -313,6 +323,16 @@ especiais para elmos `22..26` e capas `573/1767/1770/3197..3199`. Suas ANI
 são slots 0/1/2 para parada/caminhada/corrida e slot 3 montada. A sanção
 visual deriva de total de kills/citizen no servidor original, não do índice
 estático do item; portanto não deve ser mockada como refinação comum.
+
+`Equip[0]` também não é um elmo. `TMHuman::SetRace` lê `EF_CLASS` desse item
+para escolher classe e `BASE_DefineSkinMeshType`, enquanto
+`SetPacketMOBItem` copia `nIndexMesh/nIndexTexture` para
+`FaceMesh/FaceSkin`. O pacote `player/faces.json` contém as 24 identidades
+canônicas de player em `ItemList` `1..44`: quatro rostos base, dezesseis
+variações de criação/seleção e quatro identidades avançadas. O runtime valida
+a classe antes de trocar a parte 1 do `LOOK_INFO`; registros posteriores de
+posição 1 pertencem a NPCs, itens selados ou raças de monstro e não podem ser
+oferecidos como rosto jogável. Elmo continua exclusivamente em `Equip[1]`.
 
 As skills Huntress promovidas ao runtime somam dezessete. Meditacao `#77` foi
 recuperada de `TMHuman.cpp` como cinco pares de billboards `101` em espiral;
@@ -438,14 +458,18 @@ curva `bFI=0` (`cos(progress·π/2)`). Gárgulas de classe `33` também respeita
 a condição original de dungeon tipo 2 (`row > 25` e `8 < column < 16`):
 sete pontos, ciclo `101..108`, escala `2×3` e pulso entre `0,7..1`.
 
-Dois branches continuam deliberadamente bloqueados por evidência
-insuficiente. `TMButterFly(6,3,owner)` é criado por 16 templates, mas seu
+Um branch continua deliberadamente bloqueado por evidência insuficiente.
+`TMButterFly(6,3,owner)` é criado por 16 templates, mas seu
 construtor sobrescreve `m_fParticleH` e jamais inicializa
-`m_fParticleV`, lido em todos os movimentos. Os seis Krill em `ATTACK02`
-tentam usar `m_vecTempPos[1]`, embora o rig `22` escreva apenas o ponto zero.
-Não preencher esses casos com valores visuais arbitrários. O terceiro caso
-anterior, `Guer_Caveira`, foi resolvido pelo port dedicado dos sete
-`TMEffectMeshRotate` e deixou de fazer parte deste bloqueio.
+`m_fParticleV`, lido em todos os movimentos. Não preencher esse valor com uma
+amplitude visual arbitrária. Os seis Krill em `ATTACK02` usam agora somente a
+emissão alcançável de `m_vecTempPos[0]`: bone 25 do rig `22`, textura `0`,
+vermelho `0xFF6666`, escala `0,1`, crescimento `0,001/ms`, vida `1,5 s` e
+jitter `±0,25`. A leitura de `[1]` permanece omitida porque não há escrita
+correspondente no cliente. A simulação offline alterna as animações
+`ATTACK1/2/3` autoradas; futuramente o servidor volta a escolher o motion.
+O terceiro caso anterior, `Guer_Caveira`, foi resolvido pelo port dedicado dos
+sete `TMEffectMeshRotate` e deixou de fazer parte deste bloqueio.
 
 O C.C possui modos desligado, fisico, magico e suporte. No continuo, procura um
 hostil alem do alcance imediato e entrega a aproximacao ao A*. Alvos sem rota
@@ -532,7 +556,7 @@ refinamento, Ancient e preco estatico quando aplicavel.
 
 - Homologacao visual ainda e necessaria em 1024x768, widescreen e iPhone.
 - O cache persistente inicial usa `precache-armia.json` e o service worker
-  `/wyd-cache-sw.js`. O pacote atual contém 815 arquivos/33,4 MiB necessários
+  `/wyd-cache-sw.js`. O pacote atual contém 819 arquivos/34,0 MiB necessários
   ao primeiro cenário de Armia, tem chave derivada do conteúdo, valida quota,
   pede persistência, retoma entradas ausentes e pode ser interrompido ou limpo
   sem bloquear o fallback de rede. Os demais mapas continuam lazy. A
@@ -550,14 +574,18 @@ refinamento, Ancient e preco estatico quando aplicavel.
   nome; quatro referencias seguem ausentes, sem substituicao aproximada. O BGM segue o
   roteamento classico, inicia desligado e `M` alterna apenas a musica. `B` e o
   menu alternam SFX separadamente, encerrando tambem vozes e loops ativos. Ataque,
-  skill, impacto, level up e coleta usam IDs recuperados do cliente. Passos
+  skill, impacto, level up e coleta usam IDs recuperados do cliente. Level up
+  local não usa o fallback remoto `158`: segue o sound `LEVELUP` do rig,
+  acrescenta `279` quando a montaria focada é skin `31` e usa `294` nas
+  transformações Balrog/Beriel/Ga_Rea_Ddok. Passos
   seguem os pares por piso de `TMHuman::AnimationFrame`; os 82 IDs distintos
   usados pelas acoes de NPCs/monstros no `AniSound4.txt` estao presentes e
   ligados, com atenuacao e limite de canais. Cachoeira, chuva local e o objeto
   ambiental 607 mantem loops por proximidade. Clima global fica condicionado
   a implementacao futura do sistema de weather, nao ao audio.
-- Rosto/classe (`Equip[0]`), mantuas do player (`Equip[15]`), skins raros e
-  acoes especiais de criaturas ainda exigem cobertura/homologação.
+- As 24 identidades de player `Equip[0]` e as 36 mantuas `Equip[15]` estão
+  cobertas. Sanção/citizen da capa, skins raros e ações especiais de
+  criaturas ainda dependem de estado de servidor ou homologação visual.
 - WebGPU nao e substituto direto: shaders `onBeforeCompile` e materiais WebGL
   teriam de ser portados para TSL/nodes.
 - JavaScript distribuido no navegador pode ser dificultado, mas nunca mantido
@@ -654,7 +682,9 @@ atualizado para remover a divergencia.
   `#25` porta as 21 partículas, shade e som do `TMSkillCure`, sem inventar
   estado negativo no player. A auditoria agora separa corretamente os 144
   registros por semântica: 87 estão no runtime, 49 são passivos de catálogo e
-  8 são casts/buffs realmente pendentes. Extração `#83` e Alquimia `#84`
+  8 são casts/buffs reservados ao servidor. A auditoria falha se um dos 144
+  registros ficar sem categoria, se um cast bloqueado não possuir justificativa
+  ou se a tabela contiver bloqueio órfão. Extração `#83` e Alquimia `#84`
   preservam o fluxo de item do cliente: a primeira seleciona/confirma um item
   da bolsa, e a segunda abre as receitas reais de `Mixlist.bin` no atlas
   `NewItemMix`; nenhuma delas inventa consumo ou resultado sem servidor.
@@ -692,6 +722,16 @@ atualizado para remover a divergencia.
   explicitamente rotuladas, sem ativar rede durante o escopo frontend atual.
 - Distribuicao: README, capturas dos 111 mapas, Vercel/iPhone, minificacao,
   telemetria, dispose e code splitting.
+- Homologacao desktop: `tools/capture-local-homologation.mjs` controla
+  Chromium pelo DevTools Protocol sem pacote externo, força viewport exato,
+  aguarda `#loading.is-hidden`, salva a captura e reprova erros de runtime. Em
+  `1024x768`, o chat termina acima dos orbes e a faixa de atalhos quebra em
+  duas linhas; em widescreen ela permanece em uma linha. SwiftShader serve
+  para layout, nunca para baseline de FPS.
+- Cache inicial: o clique em `Entrar agora` pode abortar o reader antes do
+  `await cache.put`. O rejection handler deve ser anexado ao `Cache.put`
+  imediatamente para que esse interleaving não produza `AbortError` não
+  tratado.
 - Auditoria: matriz automatica de arquivos/cobertura e memoria canonica.
 
 ## Documentos relacionados

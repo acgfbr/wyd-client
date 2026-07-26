@@ -628,6 +628,9 @@ async function importMonsterCatalog() {
       home: [data.readUInt16LE(32), data.readUInt16LE(34)],
       baseScore: readNpcScore(data, 36),
       currentScore: readNpcScore(data, 64),
+      // STRUCT_MOB_OLD.CurrentScore.Reserved. MSG_CreateMob transports the
+      // complete score and TMFieldScene branches on its low nibble.
+      currentScoreReserved: data[70],
       equipment,
       learnedSkill: data.readUInt32LE(732),
       bonuses: [

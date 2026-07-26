@@ -96,7 +96,7 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
   o modelo do personagem ao equipar/retirar.
 - Abaixo do minimapa, a telemetria agrega FPS, heap JS quando disponível e o
   tempo/ocupação da callback principal como proxy explicitamente não-CPU.
-- Build TypeScript/Vite verde em 23/07/2026.
+- Build TypeScript/Vite verde em 25/07/2026.
 
 ## Implementado, mas ainda não homologado visualmente
 
@@ -198,8 +198,13 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
    offsets especiais de elmo/capa. A malha auxiliar acompanha
    `STAND/WALK/RUN` e usa a ANI 3 quando montada, incluindo o pitch específico
    da montaria. Sanção/citizen continua dependente do total de kills e estado
-   vindos do servidor clássico; o frontend não fabrica esse dado. Permanece
-   fora deste lote somente rosto/classe.
+   vindos do servidor clássico; o frontend não fabrica esse dado.
+   `Equip[0]` foi fechado separadamente do elmo: 24 identidades canônicas
+   entre os índices `1..44` preservam `EF_CLASS`, `FaceMesh`, `FaceSkin`,
+   `bExpand` e a seleção do rig feita por `SetRace`. O catálogo deliberadamente
+   não aceita os registros de posição 1 posteriores, pois eles representam
+   identidades de NPC, itens selados ou raças de monstro. O rosto base é
+   recomposto junto ao corpo ordinário sem ocupar um slot falso no inventário.
 4. Skytalos, refinação e Ancient. Implementado e homologado: item `2551`,
    refinação +15, composição `MODULATE2X + ADDSMOOTH`, UV animado em 4 s e
    empunhadura pelo banco de arco da Huntress.
@@ -227,21 +232,29 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
 7. Isolamento completo do modo G — **concluído no frontend**. `G` usa velocidade
    64, ignora a navegação/colisão, bloqueia dano recebido, revive ao ativar e
    continua alimentando o streaming preditivo sem alterar o modo normal.
-8. Progressão e painel de personagem — **frontend implementado, fidelidade
-   parcial**. A janela `C` usa o atlas clássico, guarda e distribui
+8. Progressão e painel de personagem — **escopo offline concluído; fórmulas
+   autoritativas reservadas ao servidor**. A janela `C` usa o atlas clássico, guarda e distribui
    `STR/INT/DEX/CON`, mostra pontos livres/EXP total e aplica a tabela exata
    `g_pNextLevel[403]`. Cada nível concede os `+5` pontos e `+3 ATQ` configurados
-   no mock, toca `LEVELUP/MLVLUP` e dispara o efeito visual clássico. Ainda
-   faltam as fórmulas autoritativas de atributos derivados e o som original;
-   não inventar essas regras no cliente antes da camada de servidor/áudio.
-9. NPCs, diálogo, lojas, portais, equipamento, inventário e loot — **parcial**.
+   no mock, toca `LEVELUP/MLVLUP` e dispara o efeito visual clássico. O áudio
+   agora segue `TMHuman::SetAnimation`: o jogador focado usa o sound da linha
+   `LEVELUP` do rig atual, transformações Balrog/Beriel/Ga_Rea_Ddok usam `294`
+   e montarias skin `31` acrescentam `279`. O fallback remoto `158` deixou de
+   ser forçado sobre o player local. Ainda faltam as fórmulas autoritativas de
+   atributos derivados; não inventar essas regras antes do servidor.
+9. NPCs, diálogo, lojas, portais, equipamento, inventário e loot — **escopo
+   offline concluído; transações e persistência reservadas ao servidor**.
    Cada ator agora expõe `generatorId`, índice/chave do template, código de
    interação, item da cabeça e categoria `shop/cargo/quest/mix/premium/special`.
    O clique segue a separação mouse-down/mouse-up do cliente, respeita o ator
    mais próximo, não abre fala inventada para código zero e fecha a interação
-   ao mover, atacar ou trocar de estado. A equivalência entre o nibble baixo de
-   `Merchant` e `SCORE.Reserved` permanece identificada como inferência do
-   corpus, embora tenha coincidido nos 376 templates resolvidos analisados.
+   ao mover, atacar ou trocar de estado. A interface já não depende da
+   equivalência inferida com `Merchant`: o importador lê diretamente
+   `STRUCT_MOB_OLD.CurrentScore.Reserved@70`; `MSG_CreateMob` transporta esse
+   `STRUCT_SCORE`, `OnPacketCreateMob` o copia para `TMHuman::m_stScore` e os
+   ramos de `MouseClick_NPC` consultam seu nibble baixo. A comparação
+   `Merchant/Reserved` permanece apenas como evidência auxiliar no catálogo
+   comercial, onde os 377 templates resolvidos coincidem.
    Foram importados os atlas reais `MessageBox2`, `Store2`, `Storage2`,
    `Quest2`, `PotalUI` e `PotalOldUI`; os painéis usam essas geometrias e o
    serviço abre junto do inventário existente, fechando-o depois somente quando
@@ -348,7 +361,8 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
    Ainda faltam ownership, decaimento/ressincronização de servidor e drop
    tables autoritativas. NPCs amistosos mantêm o passeio
    curto já implementado, e o Griupan segue homologado como familiar padrão.
-10. HUD, áudio, efeitos e revisão manual dos mapas — **parcial**. A HUD recebeu
+10. HUD, áudio, efeitos e revisão manual dos mapas — **implementação offline
+    concluída; homologação visual separada**. A HUD recebeu
     o primeiro passe de escala/composição baseado na captura 7.54 fornecida:
     painéis de personagem/inventário ampliados, trilho inferior contínuo,
     orbes laterais, readout integrado, botões redondos clicáveis e telemetria
@@ -361,8 +375,13 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
     rotas `@`/`/` não geram balão; os offsets a pé/montado, a fonte
     `FontNanum.ttf`, o recorte de viewport e a ausência deliberada de
     depth-test seguem `TMHuman::LabelPosition` e `SText`.
-    Ainda é necessária homologação visual em 1024×768, desktop widescreen e
-    iPhone; o detalhamento dos slots equipados já foi reconstruído a partir do
+    A homologação automatizada do layout-base cobre viewports exatos de
+    `1024×768` e `1440×900` em Chromium 139: o chat termina acima dos orbes,
+    os orbes permanecem no desktop de 1024 px e a faixa de atalhos quebra em
+    duas linhas sem invadir o chat. As capturas estão no checklist; SwiftShader
+    não é usado como baseline de performance. Ainda é necessária homologação
+    interativa dos painéis e no iPhone; o detalhamento dos slots equipados já
+    foi reconstruído a partir do
     `FieldScene2.bin`. A causa da
     grama deslocada em `2104,2088` e `2129,2102` foi rastreada no cliente:
     `TMLeaf/TMTree/TMShip` usam `TMSkinMesh` sem owner/type 1 e não recebem o
@@ -464,8 +483,8 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
     Bun, preparo dos assets, erros comuns, iPhone/Vercel e a galeria de capturas
     reais, incluindo as quatro classes, evocações e os 111 mapas.
     A primeira execução agora lê `precache-armia.json`, valida sua chave de
-    conteúdo e prepara em `CacheStorage` um pacote essencial de Armia com 780
-    arquivos/32,9 MiB. A tela mostra arquivos, bytes, taxa e nome corrente;
+    conteúdo e prepara em `CacheStorage` um pacote essencial de Armia com 819
+    arquivos/34,0 MiB. A tela mostra arquivos, bytes, taxa e nome corrente;
     `Entrar agora` interrompe sem impedir o boot e o próximo acesso retoma
     apenas as entradas ausentes. O navegador recebe pedido de persistência
     quando suportado e a estimativa de quota é conferida antes da transferência.
@@ -480,6 +499,9 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
     Safari/iPhone ainda pode expulsar o cache sob pressão. Falta homologar em
     uma publicação HTTPS real: primeira visita, interrupção/retomada, limpeza,
     atualização de versão, offline parcial e expulsão no iPhone 15.
+    O cancelamento também ficou livre de rejeições não tratadas: o handler de
+    `Cache.put()` é anexado antes da leitura do stream, portanto abortar a
+    resposta não deixa `AbortError` órfão quando o reader encerra primeiro.
     O boot de Armia agora usa uma barreira adicional: aguarda o DAT e a montagem
     completa de modelos, água, efeitos, avatar, Griupan e montaria; em seguida
     faz o primeiro render ainda atrás da tela opaca para compilar materiais e
@@ -509,7 +531,7 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
     a manter esse contrato. A matriz automatica por
     arquivo importado foi concluida: `bun run audit:coverage` cruza o manifesto,
     o corpus fisico e as definicoes TypeScript do runtime, gerando Markdown e
-    JSON em `docs/matriz-cobertura-classico.*`. O snapshot atual valida 5.112
+    JSON em `docs/matriz-cobertura-classico.*`. O snapshot atual valida 5.153
     caminhos declarados sem faltantes — incluindo agora o grafo interno de
     MSH/BON/ANI/texturas dos monstros —, 111 TRN, 108 DAT declarados, 103
     minimapas declarados, 377 templates, 3.937 geradores, 6.500 itens, 990
@@ -518,7 +540,7 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
     evocacoes; tambem explicita por classe
     quais skills ja foram promovidas ao runtime. O code splitting tambem foi
     aplicado: Three.js ocupa um chunk vendor cacheavel, a entrada da aplicacao
-    ficou em cerca de 607 KiB minificados e os renderers de Foema, TransKnight
+    ficou em cerca de 611 KiB minificados e os renderers de Foema, TransKnight
     e BeastMaster viraram chunks lazy na faixa de aproximadamente 37–124 KiB,
     carregados somente no primeiro switch para cada classe.
     O `ModelLibrary` também passou a compartilhar DDS por caminho entre tipos:
@@ -621,13 +643,22 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
     nunca inicializa `m_fParticleV`, embora `FrameMove` leia esse valor em
     todos os movimentos. Não reproduzir memória indefinida nem escolher uma
     amplitude vertical no achismo; a implementação exige outra versão do
-    cliente ou captura que prove o valor. Os seis Krill condicionados a
-    `ATTACK02` têm inconsistência semelhante: o rig `22` só escreve
-    `m_vecTempPos[0]`, mas o renderer emite também de `[1]`.
+    cliente ou captura que prove o valor. O caso dos seis Krill foi fechado
+    até o limite comprovável: `ATTACK02` agora emite a partícula aditiva
+    vermelha `texture 0`, vida `1,5 s`, crescimento `0,001/ms` e jitter
+    clássico a partir de `m_vecTempPos[0]`, materializado pelo bone 25 do rig
+    `22`. A segunda emissão continua omitida porque nenhum caminho escreve
+    `m_vecTempPos[1]`. A IA offline também alterna deterministicamente entre
+    `ATTACK1/2/3` disponíveis; no cliente retail essa escolha virá do packet do
+    servidor, mas não há mais uma imposição global de `ATTACK1`.
     Falta homologar visualmente uma amostra de cada skin humanoide armada.
     As verificações que exigem navegador/dispositivo estão isoladas em
     `docs/checklist-homologacao-manual.md`, com cenário, duração, coordenadas e
     critério de evidência; elas não são marcadas como aprovadas pelo build.
+    `tools/capture-local-homologation.mjs` acrescenta um gate reproduzível sem
+    dependência npm: força o viewport por DevTools, pula o cache opcional,
+    aguarda a barreira real de boot, captura PNG e falha diante de exceções ou
+    erros de console.
 13. Memória canônica do projeto — **primeira consolidacao concluida**.
     `MEMORIA_PROJETO.md` registra a arquitetura resultante, decisões e justificativas,
     fontes do cliente clássico por subsistema, formatos/parsers, descobertas,
@@ -663,8 +694,9 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
     uma decisão explícita do projeto. O menu recebeu as opções clássicas de
     servidor/personagem/saída como estados honestamente bloqueados pela rede.
     Dano, sessão e regras econômicas continuam destinados ao futuro servidor.
-15. Skills e buffs completos por classe. Implementar a matriz de habilidades de
-   TransKnight, Foema, BeastMaster e Huntress a partir de `SkillData.bin` e das
+15. Skills e buffs completos por classe — **escopo offline concluído; oito
+   casts reservados ao servidor**. A matriz de habilidades de
+   TransKnight, Foema, BeastMaster e Huntress parte de `SkillData.bin` e das
    rotinas do cliente clássico. Cada skill deve usar sua textura, animação de
    personagem, efeito de conjuração, trajetória e impacto originais; cada buff
    deve manter duração/estado e o efeito persistente correto no personagem ou
@@ -877,16 +909,19 @@ considerados fiéis quando possuem uma origem rastreável no cliente clássico.
    `TMFieldScene::SkillUse`: exige garras `EF_WTYPE 41`, rejeita o Skytalos
    `WTYPE 101` antes de mana/cooldown e não desenha aura inventada, pois o
    `Affect 36` é somente estado/ícone em `TMHuman::CheckAffect`.
-   A matriz agora registra dezessete skills Huntress no runtime e 19 registros
-   ainda não promovidos, dos quais 17 são passivos e apenas `#241/#246`
-   continuam sendo casts dependentes de regra autoritativa.
+   A matriz registra dezessete skills Huntress no runtime; dos outros 19
+   registros, 17 são passivos e `#241/#246` são casts dependentes de regra
+   autoritativa.
    Os oito casts restantes das quatro classes possuem bloqueio canônico em
    `ClassSkillBlockers.ts`; o catálogo `K` os identifica como `SERVIDOR` e o
-   tooltip explica a dependência exata. A auditoria exporta os mesmos motivos
-   em Markdown/JSON, evitando que a UI e a documentação divirjam.
+   tooltip explica a dependência exata. A janela também resume por classe as
+   quantidades jogáveis, passivas e reservadas ao servidor. A auditoria exporta
+   os mesmos motivos em Markdown/JSON e agora falha se algum dos 144 registros
+   ficar sem categoria, se surgir cast sem justificativa ou bloqueio órfão.
    `#76/#81/#86/#101` estão homologadas; `#88` está implementada e aguarda a
-   inspeção visual no navegador. O épico só fecha depois da matriz completa das
-   quatro classes. As oito evocações reais do BeastMaster já têm
+   inspeção visual no navegador. Portanto a implementação offline da matriz
+   está fechada; o que resta neste item é homologação visual, não código
+   ausente. As oito evocações reais do BeastMaster já têm
    criação, skin/LOOK_INFO, animação `LEVELUP`, seguimento, escolha de alvo,
    ataque e descarte local, sem reutilizar o Griupan. O nascimento agora porta
    `TMEffectStart(type 1)` e `TMEffectLevelUp(type 0)` por entidade, com pool

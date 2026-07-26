@@ -19,6 +19,7 @@ const summonsRoot = path.join(outputRoot, "summons");
 const transformationsRoot = path.join(outputRoot, "transformations");
 const griupanRoot = path.join(outputRoot, "familiars/ag01");
 const equipmentCatalogFile = path.join(outputRoot, "equipment-looks.json");
+const faceCatalogFile = path.join(outputRoot, "faces.json");
 const weaponCatalogFile = path.join(outputRoot, "weapons.json");
 const mantuaCatalogFile = path.join(outputRoot, "mantuas.json");
 const manifestFile = path.join(projectRoot, "public/game-data/classic/manifest.json");
@@ -201,6 +202,105 @@ await writeFile(equipmentCatalogFile, `${JSON.stringify({
     part: slot.part,
   }])),
   items: equipmentItems,
+}, null, 2)}\n`);
+
+// Equip[0] is not a helmet: SetRace reads EF_CLASS from it and selects the
+// ch01/ch02 rig, while FaceMesh/FaceSkin feed LOOK_INFO part 1. Restrict this
+// player package to the 24 canonical class faces at ItemList 1..44. Later
+// position-1 records are NPC identities, sealed items or monster races and
+// belong to the monster catalog instead.
+const faceItems = [];
+const faceStats = {
+  candidates: 0,
+  missingVariantAssets: 0,
+  importedItems: 0,
+};
+for (let itemIndex = 1; itemIndex <= 44; itemIndex++) {
+  const offset = itemIndex * itemRecordBytes;
+  if (itemList.readUInt16LE(offset + 136) !== 1) continue;
+  const itemClass = itemEffect(itemList, offset, 18);
+  const playerClass = CLASSIC_PLAYER_CLASSES.find((candidate) => candidate.itemClass === itemClass);
+  if (!playerClass) continue;
+  faceStats.candidates++;
+  const mesh = itemList.readInt16LE(offset + 64);
+  const texture = itemList.readInt16LE(offset + 66);
+  const base = playerClass.skin === 0 ? "ch01" : "ch02";
+  const variantOffset = 20 * playerClass.expand;
+  let meshStem = `${base}01${String(mesh + variantOffset + 1).padStart(2, "0")}`.toLowerCase();
+  let textureStem = `${base}01${String(texture + mesh + variantOffset + 1).padStart(2, "0")}`.toLowerCase();
+  ({ meshStem, textureStem } = applyClassicPlayerFileExceptions(meshStem, textureStem));
+  const mirrorsHelmet = mesh === 40 || mesh === 64 || mesh === 80;
+  let helmetMeshStem = null;
+  let helmetTextureStem = null;
+  if (mirrorsHelmet) {
+    helmetMeshStem = `${base}02${String(mesh + variantOffset + 1).padStart(2, "0")}`.toLowerCase();
+    helmetTextureStem = `${base}02${String(texture + mesh + variantOffset + 1).padStart(2, "0")}`.toLowerCase();
+    ({
+      meshStem: helmetMeshStem,
+      textureStem: helmetTextureStem,
+    } = applyClassicPlayerFileExceptions(helmetMeshStem, helmetTextureStem));
+  }
+  const meshSource = meshFiles.get(`${meshStem}.msh`);
+  const textureSource = meshFiles.get(`${textureStem}.wys`);
+  const helmetMeshSource = helmetMeshStem ? meshFiles.get(`${helmetMeshStem}.msh`) : null;
+  const helmetTextureSource = helmetTextureStem ? meshFiles.get(`${helmetTextureStem}.wys`) : null;
+  if (
+    !meshSource
+    || !textureSource
+    || (mirrorsHelmet && (!helmetMeshSource || !helmetTextureSource))
+  ) {
+    faceStats.missingVariantAssets++;
+    continue;
+  }
+  if (!importedMeshes.has(meshStem)) {
+    await copyFile(path.join(meshRoot, meshSource), path.join(meshesRoot, `${meshStem}.msh`));
+    importedMeshes.add(meshStem);
+  }
+  if (!importedTextures.has(textureStem)) {
+    await writeFile(
+      path.join(texturesRoot, `${textureStem}.dds`),
+      decodeWys(await readFile(path.join(meshRoot, textureSource))),
+    );
+    importedTextures.add(textureStem);
+  }
+  if (helmetMeshStem && helmetMeshSource && !importedMeshes.has(helmetMeshStem)) {
+    await copyFile(
+      path.join(meshRoot, helmetMeshSource),
+      path.join(meshesRoot, `${helmetMeshStem}.msh`),
+    );
+    importedMeshes.add(helmetMeshStem);
+  }
+  if (helmetTextureStem && helmetTextureSource && !importedTextures.has(helmetTextureStem)) {
+    await writeFile(
+      path.join(texturesRoot, `${helmetTextureStem}.dds`),
+      decodeWys(await readFile(path.join(meshRoot, helmetTextureSource))),
+    );
+    importedTextures.add(helmetTextureStem);
+  }
+  faceItems.push({
+    index: itemIndex,
+    name: readCString(itemList, offset, 64),
+    classKey: playerClass.key,
+    itemClass,
+    mesh,
+    texture,
+    meshStem,
+    textureStem,
+    alpha: normalizeAlpha(alphaByTexture.get(textureSource.toLowerCase())),
+    mirrorsHelmet,
+    helmetMeshStem,
+    helmetTextureStem,
+    helmetAlpha: helmetTextureSource
+      ? normalizeAlpha(alphaByTexture.get(helmetTextureSource.toLowerCase()))
+      : null,
+  });
+}
+faceStats.importedItems = faceItems.length;
+await writeFile(faceCatalogFile, `${JSON.stringify({
+  version: 1,
+  source: "ItemList.bin Equip[0] + TMHuman::SetRace + TMSkinMesh::RestoreDeviceObjects",
+  counts: faceStats,
+  items: faceItems,
 }, null, 2)}\n`);
 
 // Hand equipment uses the common MeshList model graph imported by
@@ -451,7 +551,7 @@ await writeFile(
 );
 
 console.log(
-  `${CLASSIC_PLAYER_CLASSES.length} classes, ${equipmentItems.length} equipamentos LOOK_INFO, ${weaponItems.length} armas comuns, ${mantuaItems.length} mantuas, ${CLASSIC_COSTUME_LOOKS.length} trajes 4150..4183, ${HUNTRESS_LOOKS.length} looks especializados da Huntress, ${importedWeapons.size} armas canônicas, ${MOUNT_LOOKS.length} montarias, ${BEAST_MASTER_SUMMONS.length} evocacoes, ${BEAST_MASTER_TRANSFORMATIONS.length} transformacoes e Griupan/fadas importados para ${outputRoot}`,
+  `${CLASSIC_PLAYER_CLASSES.length} classes, ${faceItems.length} rostos Equip[0], ${equipmentItems.length} equipamentos LOOK_INFO, ${weaponItems.length} armas comuns, ${mantuaItems.length} mantuas, ${CLASSIC_COSTUME_LOOKS.length} trajes 4150..4183, ${HUNTRESS_LOOKS.length} looks especializados da Huntress, ${importedWeapons.size} armas canônicas, ${MOUNT_LOOKS.length} montarias, ${BEAST_MASTER_SUMMONS.length} evocacoes, ${BEAST_MASTER_TRANSFORMATIONS.length} transformacoes e Griupan/fadas importados para ${outputRoot}`,
 );
 
 function decodeWys(encoded) {

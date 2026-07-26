@@ -4,6 +4,19 @@ Esta lista contem somente verificacoes que nao podem ser encerradas por analise
 estatica ou build. Rede e regras autoritativas de servidor continuam fora do
 escopo atual.
 
+## Evidencias automatizadas de layout
+
+- [x] Em 25/07/2026, Chromium 139 headless no macOS abriu Armia com viewports
+  exatos de `1024x768` e `1440x900`. A barreira de boot só foi liberada após
+  terreno, objetos, player e primeira imagem; HUD base, chat, orbes, faixa de
+  atalhos, minimapa, telemetria e contador de quests ficaram visíveis sem
+  sobreposição, com zero erro de runtime capturado pelo DevTools Protocol.
+  Evidências: [1024x768](screenshots/homologacao/desktop-1024x768.png) e
+  [1440x900](screenshots/homologacao/desktop-1440x900.png).
+- Essa execução usa SwiftShader para WebGL headless. As imagens homologam
+  composição/layout, mas seus valores de FPS, RAM e THREAD não constituem
+  baseline de desempenho em GPU real.
+
 ## Desktop
 
 - Abrir Armia em `1024x768` e em widescreen; conferir HUD, chat, inventario,

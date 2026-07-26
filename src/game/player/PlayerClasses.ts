@@ -72,6 +72,8 @@ export interface ClassicPlayerClassDefinition {
   /** BM and Huntress add 20 to ordinary LOOK_INFO variants. */
   readonly expand: 0 | 1;
   readonly animationSet: ClassicPlayerAnimationSet;
+  /** Canonical in-world Equip[0] item, distinct from the selection-scene face. */
+  readonly baseFaceItemIndex: 1 | 11 | 21 | 31;
   readonly baseParts: readonly ClassicPlayerLookPart[];
   readonly selection: ClassicPlayerSelectionDefinition;
   readonly looks: readonly ClassicPlayerLookDefinition[];
@@ -263,6 +265,7 @@ export const CLASSIC_PLAYER_CLASSES = [
     skin: 0,
     expand: 0,
     animationSet: "Knight",
+    baseFaceItemIndex: 1,
     baseParts: TRANSKNIGHT_BASE_LOOK.parts,
     selection: selection(
       { face: 6, helm: 1417, body: 1230, mantle: 0, right: 0, left: 3605, refinement: 9 },
@@ -282,6 +285,7 @@ export const CLASSIC_PLAYER_CLASSES = [
     skin: 1,
     expand: 0,
     animationSet: "Mage",
+    baseFaceItemIndex: 11,
     baseParts: FOEMA_BASE_LOOK.parts,
     selection: selection(
       { face: 16, helm: 44, body: 1365, mantle: 0, right: 0, left: 3733, refinement: 9 },
@@ -301,6 +305,7 @@ export const CLASSIC_PLAYER_CLASSES = [
     skin: 0,
     expand: 1,
     animationSet: "Knight",
+    baseFaceItemIndex: 21,
     baseParts: BEASTMASTER_BASE_LOOK.parts,
     selection: selection(
       { face: 26, helm: 44, body: 1515, mantle: 0, right: 0, left: 3785, refinement: 9 },
@@ -320,6 +325,7 @@ export const CLASSIC_PLAYER_CLASSES = [
     skin: 1,
     expand: 1,
     animationSet: "Mage",
+    baseFaceItemIndex: 31,
     baseParts: HUNTRESS_BASE_LOOK.parts,
     selection: selection(
       { face: 36, helm: 44, body: 1665, mantle: 0, right: 0, left: 3625, refinement: 9 },

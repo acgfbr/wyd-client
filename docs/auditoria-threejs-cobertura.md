@@ -90,7 +90,7 @@ com vários drops, com NPC shop/cargo/inventário aberto e no iPhone.
   TransKnight e BeastMaster possuem chunks de renderer próprios carregados
   apenas no primeiro switch para a classe; o build medido gerou chunks de
   aproximadamente 37–124 KiB minificados. A entrada da aplicação ficou em
-  aproximadamente 607 KiB e o vendor Three.js em 518 KiB. Huntress permanece
+  aproximadamente 611 KiB e o vendor Three.js em 518 KiB. Huntress permanece
   no boot porque é a classe inicial; catálogos grandes já usam fetch lazy.
 - `performance.memory` não existe no Safari/iPhone, então RAM JS aparece como
   `—`; para iOS, usar GEO/TEX/CALLS/TRIS e inspeção remota.
@@ -109,7 +109,7 @@ A matriz fisica e reproduzivel agora e gerada por
 `bun run audit:coverage` em `docs/matriz-cobertura-classico.md` e
 `docs/matriz-cobertura-classico.json`. O gerador cruza o manifesto com os
 arquivos existentes e importa as definicoes TypeScript do runtime para nao
-confundir asset presente com feature jogavel. No snapshot atual existem 5.112
+confundir asset presente com feature jogável. No snapshot atual existem 5.153
 caminhos unicos declarados e nenhum ausente; os 111 Fields possuem 111 TRN,
 108 DAT declarados e 103 minimapas declarados. As ausencias de DAT/minimapa
 nos demais Fields fazem parte do proprio manifesto, nao sao links quebrados.
@@ -119,25 +119,25 @@ nos demais Fields fazem parte do proprio manifesto, nao sao links quebrados.
 | Mapas/Fields | 111 Fields, streaming, conexões, minimapas, seletor | `manifest.json`, `Field*.trn`, `regions.ts` | Revisão visual final dos 111 mapas |
 | Terreno/colisão | TRN, AttributeMap, object.bin, pontes/altura, pathfinding | `ClassicWorld`, `ClassicNavigation` | Casos isolados de máscara/altura que aparecerem em teste |
 | Objetos/props | DAT/WYS/MSH, água, folhas/árvores/fauna/navios com ANI instanciada, fogueiras, fontes, floats, TMDust 531, tetos/partículas TMHouse, reflexos de céu e composições 1846/1980/2035 | `MapObjects`, `MapWater`, `ClassicEnvironmentObjects`, `MapEffects`, `MapMeshEffects` | Homologar pontos de grama e famílias ambientais raras |
-| Personagem | Quatro classes jogáveis, rigs, 34 trajes `4150..4183`, 990 equipamentos ordinários de corpo/1.019 variantes `LOOK_INFO`, 788 armas e 36 mantuas de player | `ClassicCostumeLooks`, `ClassicPlayerEquipmentCatalog`, `ClassicPlayerWeaponCatalog`, `ClassicPlayerMantuaCatalog`, `PlayerClasses`, `ClassicPlayerAvatar` | Rosto/classe; sanção/citizen da mantua depende do servidor |
+| Personagem | Quatro classes jogáveis, 24 identidades/rostos `Equip[0]`, rigs, 34 trajes `4150..4183`, 990 equipamentos ordinários de corpo/1.019 variantes `LOOK_INFO`, 788 armas e 36 mantuas de player | `ClassicPlayerFaceCatalog`, `ClassicCostumeLooks`, `ClassicPlayerEquipmentCatalog`, `ClassicPlayerWeaponCatalog`, `ClassicPlayerMantuaCatalog`, `PlayerClasses`, `ClassicPlayerAvatar` | Sanção/citizen da mantua depende do servidor |
 | Huntress | Mulher Kalintz, Skytalos Ancient +15, Griupan, 17 skills promovidas | `HuntressLooks`, `ClassicHuntressSkillEffects`, `ClassicAlchemyCatalog`, `ClassicLevelUpEffects` | 17 passivas e 2 casts ainda fora do runtime |
 | Montarias | 16 montarias nível 120, Unicórnio padrão, sela/bones | `MountLooks`, `ClassicMount` | Homologação visual de todas as variações |
-| NPCs/monstros | Spawn por Field, animação, hover/seleção, IA offline, drops, armas Equip[6]/[7], 14 montarias Equip[14], 50 mantuas Equip[15], Nyerdes, efeitos intrínsecos 61+56, crater TMShade, Gárgulas dungeon-2 e os sete `TMEffectMeshRotate` do Guer_Caveira | `MonsterCatalog`, `ClassicSpawnManager`, `ClassicNyerdesParticles`, `ClassicMonsterPersistentEffects`, `ClassicMonsterRotateBoneEffects` | Homologar por amostragem; TMButterFly de owner e o ponto `[1]` do Krill ATTACK02 aguardam evidência não contraditória |
+| NPCs/monstros | Spawn por Field, animações de ataque variadas, hover/seleção, IA offline, drops, armas Equip[6]/[7], 14 montarias Equip[14], 50 mantuas Equip[15], Nyerdes, efeitos intrínsecos 61+56, emissão válida do Krill ATTACK02, crater TMShade, Gárgulas dungeon-2 e os sete `TMEffectMeshRotate` do Guer_Caveira | `MonsterCatalog`, `ClassicSpawnManager`, `ClassicNyerdesParticles`, `ClassicMonsterPersistentEffects`, `ClassicMonsterRotateBoneEffects` | Homologar por amostragem; TMButterFly de owner e o ponto inválido `[1]` do Krill aguardam evidência não contraditória |
 | BeastMaster | 8 evocações (10 por cast), IA offline e 5 transformações de rig | `BeastMasterSummons`, `ClassicBeastMasterSummon`, `BeastMasterTransformations` | Invocação Final e fórmulas autoritativas ainda dependem do servidor |
 | Inventário/equipamento | UI 7.54, bolsas, equip/unequip, cargo, preview 3D, Extração e Alquimia somente leitura | `GameHud`, `ClassicInventoryPreview`, `ClassicAlchemyCatalog` | Compra/venda/economia e resultado das combinações somente com servidor |
 | Itens/comércio | 6.500 ItemList, ItemPrice, Carry de NPC, tooltips clássicos e footprint EF_GRID | `ClassicCommerceCatalog`, `PlayerState`, `ClassicItemTooltip` | Ownership/decadência de drops e economia autoritativa |
 | HUD/chat | Orbes, C.C., menu, chat local, overhead name/HP/balão | `main.ts`, `GameHud`, `ClassicPlayerOverheadHud` | Homologar 1024x768, widescreen e iPhone |
-| Skills/VFX | Vários lotes por classe implementados; skills não citadas bloqueadas | `ClassSkills`, `render/effects` | Épico de skills completo continua aberto |
+| Skills/VFX | 87 registros jogáveis, 49 passivas catalogadas e 8 casts com bloqueio autoritativo explícito | `ClassSkills`, `ClassSkillBlockers`, `render/effects` | Homologação visual dos renderers; fórmulas e oito casts ficam para o servidor |
 | Áudio | 333 SFX, 13 músicas, BGM opcional, combate/coleta, passos por piso, 82 IDs AniSound de atores e loops ambientais próximos | `audio/catalog.json`, `ClassicAudio`, `ClassicSpawnManager`, `MapObjects` | Quatro referências órfãs dos corpora desktop/mobile; clima global depende do futuro weather |
 | Rede/servidor | Deliberadamente fora do escopo atual | n/a | Sessão, economia, dano autoritativo, drops reais |
 
 ## Inventário objetivo das lacunas
 
-- Skills: 87 de 144 registros de classe/master já estão no runtime. Dos 57
-  restantes, 49 são passivos no próprio `SkillData.bin`; apenas 8 são
-  casts/buffs ainda não promovidos. Alguns destes 8 dependem de estado
-  autoritativo, party, item ou servidor; “pendente” não
-  significa automaticamente “falta um efeito”.
+- Skills: os 144 registros de classe/master estão integralmente classificados.
+  São 87 definições jogáveis no runtime, 49 passivas do próprio
+  `SkillData.bin` que não ocupam a barra e 8 casts/buffs reservados ao servidor
+  por dependerem de estado autoritativo, party, PvP, item ou criação de
+  entidade. A auditoria rejeita qualquer registro sem uma dessas categorias.
 - Classes/equipamentos: as quatro classes, seus looks base e toda a faixa de
   fantasias `4150..4183` são jogáveis. Os trajes trocam também
   `m_nSkinMeshType`, banco ANI e attachment de mão como no cliente. O grafo
@@ -150,7 +150,10 @@ nos demais Fields fazem parte do proprio manifesto, nao sao links quebrados.
   `CheckWeapon` e multitextura Ancient/refinação da instância. As 36 mantuas
   `Equip[15]` usam o rig auxiliar `mt01`, `fMantuaList`, offsets especiais e
   ANI montada; sanção/citizen não é inventada sem estado de servidor.
-  Permanece sem cobertura genérica o rosto de classe (`Equip[0]`).
+  `Equip[0]` também possui catálogo próprio com as 24 identidades canônicas
+  dos quatro players. Ele aplica `FaceMesh`/`FaceSkin` e valida `EF_CLASS`
+  antes de compor o rosto, sem tratá-lo como elmo ou aceitar raças de NPC e
+  monstro no rig jogável.
 - Monstros/NPCs: os 377 templates e 3.937 geradores estão catalogados e entram
   no streaming. As armas rígidas também foram fechadas a partir de
   `Equip[6]/Equip[7]`: 76 MSAs cobrem 224 templates e 269 attachments,
@@ -227,6 +230,6 @@ nos demais Fields fazem parte do proprio manifesto, nao sao links quebrados.
    os novos chunks e registrar a baseline real.
 4. Homologar por amostragem as famílias de monstros/NPCs e as 16 montarias, em
    vez de manter todos residentes.
-5. Voltar ao épico de skills somente com uma lista curta por lote, mantendo a
-   regra de não cair em efeito genérico silencioso e separando passivas/regras
-   de servidor de VFX realmente ausentes.
+5. Homologar visualmente a Lâmina das Sombras `#88` e amostras dos renderers
+   das quatro classes; os oito casts bloqueados só retornam à fila junto do
+   servidor autoritativo.

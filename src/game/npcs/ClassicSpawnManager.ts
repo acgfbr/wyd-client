@@ -708,7 +708,11 @@ export class ClassicSpawnManager {
         && distanceSquared <= animateDistanceSquared
         && isActorAlive(actor)
       ) {
-        const emissionPeriod = classicMonsterEmissionPeriod(actor.template, actorScale);
+        const emissionPeriod = classicMonsterEmissionPeriod(
+          actor.template,
+          actorScale,
+          actor.currentAction,
+        );
         if (this.#effectsEnabled && emissionPeriod !== null) {
           actor.specialEffectAccumulator += Math.max(0, Math.min(deltaSeconds, 0.1));
           if (actor.specialEffectAccumulator >= emissionPeriod) {
@@ -719,6 +723,7 @@ export class ClassicSpawnManager {
               actorScale,
               actor.specialEffectRandomState,
               actor.yaw,
+              actor.currentAction,
             );
           }
         } else {
@@ -881,7 +886,7 @@ export class ClassicSpawnManager {
     setActorMoving(actor, false);
     faceActor(actor, playerPosition, deltaSeconds);
     if (nowSeconds < actor.nextAttackAtSeconds) return;
-    const animationDuration = playActorAction(actor, ["ATTACK1", "STRIKE", "STAND01"], true);
+    const animationDuration = playActorAction(actor, actorAttackActionOrder(actor), true);
     actor.actionLockRemaining = Math.min(0.9, animationDuration ?? 0.45);
     actor.attackCount++;
     const damageSeed = spawnHash(actor.generator, actor.attackCount + 1_301);
@@ -1784,7 +1789,12 @@ function classicAiProfile(
 }
 
 function spawnYaw(template: MonsterTemplate): number {
-  const reserved = Math.trunc(template.currentScore?.[3] ?? template.baseScore?.[3] ?? 0);
+  const reserved = Math.trunc(
+    template.currentScoreReserved
+      ?? template.currentScore?.[3]
+      ?? template.baseScore?.[3]
+      ?? 0,
+  );
   const direction = (reserved >>> 4) & 0xf;
   const degrees = direction === 6 ? 180
     : direction === 9 ? 135
@@ -2207,6 +2217,18 @@ function playActorAction(actor: SpawnedActor, actions: readonly string[], restar
     return actor.lease.actionDurationSeconds(bodyAction) ?? 0;
   }
   return null;
+}
+
+function actorAttackActionOrder(actor: SpawnedActor): readonly string[] {
+  const available = ["ATTACK1", "ATTACK2", "ATTACK3"].filter((action) => (
+    actor.lease.actionDurationSeconds(actorBodyAction(actor, action)) !== null
+  ));
+  if (available.length === 0) return ["STRIKE", "STAND01"];
+  // The retail server chooses the motion packet. Until networking exists,
+  // rotate deterministically through the authored attacks instead of forcing
+  // every monster to ATTACK1 forever.
+  const selected = available[actor.attackCount % available.length]!;
+  return [selected, "ATTACK1", "STRIKE", "STAND01"];
 }
 
 function actorBodyAction(actor: SpawnedActor, action: string): string {

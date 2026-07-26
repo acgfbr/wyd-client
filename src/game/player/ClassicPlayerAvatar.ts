@@ -351,8 +351,8 @@ function attachClassicPlayerMantua(
   effectiveSkin: number,
   definition: ClassicEquippedMantuaVisual,
 ): void {
-  const boneIndex = effectiveSkin === 1 ? 6 : 6;
-  const anchor = body.model.bones[boneIndex] ?? body.model.object;
+  // g_dwMantuaIndex resolves to frame 6 for both playable ch01/ch02 rigs.
+  const anchor = body.model.bones[6] ?? body.model.object;
   anchor.add(mantua.model.object);
   mantua.model.setClassicBaseAttachment(
     classicPlayerMantuaTransform(effectiveSkin, definition),

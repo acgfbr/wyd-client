@@ -34,6 +34,8 @@ export interface MonsterTemplate {
   readonly home?: readonly [number, number];
   readonly baseScore?: MonsterScore;
   readonly currentScore?: MonsterScore;
+  /** STRUCT_MOB_OLD.CurrentScore.Reserved, consumed by MSG_CreateMob/TMHuman. */
+  readonly currentScoreReserved?: number;
   /** Sixteen seven-value item records, using the schema in catalog.equipment. */
   readonly equipment?: readonly number[];
   readonly learnedSkill?: number;

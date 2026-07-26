@@ -122,6 +122,17 @@ export class Player {
   get avatarLookName(): string | null { return this.#avatar?.look.name ?? null; }
   get mountLookKey(): string { return this.#mount?.look.key ?? this.#mountLookKey; }
   get mountName(): string | null { return this.#mount?.name ?? null; }
+  get levelUpSoundIndices(): readonly number[] {
+    const indices: number[] = [];
+    // TMHuman::SetAnimation plays this extra sample only for a focused rider
+    // mounted on skin 31 (horse/unicorn family).
+    if (this.#mounted && this.#mount?.look.skin === 31) indices.push(279);
+    // Human ch01/ch02 LEVELUP rows have sound 0. Transformations instead use
+    // their exact AniSound4 action entry (Balrog/Beriel/Ga_Rea_Ddok = 294).
+    const transformedSound = this.#transformation?.definition.family.actions?.LEVELUP?.[2] ?? 0;
+    if (transformedSound > 0 && !indices.includes(transformedSound)) indices.push(transformedSound);
+    return indices;
+  }
   get invisible(): boolean { return this.#invisible; }
   get moving(): boolean { return this.#moving; }
   /** Retail ground portals only prompt during STAND01/STAND02 motion. */

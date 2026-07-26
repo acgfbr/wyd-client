@@ -1004,7 +1004,18 @@ export class GameHud {
       ));
     }
     columns.push(specialColumn);
-    this.#skillCatalogStatus.textContent = `${selectedClass.name} · ${classSkills.length + specialSkills.length} skills · dados do cliente clássico`;
+    const passiveCount = classSkills.filter((skill) => skill.kind === "passive").length;
+    const serverBlockedCount = classSkills.filter((skill) => (
+      skill.kind !== "passive" && CLASSIC_SKILL_RUNTIME_BLOCKERS[skill.index] !== undefined
+    )).length;
+    const playableCount = classSkills.length - passiveCount - serverBlockedCount;
+    this.#skillCatalogStatus.textContent = [
+      selectedClass.name,
+      `${playableCount} jogáveis`,
+      `${passiveCount} passivas`,
+      `${serverBlockedCount} servidor`,
+      `${specialSkills.length} especiais`,
+    ].join(" · ");
     this.#skillCatalogGrid.replaceChildren(...columns);
   }
 

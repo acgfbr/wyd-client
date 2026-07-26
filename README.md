@@ -5,13 +5,15 @@ escrita do zero em TypeScript e Three.js. O cliente clássico/decompilado é usa
 como referência de formatos e comportamento; o código web antigo não é
 reutilizado.
 
-> Projeto em desenvolvimento e atualmente offline: rede e servidor ainda não
-> fazem parte deste recorte. Consulte a [fila canônica](PENDENCIAS.md) para ver o
-> que está homologado e o que ainda é provisório.
+> A implementação do recorte offline está fechada. Rede, persistência e regras
+> autoritativas serão a próxima etapa; as verificações visuais que exigem
+> navegador/dispositivo estão no
+> [checklist de homologação manual](docs/checklist-homologacao-manual.md).
 
 Documentação de arquitetura:
 
 - [Auditoria Three.js e cobertura clássica](docs/auditoria-threejs-cobertura.md)
+- [Checklist de homologação manual](docs/checklist-homologacao-manual.md)
 - [Guia do futuro servidor multiplayer](docs/guia-servidor-multiplayer.md)
 - [Estimativa para substituir os assets clássicos](docs/estimativa-substituicao-assets.md)
 - [Memória técnica do projeto](MEMORIA_PROJETO.md)
@@ -24,6 +26,8 @@ Documentação de arquitetura:
 - Equipamento modular do player com 990 peças de corpo/1.019 variantes e 788
   armas `Equip[6]/Equip[7]`, incluindo duas mãos, garras espelhadas, ANI
   a pé/montado e multitextura Ancient/refinação quando presente na instância.
+- As 24 identidades/rostos canônicos `Equip[0]` preservam a classe, o rig e
+  `FaceMesh/FaceSkin`; elmos continuam corretamente separados em `Equip[1]`.
 - As 36 mantuas `Equip[15]` usam o rig animado `mt01`, offsets por armadura e
   pose própria quando o personagem está montado.
 - Huntress com Mulher Kalintz, Skytalos Ancient +15 animado e Griupan.
@@ -133,8 +137,8 @@ Abra [http://localhost:5173](http://localhost:5173). O jogo começa em Armia, na
 coordenada `2100, 2100`. Se a porta estiver ocupada, o Vite mostrará no terminal
 a próxima porta utilizada.
 
-No primeiro acesso, a tela inicial prepara 780 arquivos essenciais de Armia
-(cerca de 32,9 MiB) no armazenamento do navegador. O botão **Entrar agora**
+No primeiro acesso, a tela inicial prepara 819 arquivos essenciais de Armia
+(cerca de 34,0 MiB) no armazenamento do navegador. O botão **Entrar agora**
 interrompe essa preparação sem bloquear o jogo; o próximo acesso retoma apenas
 o que estiver ausente. O pacote completo de mapas permanece sob demanda e não é
 copiado inteiro. Para apagar o pacote inicial, abra **MENU → Limpar pacote

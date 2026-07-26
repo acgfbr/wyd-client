@@ -1,9 +1,9 @@
 {
-  "generatedAt": "2026-07-24T03:42:07.934Z",
+  "generatedAt": "2026-07-25T21:36:04.861Z",
   "command": "bun run audit:coverage",
   "source": "WYD classic",
   "referencedFiles": {
-    "total": 5112,
+    "total": 5153,
     "missing": []
   },
   "maps": {
@@ -53,9 +53,11 @@
       }
     ],
     "classicCostumes": 34,
+    "faces": 24,
     "ordinaryEquipmentItems": 990,
     "ordinaryEquipmentVariants": 1019,
     "ordinaryWeapons": 788,
+    "mantuas": 36,
     "huntressLooks": 12,
     "mounts": 16,
     "mountFamilies": [
@@ -81,6 +83,11 @@
   },
   "skills": {
     "catalogRecords": 248,
+    "classAndMasterRecords": 144,
+    "runtimeRecords": 87,
+    "passiveCatalogRecords": 49,
+    "serverBlockedRecords": 8,
+    "unclassifiedRecords": 0,
     "classes": [
       {
         "key": "transknight",
@@ -376,7 +383,7 @@
     "missingActorActionSounds": []
   },
   "screenshots": {
-    "total": 124,
+    "total": 126,
     "maps": 111
   },
   "areas": [
@@ -447,12 +454,12 @@
     {
       "label": "Monstros/NPCs",
       "directory": "monsters",
-      "files": 1353,
-      "bytes": 39092267,
+      "files": 1376,
+      "bytes": 39721440,
       "extensions": {
         ".ani": 560,
         ".bon": 48,
-        ".dds": 343,
+        ".dds": 366,
         ".json": 1,
         ".msh": 401
       }
@@ -460,15 +467,15 @@
     {
       "label": "Player",
       "directory": "player",
-      "files": 1339,
-      "bytes": 74559794,
+      "files": 1353,
+      "bytes": 74999908,
       "extensions": {
         ".ani": 171,
         ".bon": 23,
-        ".dds": 500,
-        ".json": 2,
+        ".dds": 506,
+        ".json": 4,
         ".msa": 5,
-        ".msh": 638
+        ".msh": 644
       }
     },
     {

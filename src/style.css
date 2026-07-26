@@ -681,7 +681,7 @@ button, select { font: inherit; }
 
 .classic-chat-shell {
   position: fixed;
-  bottom: 70px;
+  bottom: 110px;
   left: 5px;
   z-index: 22;
   width: min(510px, calc(50vw - 312px));
@@ -1940,12 +1940,21 @@ button, select { font: inherit; }
 }
 
 @media (max-width: 1040px) {
-  .classic-chat-shell { bottom: 65px; display: block; width: min(440px, calc(100vw - 10px)); min-width: 0; height: 145px; }
+  .classic-chat-shell { display: block; width: min(440px, calc(100vw - 10px)); min-width: 0; height: 145px; }
   .classic-chat-shell::before { inset: 20px 3px 53px; }
   .combat-log { height: 64px; }
+  .controls-hint {
+    right: 5px;
+    left: auto;
+    width: calc(100vw - 450px);
+    transform: none;
+    font-size: 7px;
+    line-height: 11px;
+    text-align: center;
+    white-space: normal;
+  }
   .map-teleport { width: 270px; }
   .classic-window-title small, .map-teleport-meta span:first-child { display: none; }
-  .vital-orb { display: none; }
 }
 
 @media (max-height: 680px) {
@@ -1979,6 +1988,7 @@ button, select { font: inherit; }
 
 @media (max-width: 500px) {
   .player-status { transform: translateX(-50%) scale(.61); }
+  .vital-orb { display: none; }
   .map-teleport { width: calc(100vw - 148px); }
   .map-teleport label { display: none; }
   .map-teleport select { height: 21px; }

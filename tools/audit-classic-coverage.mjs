@@ -11,6 +11,7 @@ const commerceCatalog = await readJson(join(classicRoot, "commerce/catalog.json"
 const skillCatalog = await readJson(join(classicRoot, "data/skills.json"));
 const itemIcons = await readJson(join(classicRoot, "ui/item-icons.json"));
 const playerEquipmentLooks = await readJson(join(classicRoot, "player/equipment-looks.json"));
+const playerFaces = await readJson(join(classicRoot, "player/faces.json"));
 const playerWeapons = await readJson(join(classicRoot, "player/weapons.json"));
 const playerMantuas = await readJson(join(classicRoot, "player/mantuas.json"));
 const audioCatalogPath = join(classicRoot, "audio/catalog.json");
@@ -98,6 +99,13 @@ const referencedFiles = [
     ]),
   ]),
   "player/equipment-looks.json",
+  "player/faces.json",
+  ...playerFaces.items.flatMap((face) => [
+    `player/meshes/${face.meshStem}.msh`,
+    `player/textures/${face.textureStem}.dds`,
+    face.helmetMeshStem ? `player/meshes/${face.helmetMeshStem}.msh` : null,
+    face.helmetTextureStem ? `player/textures/${face.helmetTextureStem}.dds` : null,
+  ]),
   "player/weapons.json",
   ...playerWeapons.items.map((item) => item.fallbackTexture),
   "player/mantuas.json",
@@ -165,6 +173,42 @@ const skillsByClass = skillCatalog.classes.map((classEntry) => {
   };
 });
 
+const skillCoverageErrors = [];
+const pendingCastIndices = new Set();
+for (const entry of skillsByClass) {
+  if (entry.runtime + entry.passiveCatalogIndices.length + entry.castablePendingIndices.length !== entry.imported) {
+    skillCoverageErrors.push(
+      `${entry.name}: ${entry.imported} importadas != ${entry.runtime} runtime + ${entry.passiveCatalogIndices.length} passivas + ${entry.castablePendingIndices.length} bloqueadas`,
+    );
+  }
+  for (const skill of entry.castablePending) {
+    pendingCastIndices.add(skill.index);
+    if (!skill.blocker?.trim()) {
+      skillCoverageErrors.push(`${entry.name} #${skill.index} ${skill.name}: cast/buff fora do runtime sem bloqueio documentado`);
+    }
+  }
+}
+for (const [rawIndex, reason] of Object.entries(CLASSIC_SKILL_RUNTIME_BLOCKERS)) {
+  const index = Number(rawIndex);
+  if (!pendingCastIndices.has(index)) {
+    skillCoverageErrors.push(`#${index}: bloqueio órfão, pois a skill não é um cast/buff pendente`);
+  }
+  if (!reason.trim()) skillCoverageErrors.push(`#${index}: motivo de bloqueio vazio`);
+}
+if (skillCoverageErrors.length > 0) {
+  throw new Error(`Cobertura de skills inconsistente:\n- ${skillCoverageErrors.join("\n- ")}`);
+}
+const skillCoverageSummary = Object.freeze({
+  classAndMasterRecords: skillsByClass.reduce((total, entry) => total + entry.imported, 0),
+  runtimeRecords: skillsByClass.reduce((total, entry) => total + entry.runtime, 0),
+  passiveCatalogRecords: skillsByClass.reduce(
+    (total, entry) => total + entry.passiveCatalogIndices.length,
+    0,
+  ),
+  serverBlockedRecords: pendingCastIndices.size,
+  unclassifiedRecords: 0,
+});
+
 const effectSourceFiles = (await walk(join(projectRoot, "src/render/effects")))
   .filter((file) => file.path.endsWith(".ts"));
 const screenshotFiles = (await walk(join(docsRoot, "screenshots")))
@@ -218,6 +262,7 @@ const coverage = {
       looks: entry.looks.length,
     })),
     classicCostumes: CLASSIC_COSTUME_LOOKS.length,
+    faces: playerFaces.items.length,
     ordinaryEquipmentItems: playerEquipmentLooks.items.length,
     ordinaryEquipmentVariants: playerEquipmentLooks.items.reduce(
       (total, item) => total + item.variants.length,
@@ -240,6 +285,7 @@ const coverage = {
   },
   skills: {
     catalogRecords: skillCatalog.skills.length,
+    ...skillCoverageSummary,
     classes: skillsByClass,
     dedicatedEffectSourceFiles: effectSourceFiles.length,
   },
@@ -264,6 +310,7 @@ await Bun.write(join(docsRoot, "matriz-cobertura-classico.md"), renderMarkdown(c
 console.log(`Cobertura gerada: ${relative(projectRoot, join(docsRoot, "matriz-cobertura-classico.md"))}`);
 console.log(`Referencias: ${coverage.referencedFiles.total}; ausentes: ${coverage.referencedFiles.missing.length}`);
 console.log(`Fields: ${coverage.maps.fields}; monstros/NPCs: ${coverage.monsters.templates}; itens: ${coverage.items.catalog}`);
+console.log(`Skills: ${coverage.skills.runtimeRecords} runtime + ${coverage.skills.passiveCatalogRecords} passivas + ${coverage.skills.serverBlockedRecords} servidor; ${coverage.skills.unclassifiedRecords} sem classificacao`);
 
 function renderMarkdown(report) {
   const missing = report.referencedFiles.missing.length === 0
@@ -349,6 +396,7 @@ Templates comerciais nao resolvidos: ${report.items.unresolvedNpcTemplates}.
 ${classRows}
 
 - Trajes classicos compartilhados por todas as classes: ${report.player.classicCostumes}.
+- Rostos/identidades Equip[0] das quatro classes jogaveis: ${report.player.faces}.
 - Equipamentos ordinarios LOOK_INFO: ${report.player.ordinaryEquipmentItems} itens,
   ${report.player.ordinaryEquipmentVariants} variantes de classe/slot.
 - Armas comuns Equip[6]/Equip[7]: ${report.player.ordinaryWeapons} itens.
@@ -366,18 +414,25 @@ catalogo e nunca devem ocupar a barra. Isso nao prova por si so fidelidade
 visual; a homologacao do renderer continua manual e rastreada em
 \`PENDENCIAS.md\`.
 
-| Classe | Importadas | Runtime | Indices ativos | Passivas fora da barra | Casts/buffs pendentes |
+Cobertura fechada: ${report.skills.runtimeRecords} runtime +
+${report.skills.passiveCatalogRecords} passivas +
+${report.skills.serverBlockedRecords} reservadas ao servidor =
+${report.skills.classAndMasterRecords} registros de classe/master;
+${report.skills.unclassifiedRecords} sem classificacao.
+
+| Classe | Importadas | Runtime | Indices ativos | Passivas fora da barra | Bloqueados pelo servidor |
 | --- | ---: | ---: | --- | ---: | ---: |
 ${skillRows}
 
-### Casts/buffs ainda fora do runtime
+### Casts/buffs reservados ao servidor
 
-${skillGapRows || "- Nenhum cast/buff pendente."}
+${skillGapRows || "- Nenhum cast/buff bloqueado."}
 
 ## Lacunas objetivas
 
 ${audioGap}
-- Skills importadas mas ainda nao promovidas aparecem na tabela acima.
+- Os 144 registros de classe/master estao integralmente classificados:
+  runtime jogavel, passiva fora da barra ou bloqueio autoritativo acima.
 - Compra, venda, ownership, economia, drops e formulas autoritativas dependem
   do futuro servidor e nao podem ser inferidos desta matriz de assets.
 - Cobertura fisica confirma existencia; animacao, bone, alpha, shader e escala

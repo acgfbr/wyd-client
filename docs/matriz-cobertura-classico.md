@@ -1,12 +1,12 @@
 # Matriz automatica de cobertura do cliente classico
 
-Gerado por `bun run audit:coverage` em 2026-07-24T03:42:07.934Z. Este arquivo e
+Gerado por `bun run audit:coverage` em 2026-07-25T21:36:04.861Z. Este arquivo e
 derivado dos artefatos importados e do runtime; nao deve ser editado
 manualmente. A analise e as decisoes ficam em `auditoria-threejs-cobertura.md`.
 
 ## Integridade dos imports
 
-- 5112 caminhos unicos referenciados pelo manifesto.
+- 5153 caminhos unicos referenciados pelo manifesto.
 - 0 caminhos referenciados ausentes.
 - 111 Fields: 111 TRN,
   108 DAT declarados e 103
@@ -28,8 +28,8 @@ Nenhum arquivo referenciado pelo manifesto esta ausente.
 | Texturas de ambiente | `textures/env` | 238 | 2.5 MiB | .dds 238 |
 | Texturas de efeitos | `textures/effects` | 499 | 16.2 MiB | .dds 499 |
 | Texturas de agua | `textures/water` | 5 | 67.0 KiB | .dds 5 |
-| Monstros/NPCs | `monsters` | 1353 | 37.3 MiB | .ani 560, .bon 48, .dds 343, .json 1, .msh 401 |
-| Player | `player` | 1339 | 71.1 MiB | .ani 171, .bon 23, .dds 500, .json 2, .msa 5, .msh 638 |
+| Monstros/NPCs | `monsters` | 1376 | 37.9 MiB | .ani 560, .bon 48, .dds 366, .json 1, .msh 401 |
+| Player | `player` | 1353 | 71.5 MiB | .ani 171, .bon 23, .dds 506, .json 4, .msa 5, .msh 644 |
 | Montarias | `player/mounts` | 151 | 5.6 MiB | .ani 77, .bon 10, .dds 24, .msh 40 |
 | Familiares | `player/familiars` | 8 | 195.4 KiB | .ani 1, .bon 1, .dds 3, .msh 3 |
 | Evocacoes | `player/summons` | 94 | 3.2 MiB | .ani 63, .bon 7, .dds 9, .msh 15 |
@@ -75,9 +75,11 @@ Templates comerciais nao resolvidos: 0.
 | Huntress | 39 |
 
 - Trajes classicos compartilhados por todas as classes: 34.
+- Rostos/identidades Equip[0] das quatro classes jogaveis: 24.
 - Equipamentos ordinarios LOOK_INFO: 990 itens,
   1019 variantes de classe/slot.
 - Armas comuns Equip[6]/Equip[7]: 788 itens.
+- Mantuas Equip[15]: 36 itens.
 - Looks especializados da Huntress: 12.
 - Montarias selecionaveis: 16, em
   9 familias (bd02, be01, bo01, dr01, dr02, hs01, tg01, tw01, wf01).
@@ -91,14 +93,20 @@ catalogo e nunca devem ocupar a barra. Isso nao prova por si so fidelidade
 visual; a homologacao do renderer continua manual e rastreada em
 `PENDENCIAS.md`.
 
-| Classe | Importadas | Runtime | Indices ativos | Passivas fora da barra | Casts/buffs pendentes |
+Cobertura fechada: 87 runtime +
+49 passivas +
+8 reservadas ao servidor =
+144 registros de classe/master;
+0 sem classificacao.
+
+| Classe | Importadas | Runtime | Indices ativos | Passivas fora da barra | Bloqueados pelo servidor |
 | --- | ---: | ---: | --- | ---: | ---: |
 | TransKnight | 36 (24 normais + 12 master) | 22 | 0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 16, 17, 18, 19, 20, 21, 22, 23, 200 | 14 | 0 |
 | Foema | 36 (24 normais + 12 master) | 24 | 24, 25, 26, 27, 28, 29, 30, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 43, 44, 45, 46, 47, 213, 216 | 8 | 4 |
 | BeastMaster | 36 (24 normais + 12 master) | 24 | 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 66, 68, 70, 71, 224, 225, 235 | 10 | 2 |
 | Huntress | 36 (24 normais + 12 master) | 17 | 72, 73, 75, 76, 77, 79, 80, 81, 83, 84, 85, 86, 87, 88, 89, 92, 95 | 17 | 2 |
 
-### Casts/buffs ainda fora do runtime
+### Casts/buffs reservados ao servidor
 
 - Foema `#31` Renascimento: exige um jogador aliado morto e confirmação autoritativa de renascimento.
 - Foema `#42` Teleporte: exige grupo, consentimento, restrições de mapa e teleporte do servidor.
@@ -112,7 +120,8 @@ visual; a homologacao do renderer continua manual e rastreada em
 ## Lacunas objetivas
 
 - Audio: 333 entradas de SFX e 13 musicas; 83 IDs distintos do AniSound usados por atores, com 0 ausentes; 4 referencias do soundlist nao existem no corpus.
-- Skills importadas mas ainda nao promovidas aparecem na tabela acima.
+- Os 144 registros de classe/master estao integralmente classificados:
+  runtime jogavel, passiva fora da barra ou bloqueio autoritativo acima.
 - Compra, venda, ownership, economia, drops e formulas autoritativas dependem
   do futuro servidor e nao podem ser inferidos desta matriz de assets.
 - Cobertura fisica confirma existencia; animacao, bone, alpha, shader e escala

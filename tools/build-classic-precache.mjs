@@ -134,6 +134,7 @@ for (const templateIndex of templateIndices) {
 
 // Default player presentation: Mulher Kalintz, Skytalos, Griupan and Unicorn.
 await addFile("player/equipment-looks.json");
+await addFile("player/faces.json");
 await addFile("player/weapons.json");
 await addFile("player/mantuas.json");
 for (const stem of [
